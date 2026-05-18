@@ -1,0 +1,136 @@
+.card {
+  padding: 16px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: background 0.2s;
+  background-color: var(--color-bg-base);
+}
+
+.card:hover {
+  background-color: rgba(0, 0, 0, 0.015);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.authorInfo {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  margin-left: 12px;
+}
+
+.authorName {
+  font-weight: 700;
+  color: var(--color-text-main);
+  font-size: 1rem;
+}
+
+.content {
+  color: var(--color-text-main);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 1.05rem;
+  padding: 4px 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  padding: 10px 14px;
+  border-radius: 99px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+.actionBtn:hover {
+  transform: scale(1.1);
+}
+
+.likeBtn:hover {
+  background-color: rgba(249, 24, 128, 0.1);
+  color: #f91880 !important;
+}
+
+.replyBtn:hover {
+  background-color: rgba(29, 155, 240, 0.1);
+  color: var(--color-primary) !important;
+}
+
+.repostBtn:hover {
+  background-color: rgba(0, 186, 124, 0.1);
+  color: #00ba7c !important;
+}
+
+.bookmarkBtn:hover, .shareBtn:hover {
+  background-color: rgba(29, 155, 240, 0.1);
+  color: var(--color-primary) !important;
+}
+
+.activeLike {
+  color: #f91880 !important;
+}
+
+.activeReply {
+  color: var(--color-primary) !important;
+}
+
+.activeRepost {
+  color: #00ba7c !important;
+}
+
+.activeBookmark {
+  color: var(--color-primary) !important;
+}
+
+@media (max-width: 500px) {
+  .card {
+    padding: 12px;
+  }
+  .avatar {
+    width: 40px;
+    height: 40px;
+  }
+  .actionBtn {
+    padding: 8px;
+  }
+  .actionText {
+    display: none;
+  }
+}

@@ -1,26 +1,164 @@
-@import "tailwindcss";
-
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* Color Palette - X-like Clean UI */
+  --color-primary: #1d9bf0; /* Twitter blue */
+  --color-primary-light: #71c9f8;
+  --color-primary-dark: #1a8cd8;
+  
+  --color-bg-base: #ffffff;
+  --color-bg-surface: #ffffff;
+  --color-bg-glass: rgba(255, 255, 255, 0.95);
+  
+  --color-text-main: #0f1419;
+  --color-text-muted: #536471;
+  --color-border: #eff3f4;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  /* Border Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+
+  /* Transitions */
+  --transition-fast: 150ms ease-in-out;
+  --transition-normal: 300ms ease-in-out;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --color-bg-base: #15202b; /* X Dim Mode */
+    --color-bg-surface: #15202b;
+    --color-bg-glass: rgba(21, 32, 43, 0.95);
+    
+    --color-text-main: #f7f9f9;
+    --color-text-muted: #8b98a5;
+    --color-border: #38444d;
   }
 }
 
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  background-color: var(--color-bg-base);
+  color: var(--color-text-main);
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mesh Gradient Background Removed for Minimal Look */
+.mesh-gradient-bg {
+  background-color: var(--color-bg-base);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mesh-gradient-bg {
+    background-color: var(--color-bg-base);
+  }
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+ul {
+  list-style: none;
+}
+
+/* Typography Utilities */
+.text-h1 { font-size: 2.5rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
+.text-h2 { font-size: 2rem; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; }
+.text-h3 { font-size: 1.5rem; font-weight: 600; line-height: 1.4; }
+.text-body { font-size: 1rem; color: var(--color-text-main); }
+.text-muted { font-size: 0.875rem; color: var(--color-text-muted); }
+
+/* Glassmorphism Utility -> Transitioned to Solid Minimal Panel */
+.glass {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  /* no heavy shadows, just clean borders */
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-normal) forwards;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp var(--transition-normal) ease-out forwards;
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--transition-fast) ease-out forwards;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Base Layout Classes */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-4);
 }

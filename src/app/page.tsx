@@ -1,65 +1,111 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import styles from "./page.module.css";
+import { Shield, Zap, Image as ImageIcon, Users, Globe, ArrowRight, Star, Heart } from "lucide-react";
+import { AuthModal } from "@/features/auth/components/AuthModal";
 
 export default function Home() {
+  const [authMode, setAuthMode] = useState<"login" | "register" | null>(null);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className={styles.landingContainer}>
+      <div className={styles.meshGradient} />
+      
+      {/* Decorative Floating Elements */}
+      <div style={{ position: "fixed", top: "15%", left: "10%", opacity: 0.1, zIndex: 0 }} className="animate-float">
+        <Star size={120} fill="var(--color-primary)" color="var(--color-primary)" />
+      </div>
+      <div style={{ position: "fixed", bottom: "15%", right: "10%", opacity: 0.1, zIndex: 0, animationDelay: "2s" }} className="animate-float">
+        <Heart size={100} fill="var(--color-primary)" color="var(--color-primary)" />
+      </div>
+
+      {/* Navigation */}
+      <nav className={styles.navbar}>
+        <div className={styles.logo}>DOST</div>
+        <div className={styles.navLinks}>
+          <button onClick={() => setAuthMode("login")} style={{ fontWeight: 600, background: "none", border: "none", cursor: "pointer", color: "var(--color-text-main)" }}>Sign In</button>
+          <button onClick={() => setAuthMode("register")} className={styles.secondaryBtn} style={{ padding: '10px 24px', fontSize: '1rem', cursor: "pointer" }}>
+            Join Now
+          </button>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className={styles.heroSection}>
+        <div className="animate-fade-in">
+          <div style={{ 
+            display: "inline-flex", alignItems: "center", gap: "8px", 
+            padding: "8px 20px", borderRadius: "99px", background: "rgba(29, 155, 240, 0.1)",
+            color: "var(--color-primary)", fontWeight: 700, fontSize: "0.9rem", marginBottom: "32px"
+          }}>
+            <Zap size={16} /> Beta Version 2.0 is live!
+          </div>
+          <h1 className={styles.heroTitle}>Socializing <br /> Reimagined.</h1>
+          <p className={styles.heroSubtitle}>
+            A secure, modern, and high-performance social network built for the next generation of digital connections.
           </p>
+          <div className={styles.ctaGroup}>
+            <button onClick={() => setAuthMode("register")} className={styles.primaryBtn} style={{ border: "none", cursor: "pointer" }}>
+              Start for free <ArrowRight size={20} style={{ marginLeft: 8 }} />
+            </button>
+            <button onClick={() => setAuthMode("login")} className={styles.secondaryBtn} style={{ cursor: "pointer" }}>
+              Already a member?
+            </button>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* Bento Grid Features */}
+      <section className={styles.bentoGrid}>
+        <div className={`${styles.bentoItem} ${styles.large} animate-slide-up`} style={{ animationDelay: '0.1s' }}>
+          <img src="/hero-visual.png" className={styles.visualBg} alt="" />
+          <div className={styles.bentoIcon}><Globe size={32} /></div>
+          <h3 className={styles.bentoTitle}>Global Reach</h3>
+          <p className={styles.bentoText}>Real-time global interactions without boundaries.</p>
         </div>
-      </main>
-    </div>
+
+        <div className={`${styles.bentoItem} animate-slide-up`} style={{ animationDelay: '0.2s' }}>
+          <div className={styles.bentoIcon}><Shield size={32} /></div>
+          <h3 className={styles.bentoTitle}>Private & Safe</h3>
+          <p className={styles.bentoText}>Your data, your control. State-of-the-art privacy tools.</p>
+        </div>
+
+        <div className={`${styles.bentoItem} animate-slide-up`} style={{ animationDelay: '0.3s' }}>
+          <div className={styles.bentoIcon}><Zap size={32} /></div>
+          <h3 className={styles.bentoTitle}>Pure Speed</h3>
+          <p className={styles.bentoText}>Next-gen performance with Turbopack acceleration.</p>
+        </div>
+
+        <div className={`${styles.bentoItem} animate-slide-up`} style={{ animationDelay: '0.4s' }}>
+          <div className={styles.bentoIcon}><ImageIcon size={32} /></div>
+          <h3 className={styles.bentoTitle}>HD Media</h3>
+          <p className={styles.bentoText}>Share life in stunning clarity with HD media support.</p>
+        </div>
+
+        <div className={`${styles.bentoItem} ${styles.large} animate-slide-up`} style={{ animationDelay: '0.5s' }}>
+          <div className={styles.bentoIcon}><Users size={32} /></div>
+          <h3 className={styles.bentoTitle}>Community First</h3>
+          <p className={styles.bentoText}>Built for people, by people. Join 10k+ active users.</p>
+        </div>
+      </section>
+
+      {/* Footer-like CTA */}
+      <section style={{ textAlign: 'center', padding: '100px 20px', background: 'rgba(29, 155, 240, 0.03)' }}>
+        <h2 className="text-h2" style={{ marginBottom: 24, fontWeight: 900 }}>Your social life, evolved.</h2>
+        <button onClick={() => setAuthMode("register")} className={styles.primaryBtn} style={{ border: "none", cursor: "pointer" }}>
+          Get Your Invite
+        </button>
+      </section>
+
+      {/* Auth Modal Overlay */}
+      {authMode && (
+        <AuthModal 
+          initialMode={authMode} 
+          onClose={() => setAuthMode(null)} 
+        />
+      )}
+    </main>
   );
 }
