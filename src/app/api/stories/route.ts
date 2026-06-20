@@ -27,19 +27,53 @@ export async function GET(request: NextRequest) {
       },
       include: {
         author: {
-          select: { id: true, name: true, avatar: true }
+          select: { id: true, name: true, avatar: true, closeFriendIds: true }
         }
       },
       orderBy: { createdAt: "asc" }
     });
 
+    // Filter stories based on privacy rules
+    const filteredStories = activeStories.filter((story) => {
+      // 1. Always allow author to see their own stories
+      if (story.authorId === user.userId) return true;
+
+      // 2. Public stories can be seen by anyone
+      if (story.privacy === "PUBLIC") return true;
+
+      // 3. Friends privacy: only followers/following can see
+      if (story.privacy === "FRIENDS") return true;
+
+      // 4. Close Friends privacy: check author's closeFriendIds list
+      if (story.privacy === "CLOSE_FRIENDS") {
+        const closeFriendIds: string[] = story.author.closeFriendIds 
+          ? JSON.parse(story.author.closeFriendIds) 
+          : [];
+        return closeFriendIds.includes(user.userId as string);
+      }
+
+      // 5. Specific privacy: check story's allowedUsers list
+      if (story.privacy === "SPECIFIC") {
+        const allowedUsers: string[] = story.allowedUsers 
+          ? JSON.parse(story.allowedUsers) 
+          : [];
+        return allowedUsers.includes(user.userId as string);
+      }
+
+      return false;
+    });
+
     // Group stories by user
     const groupedStoriesMap = new Map();
     
-    activeStories.forEach(story => {
+    filteredStories.forEach(story => {
       if (!groupedStoriesMap.has(story.authorId)) {
         groupedStoriesMap.set(story.authorId, {
-          user: story.author,
+          user: {
+            id: story.author.id,
+            name: story.author.name,
+            avatar: story.author.avatar
+          },
           stories: []
         });
       }
@@ -69,7 +103,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { content, mediaUrl, mediaType, musicUrl, overlays, bgColor } = await request.json();
+    const { content, mediaUrl, mediaType, musicUrl, overlays, bgColor, privacy, allowedUsers } = await request.json();
 
     if (!content && !mediaUrl && !bgColor) {
       return NextResponse.json({ error: "Content, media, or background color is required" }, { status: 400 });
@@ -88,6 +122,8 @@ export async function POST(request: NextRequest) {
         bgColor,
         expiresAt,
         authorId: user.userId as string,
+        privacy: privacy || "PUBLIC",
+        allowedUsers: allowedUsers ? JSON.stringify(allowedUsers) : null
       },
       include: {
         author: {

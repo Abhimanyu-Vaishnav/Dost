@@ -162,3 +162,129 @@ ul {
   margin: 0 auto;
   padding: var(--space-4);
 }
+
+/* Responsive Dropdown Menu to prevent off-screen menus on mobile */
+.responsive-dropdown-menu {
+  position: absolute;
+  right: 0;
+}
+
+@media (max-width: 650px) {
+  .responsive-dropdown-menu {
+    right: 8px !important;
+    left: auto !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+}
+
+/* Responsive Messages Layout and Chat elements */
+.messages-sidebar-wrapper {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.messages-chat-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.messages-sidebar {
+  width: 350px;
+  min-width: 350px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+}
+
+.messages-chat-header {
+  padding: 16px 24px;
+}
+
+.messages-chat-input-container {
+  padding: 16px 24px 24px 24px;
+}
+
+.messages-area {
+  padding: 24px;
+}
+
+.message-bubble {
+  max-width: 75%;
+}
+
+.messages-back-btn {
+  display: none !important;
+}
+
+@media (max-width: 650px) {
+  /* Toggle Sidebar and Chat View on Mobile depending on active conversation */
+  .messages-layout-active-chat .messages-sidebar-wrapper {
+    display: none !important;
+  }
+  
+  .messages-layout-no-chat .messages-chat-wrapper {
+    display: none !important;
+  }
+
+  .messages-sidebar-wrapper {
+    width: 100% !important;
+    flex: 1 !important;
+  }
+  
+  .messages-chat-wrapper {
+    width: 100% !important;
+    flex: 1 !important;
+  }
+
+  .messages-sidebar {
+    width: 100% !important;
+    min-width: 100% !important;
+    border-right: none !important;
+  }
+
+  .messages-chat-header {
+    padding: 12px 16px !important;
+  }
+  
+  .messages-chat-input-container {
+    padding: 12px 16px 16px 16px !important;
+  }
+
+  .messages-area {
+    padding: 12px !important;
+  }
+
+  .message-bubble {
+    max-width: 85% !important;
+  }
+
+  .messages-back-btn {
+    display: flex !important;
+  }
+}
+
+/* Responsive Create Post Toolbar classes */
+.create-post-more-btn {
+  display: none !important;
+}
+
+@media (max-width: 600px) {
+  .create-post-more-btn {
+    display: flex !important;
+  }
+  
+  .create-post-extra-icon {
+    display: none !important;
+  }
+}
+
+
+

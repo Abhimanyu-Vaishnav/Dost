@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
     const dbUser = await prisma.user.findUnique({
       where: { id: user.userId as string },
-      select: { id: true, name: true, email: true, avatar: true, coverImage: true, bio: true }
+      select: { id: true, name: true, email: true, avatar: true, coverImage: true, bio: true, gender: true, dob: true, accountType: true, accountSubType: true }
     });
 
     return NextResponse.json({ user: dbUser }, { status: 200 });
@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest) {
     const user = await verifyToken(token);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { name, bio, avatar, coverImage } = await req.json();
+    const { name, bio, avatar, coverImage, gender, dob, accountType, accountSubType } = await req.json();
     const userId = user.userId as string;
 
     const updatedUser = await prisma.user.update({
@@ -35,7 +35,11 @@ export async function PATCH(req: NextRequest) {
         name,
         bio,
         avatar,
-        coverImage
+        coverImage,
+        gender,
+        dob: dob ? new Date(dob) : null,
+        accountType,
+        accountSubType
       }
     });
 

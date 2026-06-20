@@ -11,6 +11,7 @@ import { UserPlus } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/common/PageHeader";
+import { SearchUserRow } from "@/features/search/components/SearchUserRow";
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
 // ... auth ...
@@ -44,6 +45,15 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         id: true,
         name: true,
         avatar: true,
+        stories: {
+          where: {
+            expiresAt: { gt: new Date() },
+            privacy: "PUBLIC"
+          },
+          orderBy: {
+            createdAt: "asc"
+          }
+        }
       },
       take: 10,
     });
@@ -102,23 +112,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               <h2 className="text-h3" style={{ marginBottom: "var(--space-4)" }}>People</h2>
               <div className="glass" style={{ padding: "var(--space-4)", borderRadius: "var(--radius-lg)", display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
                 {users.map(u => (
-                  <div key={u.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <Link href={`/profile/${u.id}`} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", textDecoration: "none" }}>
-                      <div style={{
-                        width: "40px", height: "40px", borderRadius: "var(--radius-full)",
-                        backgroundColor: "var(--color-primary)", color: "white",
-                        display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600,
-                        overflow: "hidden"
-                      }}>
-                        {u.avatar ? (
-                          <img src={u.avatar} alt={u.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        ) : (
-                          u.name?.charAt(0).toUpperCase() || "?"
-                        )}
-                      </div>
-                      <span style={{ fontWeight: 600, color: "var(--color-text-main)" }}>{u.name}</span>
-                    </Link>
-                  </div>
+                  <SearchUserRow key={u.id} user={u} />
                 ))}
               </div>
             </div>

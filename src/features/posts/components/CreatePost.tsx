@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Image as ImageIcon, Send, Video, Link as LinkIcon, X, Loader2, 
-  Smile, Calendar, MapPin, ListFilter, FileType
+  Smile, Calendar, MapPin, ListFilter, FileType, MoreHorizontal
 } from "lucide-react";
 
 interface CreatePostProps {
@@ -23,6 +23,7 @@ export function CreatePost({ userName, userAvatar, onPostSuccess }: CreatePostPr
   const [showMediaInput, setShowMediaInput] = useState<"image" | "video" | "link" | "imageUrl" | "imageOptions" | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -192,19 +193,66 @@ export function CreatePost({ userName, userAvatar, onPostSuccess }: CreatePostPr
             display: "flex", justifyContent: "space-between", alignItems: "center",
             marginTop: "12px", paddingTop: "12px"
           }}>
-            <div style={{ display: "flex", gap: "2px" }}>
+            <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
               <button type="button" onClick={() => setShowMediaInput("imageOptions")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle" title="Image / Video Options"><ImageIcon size={20} /></button>
               <button type="button" onClick={() => setShowMediaInput("link")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle" title="Add Link"><LinkIcon size={20} /></button>
-              <button type="button" onClick={() => alert("GIF coming soon!")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle"><FileType size={20} /></button>
-              <button type="button" onClick={() => alert("Poll coming soon!")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle"><ListFilter size={20} /></button>
-              <button type="button" onClick={() => alert("Emoji picker coming soon!")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle"><Smile size={20} /></button>
-              <button type="button" onClick={() => alert("Scheduling coming soon!")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle"><Calendar size={20} /></button>
-              <button type="button" onClick={() => alert("Location coming soon!")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle"><MapPin size={20} /></button>
+              <button type="button" onClick={() => alert("Poll coming soon!")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle" title="Add Poll"><ListFilter size={20} /></button>
+              <button type="button" onClick={() => alert("Emoji picker coming soon!")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle" title="Add Emoji"><Smile size={20} /></button>
               
-              <div style={{ width: "1px", background: "var(--color-border)", margin: "0 8px" }}></div>
+              {/* Extra icons hidden on mobile, shown on desktop */}
+              <button type="button" onClick={() => alert("GIF coming soon!")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle create-post-extra-icon" title="GIF"><FileType size={20} /></button>
+              <button type="button" onClick={() => alert("Scheduling coming soon!")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle create-post-extra-icon" title="Schedule"><Calendar size={20} /></button>
+              <button type="button" onClick={() => alert("Location coming soon!")} style={{ padding: "8px", color: "var(--color-primary)" }} className="hover-bg-circle create-post-extra-icon" title="Location"><MapPin size={20} /></button>
               
-              <button type="button" onClick={() => addMarker("**")} style={{ padding: "8px", color: "var(--color-text-main)", fontWeight: 800 }} className="hover-bg-circle">B</button>
-              <button type="button" onClick={() => addMarker("*")} style={{ padding: "8px", color: "var(--color-text-main)", fontStyle: "italic" }} className="hover-bg-circle">I</button>
+              <div className="create-post-extra-icon" style={{ width: "1px", background: "var(--color-border)", margin: "0 8px", height: "20px" }}></div>
+              
+              <button type="button" onClick={() => addMarker("**")} style={{ padding: "8px", color: "var(--color-text-main)", fontWeight: 800 }} className="hover-bg-circle create-post-extra-icon" title="Bold">B</button>
+              <button type="button" onClick={() => addMarker("*")} style={{ padding: "8px", color: "var(--color-text-main)", fontStyle: "italic" }} className="hover-bg-circle create-post-extra-icon" title="Italic">I</button>
+
+              {/* More options button (shown on mobile only) */}
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }} className="create-post-more-btn">
+                <button 
+                  type="button" 
+                  onClick={() => setShowMoreMenu(!showMoreMenu)} 
+                  style={{ padding: "8px", color: "var(--color-primary)" }} 
+                  className="hover-bg-circle" 
+                  title="More Options"
+                >
+                  <MoreHorizontal size={20} />
+                </button>
+                
+                {showMoreMenu && (
+                  <>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setShowMoreMenu(false)} />
+                    <div className="glass animate-scale-in responsive-dropdown-menu" style={{
+                      position: "absolute", left: 0, top: "100%", zIndex: 100,
+                      display: "flex", flexDirection: "column", minWidth: "180px",
+                      padding: "8px", borderRadius: "16px", gap: "4px",
+                      border: "1px solid var(--color-border)", boxShadow: "var(--shadow-lg)",
+                      background: "var(--color-bg-surface)", marginTop: "4px"
+                    }}>
+                      <button type="button" onClick={() => { alert("GIF coming soon!"); setShowMoreMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", color: "var(--color-text-main)", textAlign: "left", width: "100%", borderRadius: "8px" }} className="hover-bg">
+                        <FileType size={18} color="var(--color-primary)" /> <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>GIF</span>
+                      </button>
+                      <button type="button" onClick={() => { alert("Scheduling coming soon!"); setShowMoreMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", color: "var(--color-text-main)", textAlign: "left", width: "100%", borderRadius: "8px" }} className="hover-bg">
+                        <Calendar size={18} color="var(--color-primary)" /> <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>Schedule</span>
+                      </button>
+                      <button type="button" onClick={() => { alert("Location coming soon!"); setShowMoreMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", color: "var(--color-text-main)", textAlign: "left", width: "100%", borderRadius: "8px" }} className="hover-bg">
+                        <MapPin size={18} color="var(--color-primary)" /> <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>Location</span>
+                      </button>
+                      
+                      <div style={{ height: "1px", background: "var(--color-border)", margin: "4px 0" }} />
+                      
+                      <button type="button" onClick={() => { addMarker("**"); setShowMoreMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", color: "var(--color-text-main)", textAlign: "left", width: "100%", borderRadius: "8px" }} className="hover-bg">
+                        <span style={{ fontWeight: 800, width: "18px", display: "inline-block", textAlign: "center" }}>B</span> <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>Bold Text</span>
+                      </button>
+                      <button type="button" onClick={() => { addMarker("*"); setShowMoreMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", color: "var(--color-text-main)", textAlign: "left", width: "100%", borderRadius: "8px" }} className="hover-bg">
+                        <span style={{ fontStyle: "italic", width: "18px", display: "inline-block", textAlign: "center" }}>I</span> <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>Italic Text</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
             
             <button type="submit" disabled={isSubmitting || (!content.trim() && !imageUrl && !videoUrl)} style={{

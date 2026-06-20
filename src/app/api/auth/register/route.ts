@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "Email already in use" },
+        { error: "account already exist" },
         { status: 409 }
       );
     }

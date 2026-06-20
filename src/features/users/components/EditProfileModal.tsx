@@ -10,6 +10,10 @@ interface EditProfileModalProps {
     bio: string | null;
     avatar: string | null;
     coverImage: string | null;
+    gender?: string | null;
+    dob?: Date | string | null;
+    accountType?: string | null;
+    accountSubType?: string | null;
   };
   onClose: () => void;
 }
@@ -19,6 +23,14 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
   const [bio, setBio] = useState(user.bio || "");
   const [avatar, setAvatar] = useState(user.avatar || "");
   const [coverImage, setCoverImage] = useState(user.coverImage || "");
+  const [gender, setGender] = useState(user.gender || "");
+  const [dob, setDob] = useState(() => {
+    if (!user.dob) return "";
+    const d = new Date(user.dob);
+    return isNaN(d.getTime()) ? "" : d.toISOString().split('T')[0];
+  });
+  const [accountType, setAccountType] = useState(user.accountType || "PERSON");
+  const [accountSubType, setAccountSubType] = useState(user.accountSubType || "");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   
@@ -44,7 +56,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
       const res = await fetch("/api/users/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, bio, avatar, coverImage }),
+        body: JSON.stringify({ name, bio, avatar, coverImage, gender, dob, accountType, accountSubType }),
       });
 
       if (res.ok) {
@@ -67,7 +79,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
       <div className="glass animate-scale-in" style={{
         width: "100%", maxWidth: "600px", padding: "0", borderRadius: "24px",
         display: "flex", flexDirection: "column", border: "1px solid var(--color-border)",
-        maxHeight: "90vh", overflowY: "auto", background: "white"
+        maxHeight: "90vh", overflowY: "auto", background: "var(--color-bg-surface)"
       }} onClick={e => e.stopPropagation()}>
         
         {/* Modal Header */}
@@ -109,7 +121,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
           {/* Avatar Edit */}
           <div style={{ padding: "0 24px", position: "relative" }}>
              <div style={{ 
-               width: "120px", height: "120px", borderRadius: "50%", border: "4px solid white",
+               width: "120px", height: "120px", borderRadius: "50%", border: "4px solid var(--color-bg-surface)",
                background: "var(--color-primary)", marginTop: "-60px", overflow: "hidden", position: "relative"
              }}>
                 {avatar && <img src={avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
@@ -152,6 +164,79 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
                 }}
               />
             </div>
+
+            <div style={{ display: "flex", gap: "16px" }}>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--color-text-muted)" }}>Gender</label>
+                <select
+                  value={gender}
+                  onChange={e => setGender(e.target.value)}
+                  style={{
+                    width: "100%", padding: "16px", borderRadius: "12px", border: "1px solid var(--color-border)",
+                    background: "var(--color-bg-surface)", color: "var(--color-text-main)", outline: "none", fontSize: "1.1rem"
+                  }}
+                >
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--color-text-muted)" }}>Date of Birth</label>
+                <input 
+                  type="date" 
+                  value={dob}
+                  onChange={e => setDob(e.target.value)}
+                  style={{
+                    width: "100%", padding: "14.5px 16px", borderRadius: "12px", border: "1px solid var(--color-border)",
+                    background: "transparent", color: "var(--color-text-main)", outline: "none", fontSize: "1.1rem"
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <label style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--color-text-muted)" }}>Account Type</label>
+              <select
+                value={accountType}
+                onChange={e => {
+                  setAccountType(e.target.value);
+                  if (e.target.value !== "PERSON") setAccountSubType("");
+                }}
+                style={{
+                  width: "100%", padding: "16px", borderRadius: "12px", border: "1px solid var(--color-border)",
+                  background: "var(--color-bg-surface)", color: "var(--color-text-main)", outline: "none", fontSize: "1.1rem"
+                }}
+              >
+                <option value="PERSON">Person</option>
+                <option value="BUSINESS">Business / Company</option>
+                <option value="GOVERNMENT">Government</option>
+              </select>
+            </div>
+
+            {accountType === "PERSON" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--color-text-muted)" }}>Account Sub-Type (Optional)</label>
+                <select
+                  value={accountSubType}
+                  onChange={e => setAccountSubType(e.target.value)}
+                  style={{
+                    width: "100%", padding: "16px", borderRadius: "12px", border: "1px solid var(--color-border)",
+                    background: "var(--color-bg-surface)", color: "var(--color-text-main)", outline: "none", fontSize: "1.1rem"
+                  }}
+                >
+                  <option value="">Select Sub-Type</option>
+                  <option value="ATHLETE">Athlete</option>
+                  <option value="ENTERTAINMENT">Entertainment</option>
+                  <option value="INFLUENCER">Influencer</option>
+                  <option value="POLITICIAN">Politician</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
       </div>

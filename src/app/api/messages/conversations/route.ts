@@ -31,7 +31,23 @@ export async function GET() {
       orderBy: { updatedAt: "desc" }
     });
 
-    return NextResponse.json({ conversations });
+    const conversationsWithUnread = await Promise.all(
+      conversations.map(async (conv) => {
+        const unreadCount = await prisma.message.count({
+          where: {
+            conversationId: conv.id,
+            senderId: { not: user.userId as string },
+            isRead: false
+          }
+        });
+        return {
+          ...conv,
+          unreadCount
+        };
+      })
+    );
+
+    return NextResponse.json({ conversations: conversationsWithUnread });
   } catch (error) {
     console.error("Fetch conversations error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

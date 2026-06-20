@@ -98,7 +98,7 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
                     <MoreHorizontal size={20} />
                   </button>
                   {showMoreMenu && (
-                    <div className="glass animate-scale-in" style={{
+                    <div className="glass animate-scale-in responsive-dropdown-menu" style={{
                       position: "absolute", right: 0, top: "110%", zIndex: 100,
                       display: "flex", flexDirection: "column", minWidth: "220px",
                       padding: "8px", borderRadius: "16px", gap: "4px",

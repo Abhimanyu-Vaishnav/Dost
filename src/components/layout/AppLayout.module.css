@@ -262,15 +262,18 @@
   }
 
   .moreMenu {
+    position: fixed !important;
+    bottom: 76px !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
-    bottom: calc(100% + 12px) !important;
+    width: calc(100% - 32px) !important;
+    max-width: 320px !important;
   }
 
   .mainContent {
-    width: 100%;
-    min-width: 100%;
-    height: calc(100vh - 64px);
+    width: 100% !important;
+    min-width: 100% !important;
+    height: calc(100vh - 64px) !important;
     border: none;
     position: relative;
   }

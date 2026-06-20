@@ -11,6 +11,11 @@ interface Story {
   content: string | null;
   mediaUrl: string | null;
   mediaType: string;
+  musicUrl: string | null;
+  overlays: string | null;
+  bgColor: string | null;
+  privacy: string;
+  allowedUsers: string | null;
   createdAt: string;
   expiresAt: string;
 }

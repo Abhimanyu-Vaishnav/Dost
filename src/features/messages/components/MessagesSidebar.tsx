@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, Check, Circle } from "lucide-react";
 import { NewChatModal } from "./NewChatModal";
 
 export function MessagesSidebar() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [hoveredConversationId, setHoveredConversationId] = useState<string | null>(null);
   
   const params = useParams();
   const currentConversationId = params?.id as string;
@@ -30,7 +32,37 @@ export function MessagesSidebar() {
     fetchConversations();
     const interval = setInterval(fetchConversations, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshTrigger]);
+
+  const handleMarkRead = async (e: React.MouseEvent, conversationId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/messages/conversations/${conversationId}/mark-read`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        setRefreshTrigger(prev => prev + 1);
+      }
+    } catch (error) {
+      console.error("Failed to mark read", error);
+    }
+  };
+
+  const handleMarkUnread = async (e: React.MouseEvent, conversationId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/messages/conversations/${conversationId}/mark-unread`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        setRefreshTrigger(prev => prev + 1);
+      }
+    } catch (error) {
+      console.error("Failed to mark unread", error);
+    }
+  };
 
   const filteredConversations = conversations.filter(conv => {
     const otherUser = conv.participants[0] || { name: "Unknown" };
@@ -41,7 +73,7 @@ export function MessagesSidebar() {
 
   return (
     <>
-      <div style={{
+      <div className="messages-sidebar" style={{
         width: "350px", minWidth: "350px", height: "100%", display: "flex", flexDirection: "column",
         borderRight: "1px solid var(--color-border)", background: "var(--color-bg-surface)"
       }}>
@@ -95,14 +127,19 @@ export function MessagesSidebar() {
 
               return (
                 <Link key={conv.id} href={`/messages/${conv.id}`} style={{ textDecoration: "none" }}>
-                  <div style={{
-                    padding: "14px 16px", display: "flex", gap: "16px", alignItems: "center",
-                    background: isActive ? "var(--color-bg-base)" : "transparent",
-                    borderRadius: "16px", marginBottom: "4px",
-                    border: isActive ? "1px solid var(--color-primary)" : "1px solid transparent",
-                    boxShadow: isActive ? "0 4px 12px rgba(0,0,0,0.05)" : "none",
-                    transition: "all 0.2s"
-                  }} className="hover-bg">
+                  <div 
+                    onMouseEnter={() => setHoveredConversationId(conv.id)}
+                    onMouseLeave={() => setHoveredConversationId(null)}
+                    style={{
+                      padding: "14px 16px", display: "flex", gap: "16px", alignItems: "center",
+                      background: isActive ? "var(--color-bg-base)" : "transparent",
+                      borderRadius: "16px", marginBottom: "4px",
+                      border: isActive ? "1px solid var(--color-primary)" : "1px solid transparent",
+                      boxShadow: isActive ? "0 4px 12px rgba(0,0,0,0.05)" : "none",
+                      transition: "all 0.2s"
+                    }} 
+                    className="hover-bg"
+                  >
                     
                     <div style={{
                       width: "52px", height: "52px", borderRadius: "50%", background: "var(--color-primary-light)",
@@ -127,13 +164,59 @@ export function MessagesSidebar() {
                           </span>
                         )}
                       </div>
-                      <p style={{
-                        margin: 0, color: isActive ? "var(--color-text-main)" : "var(--color-text-muted)", 
-                        fontSize: "0.95rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                        fontWeight: isActive ? 500 : 400
-                      }}>
-                        {lastMessage ? lastMessage.content : "Started a conversation"}
-                      </p>
+                      
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <p style={{
+                          margin: 0, 
+                          color: (isActive || conv.unreadCount > 0) ? "var(--color-text-main)" : "var(--color-text-muted)", 
+                          fontSize: "0.95rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                          fontWeight: (isActive || conv.unreadCount > 0) ? 600 : 400,
+                          flex: 1
+                        }}>
+                          {lastMessage ? lastMessage.content : "Started a conversation"}
+                        </p>
+                        
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "8px", minWidth: "22px", justifyContent: "flex-end" }}>
+                          {hoveredConversationId === conv.id ? (
+                            conv.unreadCount > 0 ? (
+                              <button 
+                                onClick={(e) => handleMarkRead(e, conv.id)}
+                                title="Mark as Read"
+                                style={{
+                                  background: "var(--color-primary-light)", border: "none", color: "var(--color-primary)",
+                                  cursor: "pointer", width: "22px", height: "22px", borderRadius: "50%",
+                                  display: "flex", alignItems: "center", justifyContent: "center", padding: 0
+                                }}
+                              >
+                                <Check size={14} />
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={(e) => handleMarkUnread(e, conv.id)}
+                                title="Mark as Unread"
+                                style={{
+                                  background: "var(--color-border)", border: "none", color: "var(--color-text-muted)",
+                                  cursor: "pointer", width: "22px", height: "22px", borderRadius: "50%",
+                                  display: "flex", alignItems: "center", justifyContent: "center", padding: 0
+                                }}
+                              >
+                                <Circle size={8} fill="var(--color-text-muted)" />
+                              </button>
+                            )
+                          ) : (
+                            conv.unreadCount > 0 && (
+                              <div style={{
+                                background: "var(--color-primary)", color: "white",
+                                borderRadius: "50%", minWidth: "18px", height: "18px",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: "0.7rem", fontWeight: 800, padding: "0 5px"
+                              }}>
+                                {conv.unreadCount}
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </Link>

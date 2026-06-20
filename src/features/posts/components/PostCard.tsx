@@ -460,7 +460,7 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
             <MoreHorizontal size={20} />
           </button>
           {showMenu && (
-            <div className="glass animate-scale-in" style={{
+            <div className="glass animate-scale-in responsive-dropdown-menu" style={{
               position: "absolute", right: 0, top: "100%", zIndex: 100,
               display: "flex", flexDirection: "column", minWidth: "240px",
               padding: "var(--space-2)", borderRadius: "var(--radius-md)", gap: "var(--space-1)",
@@ -752,7 +752,7 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
                         </button>
                         
                         {commentMenuId === comment.id && (
-                          <div className="glass animate-scale-in" style={{
+                          <div className="glass animate-scale-in responsive-dropdown-menu" style={{
                             position: "absolute", right: 0, top: "100%", zIndex: 100,
                             display: "flex", flexDirection: "column", minWidth: "180px",
                             padding: "6px", borderRadius: "12px", border: "1px solid var(--color-border)",

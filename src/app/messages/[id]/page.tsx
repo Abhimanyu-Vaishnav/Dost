@@ -1,12 +1,20 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Send, MoreVertical, Search, Info, Trash2, X, Paperclip, Smile, Image as ImageIcon, Video, MapPin, Sticker } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { 
+  Send, MoreVertical, Search, Info, Trash2, X, Paperclip, Smile, 
+  Image as ImageIcon, Video, MapPin, Sticker, ArrowLeft,
+  VolumeX, Ban, Circle, Square, CheckSquare, Trash
+} from "lucide-react";
 import { use } from "react";
+import { formatDistanceToNow } from "date-fns";
 
 const EMOJIS = ["😂", "❤️", "😍", "🔥", "😭", "😊", "✨", "🙏", "👍", "🥰", "🎉", "💯", "😎", "🥺", "🤔"];
 
 export default function ActiveChatPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
   const [messages, setMessages] = useState<any[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -17,8 +25,89 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
   const [showAttachments, setShowAttachments] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
   
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const longPressTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isLongPress = useRef(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { id: conversationId } = use(params);
+
+  const handleMuteUser = async () => {
+    if (!otherUser) return;
+    try {
+      const res = await fetch(`/api/users/${otherUser.id}/mute`, { method: "POST" });
+      if (res.ok) {
+        alert(`${otherUser.name} has been muted successfully!`);
+        setShowOptions(false);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleBlockUser = async () => {
+    if (!otherUser) return;
+    if (!confirm(`Are you sure you want to block ${otherUser.name}?`)) return;
+    try {
+      const res = await fetch(`/api/users/${otherUser.id}/block`, { method: "POST" });
+      if (res.ok) {
+        alert(`${otherUser.name} has been blocked successfully!`);
+        setShowOptions(false);
+        router.push("/messages");
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleMarkChatUnread = async () => {
+    try {
+      const res = await fetch(`/api/messages/conversations/${conversationId}/mark-unread`, { method: "POST" });
+      if (res.ok) {
+        alert("Conversation marked as unread!");
+        setShowOptions(false);
+        router.push("/messages");
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const toggleMessageSelection = (messageId: string) => {
+    setSelectedMessageIds(prev => 
+      prev.includes(messageId) 
+        ? prev.filter(id => id !== messageId) 
+        : [...prev, messageId]
+    );
+  };
+
+  const handleMessagePressStart = (messageId: string) => {
+    isLongPress.current = false;
+    longPressTimeout.current = setTimeout(() => {
+      setSelectionMode(true);
+      setSelectedMessageIds([messageId]);
+      isLongPress.current = true;
+    }, 800);
+  };
+
+  const handleMessagePressEnd = () => {
+    if (longPressTimeout.current) {
+      clearTimeout(longPressTimeout.current);
+      longPressTimeout.current = null;
+    }
+  };
+
+  const handleDeleteSelectedMessages = async () => {
+    if (selectedMessageIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedMessageIds.length} message(s)?`)) return;
+    try {
+      const res = await fetch(`/api/messages/${conversationId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageIds: selectedMessageIds })
+      });
+      if (res.ok) {
+        setMessages(prev => prev.filter(msg => !selectedMessageIds.includes(msg.id)));
+        setSelectionMode(false);
+        setSelectedMessageIds([]);
+      }
+    } catch (e) { console.error(e); }
+  };
 
   const fetchMessages = async () => {
     try {
@@ -101,14 +190,45 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative", background: "var(--color-bg-base)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative", background: "var(--color-bg-base)", overflow: "hidden" }}>
       {/* Premium Header */}
-      <div style={{
-        padding: "16px 24px", borderBottom: "1px solid var(--color-border)",
-        background: "var(--color-bg-glass)", backdropFilter: "blur(16px)",
-        position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+      {selectionMode ? (
+        <div className="messages-chat-header" style={{
+          padding: "16px 24px", borderBottom: "1px solid var(--color-border)",
+          background: "rgba(29, 155, 240, 0.1)",
+          position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <button onClick={() => { setSelectionMode(false); setSelectedMessageIds([]); }} style={{ background: "none", border: "none", color: "var(--color-text-main)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <X size={24} />
+            </button>
+            <span style={{ fontWeight: 800, fontSize: "1.2rem", color: "var(--color-text-main)" }}>
+              {selectedMessageIds.length} Selected
+            </span>
+          </div>
+          <button 
+            onClick={handleDeleteSelectedMessages} 
+            disabled={selectedMessageIds.length === 0} 
+            style={{ 
+              background: "none", border: "none", color: selectedMessageIds.length > 0 ? "#ff4d4d" : "var(--color-text-muted)", 
+              cursor: selectedMessageIds.length > 0 ? "pointer" : "default", display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 
+            }}
+          >
+            <Trash size={20} /> Delete
+          </button>
+        </div>
+      ) : (
+        <div className="messages-chat-header" style={{
+          padding: "16px 24px", borderBottom: "1px solid var(--color-border)",
+          background: "var(--color-bg-glass)", backdropFilter: "blur(16px)",
+          position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <Link href="/messages" className="messages-back-btn" style={{
+              marginRight: "8px", color: "var(--color-text-main)", display: "none", alignItems: "center"
+            }}>
+              <ArrowLeft size={24} />
+            </Link>
           <div style={{
             width: "44px", height: "44px", borderRadius: "50%", background: "var(--color-primary-light)",
             display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-primary)",
@@ -125,7 +245,13 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
               {otherUser?.name || "Loading..."}
             </h2>
             <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-primary)", fontWeight: 600 }}>
-              Active Now
+              {(() => {
+                if (!otherUser?.lastSeen) return "Active recently";
+                const lastSeenDate = new Date(otherUser.lastSeen);
+                const diffMs = Date.now() - lastSeenDate.getTime();
+                if (diffMs < 120000) return "Active Now"; // < 2 mins
+                return `Active ${formatDistanceToNow(lastSeenDate, { addSuffix: true })}`;
+              })()}
             </p>
           </div>
         </div>
@@ -142,7 +268,7 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
           {showOptions && (
             <>
               <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setShowOptions(false)} />
-              <div className="glass animate-scale-in" style={{
+              <div className="glass animate-scale-in responsive-dropdown-menu" style={{
                 position: "absolute", right: 0, top: "50px", zIndex: 100,
                 minWidth: "220px", background: "var(--color-bg-surface)", borderRadius: "16px",
                 border: "1px solid var(--color-border)", boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
@@ -154,11 +280,35 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
                 }}>
                   <Search size={18} /> Search in Chat
                 </button>
-                <button className="hover-bg" style={{
+                <button onClick={() => { if (otherUser) router.push(`/profile/${otherUser.id}`); setShowOptions(false); }} className="hover-bg" style={{
                   display: "flex", alignItems: "center", gap: "12px", background: "none", border: "none",
                   padding: "12px 16px", borderRadius: "12px", cursor: "pointer", color: "var(--color-text-main)", fontWeight: 600, fontSize: "1rem"
                 }}>
                   <Info size={18} /> View Profile
+                </button>
+                <button onClick={handleMuteUser} className="hover-bg" style={{
+                  display: "flex", alignItems: "center", gap: "12px", background: "none", border: "none",
+                  padding: "12px 16px", borderRadius: "12px", cursor: "pointer", color: "var(--color-text-main)", fontWeight: 600, fontSize: "1rem"
+                }}>
+                  <VolumeX size={18} /> Mute User
+                </button>
+                <button onClick={handleMarkChatUnread} className="hover-bg" style={{
+                  display: "flex", alignItems: "center", gap: "12px", background: "none", border: "none",
+                  padding: "12px 16px", borderRadius: "12px", cursor: "pointer", color: "var(--color-text-main)", fontWeight: 600, fontSize: "1rem"
+                }}>
+                  <Circle size={10} fill="var(--color-text-main)" /> Mark as Unread
+                </button>
+                <button onClick={() => { setSelectionMode(true); setShowOptions(false); }} className="hover-bg" style={{
+                  display: "flex", alignItems: "center", gap: "12px", background: "none", border: "none",
+                  padding: "12px 16px", borderRadius: "12px", cursor: "pointer", color: "var(--color-text-main)", fontWeight: 600, fontSize: "1rem"
+                }}>
+                  <Trash size={18} /> Delete Messages
+                </button>
+                <button onClick={handleBlockUser} className="hover-bg" style={{
+                  display: "flex", alignItems: "center", gap: "12px", background: "none", border: "none",
+                  padding: "12px 16px", borderRadius: "12px", cursor: "pointer", color: "#ff4d4d", fontWeight: 600, fontSize: "1rem"
+                }}>
+                  <Ban size={18} /> Block User
                 </button>
                 <div style={{ height: "1px", background: "var(--color-border)", margin: "4px 0" }} />
                 <button className="hover-bg" style={{
@@ -172,6 +322,7 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
       </div>
+      )}
 
       {/* Inline Search Bar */}
       {showSearch && (
@@ -194,7 +345,7 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* Messages Area */}
-      <div style={{ 
+      <div className="messages-area" style={{ 
         flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "16px",
         backgroundImage: "radial-gradient(circle at center, rgba(29, 155, 240, 0.03) 0%, transparent 70%)"
       }}>
@@ -219,9 +370,39 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
             return (
               <div key={msg.id} className="animate-fade-in" style={{ 
                 display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start",
-                marginTop: isFirstInGroup ? "8px" : "2px"
+                marginTop: isFirstInGroup ? "8px" : "2px",
+                width: "100%"
               }}>
-                <div style={{
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", width: "100%", flexDirection: isMe ? "row-reverse" : "row" }}>
+                  {selectionMode && (
+                    <button 
+                      onClick={() => toggleMessageSelection(msg.id)}
+                      style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-primary)" }}
+                    >
+                      {selectedMessageIds.includes(msg.id) ? (
+                        <CheckSquare size={20} />
+                      ) : (
+                        <Square size={20} color="var(--color-text-muted)" />
+                      )}
+                    </button>
+                  )}
+                  
+                  <div 
+                    className="message-bubble" 
+                    onMouseDown={() => handleMessagePressStart(msg.id)}
+                    onMouseUp={handleMessagePressEnd}
+                    onTouchStart={() => handleMessagePressStart(msg.id)}
+                    onTouchEnd={handleMessagePressEnd}
+                    onClick={() => {
+                      if (isLongPress.current) {
+                        isLongPress.current = false;
+                        return;
+                      }
+                      if (selectionMode) {
+                        toggleMessageSelection(msg.id);
+                      }
+                    }}
+                    style={{
                   maxWidth: "75%",
                   padding: msg.messageType === "STICKER" ? "0" : "12px 18px",
                   borderRadius: msg.messageType === "STICKER" ? "0" : "24px",
@@ -259,14 +440,30 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
                     <img src={msg.fileUrl} alt="Sticker" style={{ width: "150px", height: "150px", objectFit: "contain" }} />
                   )}
                 </div>
-                {isFirstInGroup && (
-                   <span style={{ 
-                     fontSize: "0.75rem", color: "var(--color-text-muted)", marginTop: "6px", 
-                     padding: isMe ? "0 8px 0 0" : "0 0 0 8px", fontWeight: 500
-                   }}>
-                     {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                   </span>
-                )}
+                </div>
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "4px",
+                  marginTop: "4px",
+                  padding: isMe ? "0 8px 0 0" : "0 0 0 8px"
+                }}>
+                  <span style={{ 
+                    fontSize: "0.72rem", color: "var(--color-text-muted)", fontWeight: 500 
+                  }}>
+                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {isMe && (
+                    <span style={{ 
+                      fontSize: "0.8rem", 
+                      color: msg.isRead ? "var(--color-primary)" : "var(--color-text-muted)", 
+                      fontWeight: 800,
+                      lineHeight: 1
+                    }}>
+                      {msg.isRead ? "✓✓" : "✓"}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })
@@ -275,7 +472,7 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* Input Area */}
-      <div style={{ 
+      <div className="messages-chat-input-container" style={{ 
         padding: "16px 24px 24px 24px", borderTop: "1px solid var(--color-border)", background: "var(--color-bg-base)", position: "relative" 
       }}>
         

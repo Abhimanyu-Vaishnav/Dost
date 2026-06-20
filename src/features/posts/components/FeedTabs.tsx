@@ -16,7 +16,7 @@ export function FeedTabs() {
       display: "flex", 
       width: "100%", 
       borderBottom: "1px solid var(--color-border)",
-      background: "rgba(255, 255, 255, 0.8)",
+      background: "var(--color-bg-glass)",
       backdropFilter: "blur(8px)",
       position: "sticky",
       top: "53px",

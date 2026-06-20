@@ -19,8 +19,12 @@ model User {
   password  String
   name      String?
   avatar    String?
-  coverImage String?
-  bio       String?
+  coverImage     String?
+  bio            String?
+  gender         String?
+  dob            DateTime?
+  accountType    String?   @default("PERSON") // PERSON, GOVERNMENT, BUSINESS
+  accountSubType String?
   posts     Post[]
   followers Follows[] @relation("following")
   following Follows[] @relation("follower")
@@ -42,6 +46,9 @@ model User {
   blockedUsers Block[] @relation("blockedBy")
   blockedBy    Block[] @relation("blockedUser")
 
+  closeFriendIds String?
+
+  lastSeen  DateTime  @default(now())
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -222,6 +229,8 @@ model Story {
   bgColor     String?  // Optional background color for text-only stories
   createdAt   DateTime @default(now())
   expiresAt   DateTime
+  privacy     String   @default("PUBLIC") // PUBLIC, FRIENDS, CLOSE_FRIENDS, SPECIFIC
+  allowedUsers String?  // JSON string array of user IDs
   
   author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
