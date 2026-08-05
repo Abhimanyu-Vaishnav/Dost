@@ -9,6 +9,7 @@ interface CreatePostModalProps {
   userName?: string;
   userAvatar?: string | null;
   initialDraft?: string;
+  autoOpenDrafts?: boolean;
 }
 
 interface SavedDraft {
@@ -17,11 +18,11 @@ interface SavedDraft {
   threadItems: { content: string; imageUrl?: string; videoUrl?: string }[];
 }
 
-export function CreatePostModal({ onClose, userName, userAvatar, initialDraft }: CreatePostModalProps) {
+export function CreatePostModal({ onClose, userName, userAvatar, initialDraft, autoOpenDrafts = false }: CreatePostModalProps) {
   const [hasContent, setHasContent] = useState(false);
   const [currentThreads, setCurrentThreads] = useState<any[]>([]);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
-  const [showDraftsList, setShowDraftsList] = useState(false);
+  const [showDraftsList, setShowDraftsList] = useState(autoOpenDrafts);
   const [savedDrafts, setSavedDrafts] = useState<SavedDraft[]>([]);
   const [activeDraftText, setActiveDraftText] = useState<string | undefined>(initialDraft);
 

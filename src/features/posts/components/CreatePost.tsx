@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { 
   Image as ImageIcon, Video, Link as LinkIcon, X, Loader2, 
   Smile, Calendar, MapPin, ListFilter, FileType,
-  Globe, Users, Lock, Plus, ChevronDown
+  Globe, Users, Lock, Plus, ChevronDown, FileText
 } from "lucide-react";
 import { uploadMediaFile } from "@/lib/upload";
 import { CreatePostModal } from "./CreatePostModal";
@@ -34,9 +34,11 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRefs = useRef<{ [key: string]: HTMLTextAreaElement | null }>({});
 
-  // If inline, state to launch modal pop-up when adding thread
+  // If inline, state to launch modal pop-up when adding thread or opening drafts
   const [showThreadModal, setShowThreadModal] = useState(false);
+  const [autoOpenDrafts, setAutoOpenDrafts] = useState(false);
   const [initialModalDraft, setInitialModalDraft] = useState("");
+  const [draftsCount, setDraftsCount] = useState(0);
 
   const [threadItems, setThreadItems] = useState<ThreadItem[]>(() => {
     if (initialDraft && initialDraft.trim()) {
@@ -58,6 +60,16 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem("dost_saved_drafts");
+      if (stored) {
+        const arr = JSON.parse(stored);
+        setDraftsCount(arr.length);
+      }
+    } catch (e) {}
+  }, [showThreadModal]);
+
+  useEffect(() => {
     const hasContent = threadItems.some(i => i.content.trim() || i.imageUrl || i.videoUrl);
     if (onDraftChange) {
       onDraftChange(hasContent, threadItems);
@@ -72,7 +84,6 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
   };
 
   useLayoutEffect(() => {
-    // Initial auto-height for all textareas on mount
     Object.values(textareaRefs.current).forEach(el => resizeTextarea(el));
   }, [threadItems]);
 
@@ -108,8 +119,8 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
 
   const handleAddThreadClick = () => {
     if (!isModal) {
-      // Launch popup modal dialog for thread creation
       setInitialModalDraft(threadItems[0]?.content || "");
+      setAutoOpenDrafts(false);
       setShowThreadModal(true);
       return;
     }
@@ -123,6 +134,14 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
     };
     setThreadItems([...threadItems, newItem]);
     setActiveItemIndex(threadItems.length);
+  };
+
+  const handleOpenDraftsClick = () => {
+    if (!isModal) {
+      setInitialModalDraft("");
+      setAutoOpenDrafts(true);
+      setShowThreadModal(true);
+    }
   };
 
   const removeThreadItem = (index: number) => {
@@ -186,6 +205,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
           userName={userName}
           userAvatar={userAvatar}
           initialDraft={initialModalDraft}
+          autoOpenDrafts={autoOpenDrafts}
           onClose={() => setShowThreadModal(false)}
         />
         {renderInlineForm()}
@@ -203,23 +223,22 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
         background: "transparent",
         borderBottom: "1px solid var(--color-border)"
       }}>
-        <div style={{ display: "flex", gap: "12px" }}>
-          {/* Avatar */}
-          <div style={{
-            width: "40px", height: "40px", borderRadius: "50%",
-            backgroundColor: "var(--color-primary)", color: "white",
-            display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700,
-            fontSize: "1.1rem", overflow: "hidden", flexShrink: 0
-          }}>
-            {userAvatar ? (
-              <img src={userAvatar} alt="Me" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : (
-              userName.charAt(0).toUpperCase()
-            )}
-          </div>
+        {/* Top Header Row with Drafts Button */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "12px", flex: 1, alignItems: "center" }}>
+            <div style={{
+              width: "40px", height: "40px", borderRadius: "50%",
+              backgroundColor: "var(--color-primary)", color: "white",
+              display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700,
+              fontSize: "1.1rem", overflow: "hidden", flexShrink: 0
+            }}>
+              {userAvatar ? (
+                <img src={userAvatar} alt="Me" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                userName.charAt(0).toUpperCase()
+              )}
+            </div>
 
-          {/* Single Textarea Prompt */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
             <textarea
               rows={1}
               value={threadItems[0].content}
@@ -234,29 +253,44 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
                 fontFamily: "inherit", lineHeight: "1.5"
               }}
             />
-
-            {/* Media Previews */}
-            {(threadItems[0].imageUrl || threadItems[0].videoUrl || threadItems[0].linkUrl) && (
-              <div className="animate-slide-up" style={{ marginTop: "10px", borderRadius: "16px", position: "relative", overflow: "hidden", border: "1px solid var(--color-border)" }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const updated = [...threadItems];
-                    updated[0].imageUrl = "";
-                    updated[0].videoUrl = "";
-                    updated[0].linkUrl = "";
-                    setThreadItems(updated);
-                  }}
-                  style={{ position: "absolute", right: "12px", top: "12px", color: "white", background: "rgba(15, 20, 25, 0.75)", borderRadius: "50%", padding: "6px", zIndex: 2, cursor: "pointer" }}
-                >
-                  <X size={16} />
-                </button>
-                {threadItems[0].imageUrl && <img src={threadItems[0].imageUrl} style={{ width: "100%", maxHeight: "350px", objectFit: "cover" }} alt="Preview" />}
-                {threadItems[0].videoUrl && <video src={threadItems[0].videoUrl} controls style={{ width: "100%", maxHeight: "350px" }} />}
-              </div>
-            )}
           </div>
+
+          {/* Drafts Button on Inline Form */}
+          <button
+            type="button"
+            onClick={handleOpenDraftsClick}
+            style={{
+              background: "none", border: "none", color: "var(--color-primary)",
+              fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", padding: "4px 10px",
+              borderRadius: "99px", display: "flex", alignItems: "center", gap: "4px", flexShrink: 0
+            }}
+            className="hover-bg"
+            title="View saved drafts"
+          >
+            <FileText size={16} /> Drafts {draftsCount > 0 && `(${draftsCount})`}
+          </button>
         </div>
+
+        {/* Media Previews */}
+        {(threadItems[0].imageUrl || threadItems[0].videoUrl || threadItems[0].linkUrl) && (
+          <div className="animate-slide-up" style={{ marginTop: "10px", borderRadius: "16px", position: "relative", overflow: "hidden", border: "1px solid var(--color-border)", marginLeft: "52px" }}>
+            <button
+              type="button"
+              onClick={() => {
+                const updated = [...threadItems];
+                updated[0].imageUrl = "";
+                updated[0].videoUrl = "";
+                updated[0].linkUrl = "";
+                setThreadItems(updated);
+              }}
+              style={{ position: "absolute", right: "12px", top: "12px", color: "white", background: "rgba(15, 20, 25, 0.75)", borderRadius: "50%", padding: "6px", zIndex: 2, cursor: "pointer" }}
+            >
+              <X size={16} />
+            </button>
+            {threadItems[0].imageUrl && <img src={threadItems[0].imageUrl} style={{ width: "100%", maxHeight: "350px", objectFit: "cover" }} alt="Preview" />}
+            {threadItems[0].videoUrl && <video src={threadItems[0].videoUrl} controls style={{ width: "100%", maxHeight: "350px" }} />}
+          </div>
+        )}
 
         {/* Global Audience Indicator */}
         <div style={{ paddingLeft: "52px", display: "flex", alignItems: "center", gap: "8px", color: "var(--color-primary)", fontSize: "0.85rem", fontWeight: 700 }}>
@@ -343,7 +377,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
     return renderInlineForm();
   }
 
-  // MODAL MODE (Sleek X Thread Pop-Up Modal matching Pic 1 & Pic 2)
+  // MODAL MODE
   return (
     <form onSubmit={handleSubmit} style={{
       padding: "16px 20px",
