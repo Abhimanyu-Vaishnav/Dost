@@ -449,15 +449,46 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
           {/* Navigation Tap Zones */}
           <div 
             onClick={(e) => { e.stopPropagation(); handlePrev(); }}
-            style={{ position: "absolute", top: 0, left: 0, width: "30%", height: "100%", zIndex: 40 }} 
+            style={{ position: "absolute", top: 0, left: 0, width: "30%", height: "80%", zIndex: 40 }} 
           />
           <div 
             onClick={(e) => { e.stopPropagation(); handleNext(); }}
-            style={{ position: "absolute", top: 0, right: 0, width: "70%", height: "100%", zIndex: 40 }} 
+            style={{ position: "absolute", top: 0, right: 0, width: "70%", height: "80%", zIndex: 40 }} 
           />
+
+          {/* Quick Reaction Bar */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)",
+              zIndex: 50, display: "flex", gap: "12px", background: "rgba(0, 0, 0, 0.6)",
+              backdropFilter: "blur(8px)", padding: "8px 16px", borderRadius: "99px",
+              border: "1px solid rgba(255, 255, 255, 0.2)"
+            }}
+          >
+            {["❤️", "🔥", "😂", "👏", "😍"].map((emoji) => (
+              <button
+                key={emoji}
+                onClick={async () => {
+                  if (!currentStory) return;
+                  await fetch(`/api/stories/${currentStory.id}/react`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ emoji }),
+                  }).catch(() => {});
+                }}
+                style={{
+                  fontSize: "1.3rem", background: "none", border: "none", cursor: "pointer",
+                  transition: "transform 0.1s ease"
+                }}
+                className="hover-scale"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-
     </div>
   );
 }

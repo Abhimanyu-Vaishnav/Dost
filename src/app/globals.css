@@ -1,16 +1,16 @@
-:root {
-  /* Color Palette - X-like Clean UI */
-  --color-primary: #1d9bf0; /* Twitter blue */
+:root, [data-theme="dark"] {
+  /* Color Palette - Dark Mode (Default) */
+  --color-primary: #1d9bf0;
   --color-primary-light: #71c9f8;
   --color-primary-dark: #1a8cd8;
   
-  --color-bg-base: #ffffff;
-  --color-bg-surface: #ffffff;
-  --color-bg-glass: rgba(255, 255, 255, 0.95);
+  --color-bg-base: #15202b;
+  --color-bg-surface: #192734;
+  --color-bg-glass: rgba(21, 32, 43, 0.95);
   
-  --color-text-main: #0f1419;
-  --color-text-muted: #536471;
-  --color-border: #eff3f4;
+  --color-text-main: #f7f9f9;
+  --color-text-muted: #8b98a5;
+  --color-border: #38444d;
 
   /* Spacing */
   --space-1: 0.25rem;
@@ -31,23 +31,31 @@
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 
   /* Transitions */
   --transition-fast: 150ms ease-in-out;
   --transition-normal: 300ms ease-in-out;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg-base: #15202b; /* X Dim Mode */
-    --color-bg-surface: #15202b;
-    --color-bg-glass: rgba(21, 32, 43, 0.95);
-    
-    --color-text-main: #f7f9f9;
-    --color-text-muted: #8b98a5;
-    --color-border: #38444d;
-  }
+[data-theme="light"] {
+  --color-bg-base: #ffffff;
+  --color-bg-surface: #f7f9f9;
+  --color-bg-glass: rgba(255, 255, 255, 0.95);
+  --color-text-main: #0f1419;
+  --color-text-muted: #536471;
+  --color-border: #eff3f4;
+  --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+[data-theme="midnight"] {
+  --color-bg-base: #000000;
+  --color-bg-surface: #16181c;
+  --color-bg-glass: rgba(0, 0, 0, 0.95);
+  --color-text-main: #e7e9ea;
+  --color-text-muted: #71767b;
+  --color-border: #2f3336;
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -284,6 +292,22 @@ ul {
   .create-post-extra-icon {
     display: none !important;
   }
+}
+
+/* Sleek custom scrollbars for modals and containers */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
 }
 
 

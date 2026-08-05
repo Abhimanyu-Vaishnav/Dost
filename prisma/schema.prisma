@@ -40,6 +40,12 @@ model User {
   messages      Message[]
   stories       Story[]
   
+  storyReactions StoryReaction[]
+  storyPollVotes StoryPollVote[]
+  createdCommunities Community[]
+  communities    CommunityMember[]
+  communityPosts CommunityPost[]
+
   mutedUsers   Mute[] @relation("mutedBy")
   mutedBy      Mute[] @relation("mutedUser")
   
@@ -196,11 +202,16 @@ model Bookmark {
 
 model Conversation {
   id            String    @id @default(cuid())
+  isGroup       Boolean   @default(false)
+  name          String?
+  groupImage    String?
+  adminId       String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   participants  User[]    @relation("ConversationParticipants")
   messages      Message[]
+  callSessions  CallSession[]
 }
 
 model Message {
@@ -233,4 +244,104 @@ model Story {
   allowedUsers String?  // JSON string array of user IDs
   
   author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reactions   StoryReaction[]
+  polls       StoryPoll[]
+}
+
+model StoryReaction {
+  id        String   @id @default(cuid())
+  storyId   String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, userId, emoji])
+}
+
+model StoryPoll {
+  id        String   @id @default(cuid())
+  storyId   String
+  question  String
+  options   String   // JSON string array e.g. ["Yes", "No"]
+  createdAt DateTime @default(now())
+
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  votes     StoryPollVote[]
+}
+
+model StoryPollVote {
+  id          String    @id @default(cuid())
+  pollId      String
+  userId      String
+  optionIndex Int
+  createdAt   DateTime  @default(now())
+
+  poll        StoryPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+}
+
+model Community {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  icon        String?
+  coverImage  String?
+  creatorId   String
+  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     CommunityMember[]
+  posts       CommunityPost[]
+}
+
+model CommunityMember {
+  id          String    @id @default(cuid())
+  communityId String
+  userId      String
+  role        String    @default("MEMBER") // ADMIN, MEMBER
+  joinedAt    DateTime  @default(now())
+
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+}
+
+model CommunityPost {
+  id          String   @id @default(cuid())
+  communityId String
+  authorId    String
+  content     String
+  imageUrl    String?
+  videoUrl    String?
+  createdAt   DateTime @default(now())
+
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model Hashtag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  count     Int      @default(1)
+  createdAt DateTime @default(now())
+}
+
+model CallSession {
+  id             String   @id @default(cuid())
+  conversationId String
+  callerId       String
+  type           String   // "AUDIO", "VIDEO"
+  status         String   @default("RINGING") // "RINGING", "CONNECTED", "ENDED"
+  sdp            String?  // Signalling data JSON string
+  candidates     String?  // ICE candidates JSON string
+  createdAt      DateTime @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }

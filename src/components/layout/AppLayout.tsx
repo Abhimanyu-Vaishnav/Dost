@@ -11,16 +11,19 @@ import styles from "./AppLayout.module.css";
 import { CreatePostModal } from "@/features/posts/components/CreatePostModal";
 import { CreateStoryModal } from "@/features/stories/components/CreateStoryModal";
 
+import { ThemeModal } from "@/components/layout/ThemeModal";
+
 export function AppLayout({ children, rightSidebar, fullWidth = false }: { children: React.ReactNode, rightSidebar?: React.ReactNode, fullWidth?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<{ userId: string; name: string } | null>(null);
+  const [user, setUser] = useState<{ userId: string; name: string; avatar?: string | null } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [latestUnreadMsgId, setLatestUnreadMsgId] = useState<string | null>(null);
   const [activeToast, setActiveToast] = useState<{ senderName: string; content: string; conversationId: string; id: string } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showStoryModal, setShowStoryModal] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [showMore, setShowMore] = useState(false);
 
@@ -30,7 +33,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         const profileRes = await fetch("/api/users/profile");
         if (profileRes.ok) {
           const data = await profileRes.json();
-          setUser({ userId: data.user.id, name: data.user.name });
+          setUser({ userId: data.user.id, name: data.user.name, avatar: data.user.avatar });
         }
 
         const notifyRes = await fetch("/api/notifications/unread-count");
@@ -119,7 +122,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
     { href: "/analytics", icon: <BarChart3 size={24} />, label: "Analytics" },
     { href: "/ads", icon: <TrendingUp size={24} />, label: "Ads Manager" },
     { href: "/settings", icon: <SettingsIcon size={24} />, label: "Settings" },
-    { icon: <Palette size={24} />, label: "Display", onClick: () => alert("Theme switching coming soon!") },
+    { icon: <Palette size={24} />, label: "Display", onClick: () => setShowThemeModal(true) },
     { icon: <Shield size={24} />, label: "Privacy & Safety", onClick: () => alert("Privacy settings coming soon!") },
     { href: "/help", icon: <HelpCircle size={24} />, label: "Help Center" },
     { icon: <Command size={24} />, label: "Keyboard Shortcuts", onClick: () => alert("Shortcuts: N (New Post), L (Like)") },
@@ -261,6 +264,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         <CreatePostModal 
           onClose={() => setShowCreateModal(false)} 
           userName={user?.name || "User"} 
+          userAvatar={user?.avatar}
         />
       )}
 
@@ -268,6 +272,12 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         <CreateStoryModal 
           onClose={() => setShowStoryModal(false)} 
           onSuccess={() => setShowStoryModal(false)}
+        />
+      )}
+
+      {showThemeModal && (
+        <ThemeModal 
+          onClose={() => setShowThemeModal(false)} 
         />
       )}
 

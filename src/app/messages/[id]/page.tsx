@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { 
   Send, MoreVertical, Search, Info, Trash2, X, Paperclip, Smile, 
   Image as ImageIcon, Video, MapPin, Sticker, ArrowLeft,
-  VolumeX, Ban, Circle, Square, CheckSquare, Trash
+  VolumeX, Ban, Circle, Square, CheckSquare, Trash, Phone
 } from "lucide-react";
 import { use } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { CallModal } from "@/features/messages/components/CallModal";
 
 const EMOJIS = ["😂", "❤️", "😍", "🔥", "😭", "😊", "✨", "🙏", "👍", "🥰", "🎉", "💯", "😎", "🥺", "🤔"];
 
@@ -24,6 +25,7 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
   const [searchQuery, setSearchQuery] = useState("");
   const [showAttachments, setShowAttachments] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [activeCall, setActiveCall] = useState<"AUDIO" | "VIDEO" | null>(null);
   
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
@@ -256,7 +258,20 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
 
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: "8px" }}>
+          <button onClick={() => setActiveCall("AUDIO")} style={{
+            background: "transparent", border: "none", color: "var(--color-primary)", cursor: "pointer",
+            width: "40px", height: "40px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center"
+          }} className="hover-bg">
+            <Phone size={22} />
+          </button>
+          <button onClick={() => setActiveCall("VIDEO")} style={{
+            background: "transparent", border: "none", color: "var(--color-primary)", cursor: "pointer",
+            width: "40px", height: "40px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center"
+          }} className="hover-bg">
+            <Video size={22} />
+          </button>
+
           <button onClick={() => setShowOptions(!showOptions)} style={{
             background: "transparent", border: "none", color: "var(--color-text-muted)", cursor: "pointer",
             width: "40px", height: "40px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
@@ -562,6 +577,15 @@ export default function ActiveChatPage({ params }: { params: Promise<{ id: strin
           </button>
         </form>
       </div>
+
+      {activeCall && (
+        <CallModal
+          conversationId={conversationId}
+          type={activeCall}
+          recipientName={otherUser?.name || "User"}
+          onClose={() => setActiveCall(null)}
+        />
+      )}
     </div>
   );
 }

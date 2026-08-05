@@ -23,6 +23,8 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
+import { ThemeProvider } from "@/context/ThemeContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -34,7 +36,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="app-container mesh-gradient-bg">{children}</body>
+      <body className="app-container mesh-gradient-bg">
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   );
 }
