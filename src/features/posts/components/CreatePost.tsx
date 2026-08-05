@@ -15,6 +15,7 @@ interface CreatePostProps {
   userAvatar?: string | null;
   initialDraft?: string;
   onPostSuccess?: () => void;
+  onDraftChange?: (hasContent: boolean, threadItems: ThreadItem[]) => void;
   isModal?: boolean;
 }
 
@@ -28,7 +29,7 @@ interface ThreadItem {
 
 const EMOJIS = ["😀", "😂", "😍", "🔥", "✨", "👏", "💯", "🙏", "❤️", "🚀", "💡", "🎉", "👀", "🥳", "👍"];
 
-export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, isModal = false }: CreatePostProps) {
+export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, onDraftChange, isModal = false }: CreatePostProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRefs = useRef<{ [key: string]: HTMLTextAreaElement | null }>({});
@@ -55,6 +56,13 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
   const [showEmojis, setShowEmojis] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    const hasContent = threadItems.some(i => i.content.trim() || i.imageUrl || i.videoUrl);
+    if (onDraftChange) {
+      onDraftChange(hasContent, threadItems);
+    }
+  }, [threadItems, onDraftChange]);
 
   // Resize textareas safely without triggering parent scroll jump
   const resizeTextarea = (el: HTMLTextAreaElement | null) => {
