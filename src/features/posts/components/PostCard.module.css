@@ -129,6 +129,96 @@
   color: var(--color-primary) !important;
 }
 
+/* Thread connector line styles matching X/Twitter */
+.threadWrapper {
+  display: flex;
+  position: relative;
+  width: 100%;
+}
+
+.avatarColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: 12px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.threadLine {
+  width: 2px;
+  background-color: var(--color-border);
+  flex-grow: 1;
+  margin-top: 4px;
+  border-radius: 2px;
+}
+
+.mainColumn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.replyHeader {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+
+.replyHeader a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.replyHeader a:hover {
+  text-decoration: underline;
+}
+
+.quoteCard {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.quoteCard:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.codeBlock {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 0.88rem;
+  overflow-x: auto;
+  margin-top: 8px;
+  border: 1px solid var(--color-border);
+  position: relative;
+}
+
+.showMoreBtn {
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 4px 0;
+  margin-top: 2px;
+}
+
+.showMoreBtn:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 500px) {
   .card {
     padding: 10px 12px;

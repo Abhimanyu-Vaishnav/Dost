@@ -32,29 +32,52 @@ interface Post {
   content: string;
   imageUrl?: string | null;
   videoUrl?: string | null;
+  gifUrl?: string | null;
+  isCodeBlock?: boolean;
   linkUrl?: string | null;
   location?: string | null;
   pollData?: string | null;
   scheduledAt?: string | null;
   createdAt: string;
+  parentId?: string | null;
+  parent?: {
+    id: string;
+    author: {
+      id: string;
+      name: string | null;
+      username?: string | null;
+    };
+  } | null;
+  quotePost?: Post | null;
   author: {
     id: string;
     name: string | null;
     avatar?: string | null;
+    username?: string | null;
   };
   likes?: Like[];
   bookmarkedBy?: { userId: string }[];
   comments?: Comment[];
   repost?: Post | null;
+  reposts?: { id: string }[];
   views?: number;
   _count?: {
     likes: number;
     comments: number;
+    replies?: number;
+    reposts?: number;
   };
 }
 
+interface PostCardProps {
+  post: Post;
+  currentUserId?: string;
+  isPrivacyPage?: boolean;
+  isThreadParent?: boolean;
+  hasThreadChild?: boolean;
+}
 
-export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, currentUserId?: string, isPrivacyPage?: boolean }) {
+export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, hasThreadChild }: PostCardProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
@@ -502,25 +525,44 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
   if (isHidden) return null;
 
   return (
-    <div className={`glass ${styles.card} animate-scale-in`}>
+    <div 
+      className={`glass ${styles.card} animate-scale-in`}
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest("a, button, input, textarea, select, label")) return;
+        router.push(`/post/${post.id}`);
+      }}
+      style={{ cursor: "pointer" }}
+    >
       {post.repost && (
         <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", paddingLeft: "12px" }}>
           <Repeat size={14} /> Reposted
         </div>
       )}
       
-      <div className={styles.header}>
-        <Link href={`/profile/${post.author.id}`} className={styles.avatar}>
-          {post.author.avatar ? (
-             <img src={post.author.avatar} alt={post.author.name || ""} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
-          ) : getInitials(post.author.name)}
-        </Link>
-        <div className={styles.authorInfo}>
-          <Link href={`/profile/${post.author.id}`} className={styles.authorName} style={{ textDecoration: "none" }}>
-            {post.author.name || "Unknown User"}
+      <div className={styles.threadWrapper}>
+        <div className={styles.avatarColumn}>
+          <Link href={`/profile/${post.author.id}`} className={styles.avatar}>
+            {post.author.avatar ? (
+              <img src={post.author.avatar} alt={post.author.name || ""} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
+            ) : getInitials(post.author.name)}
           </Link>
-          <span className="text-muted" style={{ fontSize: "0.85rem" }} suppressHydrationWarning>{formattedDate}</span>
+          {(isThreadParent || hasThreadChild) && <div className={styles.threadLine} />}
         </div>
+
+        <div className={styles.mainColumn}>
+          <div className={styles.header}>
+            <div className={styles.authorInfo} style={{ marginLeft: 0 }}>
+              <Link href={`/profile/${post.author.id}`} className={styles.authorName} style={{ textDecoration: "none" }}>
+                {post.author.name || "Unknown User"}
+              </Link>
+              {post.parent?.author && (
+                <div className={styles.replyHeader}>
+                  Replying to <Link href={`/profile/${post.parent.author.id}`}>@{post.parent.author.username || post.parent.author.name}</Link>
+                </div>
+              )}
+              <span className="text-muted" style={{ fontSize: "0.85rem" }} suppressHydrationWarning>{formattedDate}</span>
+            </div>
         
         <div style={{ marginLeft: "auto", position: "relative" }}>
           <button 
@@ -829,15 +871,20 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
             <span key={ripple.id} className="comment-ripple-effect" />
           ))}
           <button 
-            className={`${styles.actionBtn} ${styles.replyBtn} ${showComments ? styles.activeReply : ""}`} 
-            onClick={() => {
+            className={`${styles.actionBtn} ${styles.replyBtn}`} 
+            onClick={(e) => {
+              e.stopPropagation();
               triggerCommentRipple();
-              setShowComments(!showComments);
+              router.push(`/post/${post.id}`);
             }}
             title="Reply"
           >
-            <MessageCircle size={18} fill={showComments ? "var(--color-primary)" : "none"} color={showComments ? "var(--color-primary)" : "currentColor"} />
-            {commentCount > 0 && <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>{commentCount}</span>}
+            <MessageCircle size={18} />
+            {(post._count?.replies ?? post._count?.comments ?? commentCount) > 0 && (
+              <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                {post._count?.replies ?? post._count?.comments ?? commentCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -1043,6 +1090,8 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

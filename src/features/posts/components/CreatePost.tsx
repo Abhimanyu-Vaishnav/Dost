@@ -463,10 +463,62 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
   function renderInlineForm() {
     return (
       <form onSubmit={handleSubmit} style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: "8px", background: "transparent", borderBottom: "1px solid var(--color-border)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", gap: "12px", flex: 1, alignItems: "flex-start" }}>
-            <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "var(--color-bg-surface)", color: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "1rem", overflow: "hidden", flexShrink: 0, border: "1px solid var(--color-border)" }}>
-              {userAvatar ? <img src={userAvatar} alt="Me" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : userName.charAt(0).toUpperCase()}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
+          <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "var(--color-bg-surface)", color: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "1rem", overflow: "hidden", flexShrink: 0, border: "1px solid var(--color-border)" }}>
+            {userAvatar ? <img src={userAvatar} alt="Me" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : userName.charAt(0).toUpperCase()}
+          </div>
+
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
+            {/* Audience Visibility Pill */}
+            <div style={{ position: "relative", width: "fit-content" }}>
+              <button
+                type="button"
+                onClick={() => setShowAudienceMenu(!showAudienceMenu)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "6px",
+                  padding: "2px 10px", borderRadius: "9999px",
+                  border: "1px solid var(--color-primary)", color: "var(--color-primary)",
+                  background: "rgba(29, 155, 240, 0.08)", fontSize: "0.8rem", fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                {replyAudience === "EVERYONE" && <><Globe size={13} /> Everyone can reply</>}
+                {replyAudience === "FOLLOWERS" && <><Users size={13} /> People you follow</>}
+                {replyAudience === "MENTIONED" && <><Lock size={13} /> Only people you mention</>}
+                <ChevronDown size={13} />
+              </button>
+
+              {showAudienceMenu && (
+                <div style={{
+                  position: "absolute", top: "100%", left: 0, zIndex: 100, marginTop: "4px",
+                  background: "var(--color-bg-surface)", border: "1px solid var(--color-border)",
+                  borderRadius: "14px", padding: "6px", display: "flex", flexDirection: "column", gap: "2px",
+                  boxShadow: "var(--shadow-lg)", minWidth: "220px"
+                }}>
+                  <div style={{ padding: "6px 10px", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-muted)" }}>Who can reply?</div>
+                  <button
+                    type="button"
+                    onClick={() => { setReplyAudience("EVERYONE"); setShowAudienceMenu(false); }}
+                    style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", borderRadius: "8px", background: replyAudience === "EVERYONE" ? "rgba(29,155,240,0.1)" : "transparent", color: "var(--color-text-main)", border: "none", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}
+                  >
+                    <Globe size={16} style={{ color: "var(--color-primary)" }} /> Everyone
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setReplyAudience("FOLLOWERS"); setShowAudienceMenu(false); }}
+                    style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", borderRadius: "8px", background: replyAudience === "FOLLOWERS" ? "rgba(29,155,240,0.1)" : "transparent", color: "var(--color-text-main)", border: "none", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}
+                  >
+                    <Users size={16} style={{ color: "var(--color-primary)" }} /> Accounts you follow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setReplyAudience("MENTIONED"); setShowAudienceMenu(false); }}
+                    style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", borderRadius: "8px", background: replyAudience === "MENTIONED" ? "rgba(29,155,240,0.1)" : "transparent", color: "var(--color-text-main)", border: "none", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}
+                  >
+                    <Lock size={16} style={{ color: "var(--color-primary)" }} /> Only accounts you mention
+                  </button>
+                </div>
+              )}
             </div>
 
             <textarea
@@ -476,7 +528,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
               onChange={(e) => handleTextareaInput(0, e.target.value, e.target)}
               placeholder="What is happening?!"
               disabled={isSubmitting}
-              style={{ width: "100%", border: "none", resize: "none", backgroundColor: "transparent", color: "var(--color-text-main)", fontSize: "1.1rem", outline: "none", overflow: "hidden", minHeight: "44px", paddingTop: "6px", fontWeight: 400, fontFamily: "inherit", lineHeight: "1.4" }}
+              style={{ width: "100%", border: "none", resize: "none", backgroundColor: "transparent", color: "var(--color-text-main)", fontSize: "1.1rem", outline: "none", overflow: "hidden", minHeight: "44px", paddingTop: "4px", fontWeight: 400, fontFamily: "inherit", lineHeight: "1.4" }}
             />
           </div>
 

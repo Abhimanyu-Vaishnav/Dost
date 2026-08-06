@@ -111,13 +111,22 @@ model Post {
   imageUrl    String?
   videoUrl    String?
   linkUrl     String?
-  location    String?
   pollData    String?
+  gifUrl      String?
+  isCodeBlock Boolean   @default(false)
   scheduledAt DateTime?
   author      User      @relation(fields: [authorId], references: [id])
   authorId  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  parentId  String?
+  parent    Post?    @relation("PostReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Post[]   @relation("PostReplies")
+
+  quotePostId String?
+  quotePost   Post?    @relation("PostQuotes", fields: [quotePostId], references: [id], onDelete: SetNull)
+  quotePosts  Post[]   @relation("PostQuotes")
 
   repostId  String?
   repost    Post?    @relation("PostReposts", fields: [repostId], references: [id], onDelete: Cascade)

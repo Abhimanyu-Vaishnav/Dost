@@ -63,7 +63,7 @@ export default async function FeedPage(props: { searchParams: Promise<{ tab?: st
     where = { ...where, authorId: { in: followingIds } };
   }
 
-  const posts = await prisma.post.findMany({
+  const posts = await (prisma.post as any).findMany({
     where,
     orderBy: { createdAt: "desc" },
     include: {
