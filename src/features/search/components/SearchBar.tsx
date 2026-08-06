@@ -16,12 +16,12 @@ export function SearchBar() {
   };
 
   return (
-    <form onSubmit={handleSearch} style={{ position: "relative" }}>
+    <form onSubmit={handleSearch} style={{ position: "relative", width: "100%" }}>
       <div style={{
         position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)",
         color: "var(--color-text-muted)", display: "flex", alignItems: "center"
       }}>
-        <Search size={18} />
+        <Search size={17} />
       </div>
       <input
         type="text"
@@ -29,14 +29,21 @@ export function SearchBar() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         style={{
-          width: "100%", padding: "12px 16px 12px 44px",
-          borderRadius: "var(--radius-full)", border: "1px solid var(--color-border)",
-          backgroundColor: "rgba(255,255,255,0.05)", color: "var(--color-text-main)",
-          fontSize: "1rem", outline: "none", transition: "all var(--transition-fast)"
+          width: "100%", padding: "10px 16px 10px 44px",
+          borderRadius: "9999px", border: "1px solid transparent",
+          backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-main)",
+          fontSize: "0.95rem", outline: "none", transition: "all 0.15s ease"
         }}
-        onFocus={(e) => e.target.style.backgroundColor = "rgba(255,255,255,0.1)"}
-        onBlur={(e) => e.target.style.backgroundColor = "rgba(255,255,255,0.05)"}
+        onFocus={(e) => {
+          e.target.style.backgroundColor = "var(--color-bg-base)";
+          e.target.style.borderColor = "var(--color-primary)";
+        }}
+        onBlur={(e) => {
+          e.target.style.backgroundColor = "var(--color-bg-surface)";
+          e.target.style.borderColor = "transparent";
+        }}
       />
     </form>
   );
 }
+

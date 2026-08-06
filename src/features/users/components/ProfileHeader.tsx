@@ -147,7 +147,7 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
         {/* User Info Section */}
         <div style={{ marginBottom: "20px" }}>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--color-text-main)", marginBottom: "2px" }}>{user.name}</h1>
-          <p className="text-muted" style={{ fontSize: "1rem", marginBottom: "16px" }}>@{user.name?.toLowerCase().replace(/\s+/g, '')}</p>
+          <p className="text-muted" style={{ fontSize: "1rem", marginBottom: "16px" }}>@{user.username || user.name?.toLowerCase().replace(/\s+/g, '')}</p>
           
           <div style={{ fontSize: "1.05rem", color: "var(--color-text-main)", marginBottom: "16px", whiteSpace: "pre-wrap" }}>
             {user.bio || "No bio yet"}

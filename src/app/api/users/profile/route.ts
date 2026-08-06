@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
     const dbUser = await prisma.user.findUnique({
       where: { id: user.userId as string },
-      select: { id: true, name: true, email: true, avatar: true, coverImage: true, bio: true, gender: true, dob: true, accountType: true, accountSubType: true }
+      select: { id: true, name: true, username: true, email: true, avatar: true, coverImage: true, bio: true, gender: true, dob: true, accountType: true, accountSubType: true }
     });
 
     return NextResponse.json({ user: dbUser }, { status: 200 });
@@ -26,13 +26,28 @@ export async function PATCH(req: NextRequest) {
     const user = await verifyToken(token);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { name, bio, avatar, coverImage, gender, dob, accountType, accountSubType } = await req.json();
+    const { name, username, bio, avatar, coverImage, gender, dob, accountType, accountSubType } = await req.json();
     const userId = user.userId as string;
+
+    let cleanUsername: string | undefined = undefined;
+    if (username) {
+      cleanUsername = username.toLowerCase().trim().replace(/[^a-z0-9_]/g, "");
+      const existing = await prisma.user.findFirst({
+        where: {
+          username: cleanUsername,
+          NOT: { id: userId }
+        }
+      });
+      if (existing) {
+        return NextResponse.json({ error: "Username is already taken" }, { status: 400 });
+      }
+    }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         name,
+        ...(cleanUsername ? { username: cleanUsername } : {}),
         bio,
         avatar,
         coverImage,

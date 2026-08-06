@@ -11,65 +11,56 @@ export function FeedTabs() {
     router.push(`/feed?tab=${tab}`);
   };
 
+  const topicTabs = [
+    { id: "for-you", label: "For you" },
+    { id: "following", label: "Following" },
+    { id: "ai", label: "AI Engineering" },
+    { id: "tech", label: "Tech" },
+    { id: "science", label: "Science" },
+  ];
+
   return (
     <div style={{ 
       display: "flex", 
       width: "100%", 
       borderBottom: "1px solid var(--color-border)",
       background: "var(--color-bg-glass)",
-      backdropFilter: "blur(8px)",
+      backdropFilter: "blur(12px)",
       position: "sticky",
-      top: "53px",
-      zIndex: 10
+      top: 0,
+      zIndex: 10,
+      overflowX: "auto",
+      scrollbarWidth: "none"
     }}>
-      <button 
-        onClick={() => handleTabChange("for-you")}
-        style={{
-          flex: 1,
-          padding: "16px",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          fontWeight: activeTab === "for-you" ? 800 : 500,
-          color: activeTab === "for-you" ? "var(--color-text-main)" : "var(--color-text-muted)",
-          position: "relative",
-          transition: "all 0.2s"
-        }}
-        className="hover-bg"
-      >
-        For you
-        {activeTab === "for-you" && (
-          <div style={{
-            position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
-            width: "56px", height: "4px", background: "var(--color-primary)",
-            borderRadius: "99px"
-          }} />
-        )}
-      </button>
-      <button 
-        onClick={() => handleTabChange("following")}
-        style={{
-          flex: 1,
-          padding: "16px",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          fontWeight: activeTab === "following" ? 800 : 500,
-          color: activeTab === "following" ? "var(--color-text-main)" : "var(--color-text-muted)",
-          position: "relative",
-          transition: "all 0.2s"
-        }}
-        className="hover-bg"
-      >
-        Following
-        {activeTab === "following" && (
-          <div style={{
-            position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
-            width: "70px", height: "4px", background: "var(--color-primary)",
-            borderRadius: "99px"
-          }} />
-        )}
-      </button>
+      {topicTabs.map(tab => (
+        <button 
+          key={tab.id}
+          onClick={() => handleTabChange(tab.id)}
+          style={{
+            flex: "1 0 auto",
+            padding: "14px 20px",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontWeight: activeTab === tab.id ? 700 : 500,
+            fontSize: "0.95rem",
+            color: activeTab === tab.id ? "var(--color-text-main)" : "var(--color-text-muted)",
+            position: "relative",
+            transition: "color 0.15s ease",
+            whiteSpace: "nowrap"
+          }}
+        >
+          {tab.label}
+          {activeTab === tab.id && (
+            <div style={{
+              position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
+              width: "48px", height: "4px", background: "var(--color-primary)",
+              borderRadius: "99px"
+            }} />
+          )}
+        </button>
+      ))}
     </div>
   );
 }
+

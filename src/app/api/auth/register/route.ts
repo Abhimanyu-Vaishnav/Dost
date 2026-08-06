@@ -6,7 +6,7 @@ import { signToken, setAuthCookie } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
-    const { email, password, name } = await request.json();
+    const { email, password, name, username: requestedUsername } = await request.json();
 
     if (!email || !password || !name) {
       return NextResponse.json(
@@ -15,16 +15,40 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if user exists
+    // Check if email exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "account already exist" },
+        { error: "Account already exists" },
         { status: 409 }
       );
+    }
+
+    // Determine unique username
+    let finalUsername = requestedUsername
+      ? requestedUsername.toLowerCase().trim().replace(/[^a-z0-9_]/g, "")
+      : name.toLowerCase().trim().replace(/[^a-z0-9_]/g, "");
+
+    if (!finalUsername) {
+      finalUsername = `user_${Date.now()}`;
+    }
+
+    const existingUsername = await prisma.user.findUnique({
+      where: { username: finalUsername },
+    });
+
+    if (existingUsername) {
+      if (requestedUsername) {
+        return NextResponse.json(
+          { error: "Username is already taken" },
+          { status: 409 }
+        );
+      } else {
+        finalUsername = `${finalUsername}_${Math.floor(100 + Math.random() * 900)}`;
+      }
     }
 
     // Hash password
@@ -34,6 +58,7 @@ export async function POST(request: Request) {
     const user = await prisma.user.create({
       data: {
         email,
+        username: finalUsername,
         password: hashedPassword,
         name,
       },

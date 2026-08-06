@@ -6,7 +6,7 @@ import Link from "next/link";
 import { 
   Heart, MessageCircle, Share2, MoreHorizontal, Edit2, Trash2, Check, X, Repeat, EyeOff, Send, 
   ExternalLink, Bookmark as BookmarkIcon, VolumeX, Ban, BarChart3, Pin, Zap, Star, ListPlus, 
-  Settings2, Code, ShieldAlert, Flag, Eye, PenTool, UserPlus 
+  Settings2, Code, ShieldAlert, Flag, Eye, PenTool, UserPlus, MapPin 
 } from "lucide-react";
 import styles from "./PostCard.module.css";
 
@@ -33,6 +33,9 @@ interface Post {
   imageUrl?: string | null;
   videoUrl?: string | null;
   linkUrl?: string | null;
+  location?: string | null;
+  pollData?: string | null;
+  scheduledAt?: string | null;
   createdAt: string;
   author: {
     id: string;
@@ -58,10 +61,42 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
   const [showMenu, setShowMenu] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
   
+  // Interactive Poll state
+  const [pollState, setPollState] = useState<any>(() => {
+    if (!post.pollData) return null;
+    try {
+      return typeof post.pollData === "string" ? JSON.parse(post.pollData) : post.pollData;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [isVoting, setIsVoting] = useState(false);
+
+  const handleVotePoll = async (optionId: number) => {
+    if (isVoting || !currentUserId) return;
+    setIsVoting(true);
+    try {
+      const res = await fetch(`/api/posts/${post.id}/poll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ optionId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPollState(data.pollData);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsVoting(false);
+    }
+  };
+  
   // Interaction states
   const initialLiked = post.likes?.some(l => l.userId === currentUserId) || false;
   const [isLiked, setIsLiked] = useState(initialLiked);
   const [likeCount, setLikeCount] = useState(post._count?.likes ?? post.likes?.length ?? 0);
+  const [animateLike, setAnimateLike] = useState(false);
 
   const initialBookmarked = post.bookmarkedBy?.some(b => b.userId === currentUserId) || false;
   const [isBookmarked, setIsBookmarked] = useState(initialBookmarked);
@@ -80,22 +115,64 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
       try {
         const res = await fetch(`/api/posts/${post.id}/view`, { method: "POST" });
         if (res.ok) {
-          // Optimistically increment locally if not author
           if (!isAuthor) setViews(v => v + 1);
         }
       } catch (e) {}
     };
     
-    // Use a small delay to avoid accidental scrolls
     const timer = setTimeout(trackView, 2000);
     return () => clearTimeout(timer);
   }, [post.id, isAuthor]);
 
+  // Fun interaction animation states
+  const [heartBubbles, setHeartBubbles] = useState<{ id: number; tx: number; ty: number; tyEnd: number; rot: number; icon: string }[]>([]);
+  const [commentRipples, setCommentRipples] = useState<{ id: number }[]>([]);
+  const [shareSparkles, setShareSparkles] = useState<{ id: number; stx: number; sty: number; srot: number; symbol: string }[]>([]);
+
+  const triggerHeartBubbles = () => {
+    const icons = ["❤️", "💖", "💕", "✨", "💗", "💝"];
+    const newBubbles = Array.from({ length: 6 }).map((_, i) => ({
+      id: Date.now() + i + Math.random(),
+      tx: (Math.random() - 0.5) * 60,
+      ty: -(25 + Math.random() * 30),
+      tyEnd: -(55 + Math.random() * 40),
+      rot: (Math.random() - 0.5) * 45,
+      icon: icons[Math.floor(Math.random() * icons.length)]
+    }));
+    setHeartBubbles(prev => [...prev, ...newBubbles]);
+    setTimeout(() => {
+      setHeartBubbles(prev => prev.filter(b => !newBubbles.includes(b)));
+    }, 900);
+  };
+
+  const triggerCommentRipple = () => {
+    const newRipple = { id: Date.now() + Math.random() };
+    setCommentRipples(prev => [...prev, newRipple]);
+    setTimeout(() => {
+      setCommentRipples(prev => prev.filter(r => r.id !== newRipple.id));
+    }, 700);
+  };
+
+  const triggerShareSparkles = () => {
+    const symbols = ["✨", "🚀", "🎉", "🌟", "🔗", "✨"];
+    const newSparkles = Array.from({ length: 7 }).map((_, i) => ({
+      id: Date.now() + i + Math.random(),
+      stx: (Math.random() - 0.5) * 70,
+      sty: -(20 + Math.random() * 35),
+      srot: (Math.random() - 0.5) * 60,
+      symbol: symbols[Math.floor(Math.random() * symbols.length)]
+    }));
+    setShareSparkles(prev => [...prev, ...newSparkles]);
+    setTimeout(() => {
+      setShareSparkles(prev => prev.filter(s => !newSparkles.includes(s)));
+    }, 800);
+  };
+
   const handleShare = async () => {
+    triggerShareSparkles();
     const url = `${window.location.origin}/feed?postId=${post.id}`;
     try {
       await navigator.clipboard.writeText(url);
-      alert("Post link copied to clipboard!");
     } catch (err) {
       console.error("Failed to copy!", err);
     }
@@ -112,57 +189,62 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
   const [commentMenuId, setCommentMenuId] = useState<string | null>(null);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
 
-
-
   const getInitials = (name: string | null) => {
     if (!name) return "?";
     return name.charAt(0).toUpperCase();
   };
 
+  const handleLike = async () => {
+    if (!isLiked) {
+      setAnimateLike(true);
+      triggerHeartBubbles();
+      setTimeout(() => setAnimateLike(false), 500);
+    }
+    const newLiked = !isLiked;
+    setIsLiked(newLiked);
+    setLikeCount(prev => newLiked ? prev + 1 : Math.max(0, prev - 1));
+
+    try {
+      await fetch(`/api/posts/${post.id}/like`, { method: "POST" });
+    } catch (e) {
+      console.error(e);
+      setIsLiked(isLiked);
+      setLikeCount(prev => isLiked ? prev + 1 : prev - 1);
+    }
+  };
+
   const renderContent = (content: string) => {
     if (!content) return null;
     
-    // First, handle links/hashtags as before, but keep the structure
-    const parts = content.split(/(\s+)/);
+    // Global regex parser for bold **text**, italic *text*, code `text`, #hashtags, and links
+    const regex = /(\*\*[\s\S]*?\*\*|\*[\s\S]*?\*|`[\s\S]*?`|#[a-zA-Z0-9_]+|https?:\/\/[^\s]+)/g;
+    const parts = content.split(regex);
     
     return parts.map((part, i) => {
-      // Process bold/italic within each part (simple implementation)
-      let element: React.ReactNode = part;
+      if (!part) return null;
       
-      // Handle Bold **text**
-      if (typeof element === "string" && element.includes("**")) {
-        const boldParts = element.split(/(\*\*.*?\*\*)/);
-        element = boldParts.map((bp, j) => {
-          if (bp.startsWith("**") && bp.endsWith("**")) {
-            return <strong key={j}>{bp.slice(2, -2)}</strong>;
-          }
-          return bp;
-        });
+      if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+        return <strong key={i} style={{ fontWeight: 800, color: "var(--color-text-main)" }}>{part.slice(2, -2)}</strong>;
       }
-
-      // Handle Italic *text*
-      if (typeof element === "string" && element.includes("*")) {
-        const italicParts = element.split(/(\*.*?\*)/);
-        element = italicParts.map((ip, j) => {
-          if (ip.startsWith("*") && ip.endsWith("*") && !ip.startsWith("**")) {
-            return <em key={j}>{ip.slice(1, -1)}</em>;
-          }
-          return ip;
-        });
+      if (part.startsWith("*") && part.endsWith("*") && part.length > 2 && !part.startsWith("**")) {
+        return <em key={i} style={{ fontStyle: "italic", color: "var(--color-text-main)" }}>{part.slice(1, -1)}</em>;
       }
-
-      // Handle Hashtags
+      if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+        return (
+          <code key={i} style={{ background: "rgba(255,255,255,0.12)", padding: "2px 6px", borderRadius: "6px", fontSize: "0.88em", fontFamily: "monospace", color: "var(--color-primary)" }}>
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
       if (part.startsWith("#") && part.length > 1) {
         const tag = part.substring(1).replace(/[.,!?;:]$/, "");
         return <Link key={i} href={`/hashtag/${tag}`} style={{ color: "var(--color-primary)", fontWeight: 600 }}>{part}</Link>;
       }
-      
-      // Handle URLs
-      if (part.startsWith("http") || part.startsWith("https")) {
+      if (part.startsWith("http://") || part.startsWith("https://")) {
         return <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>{part}</a>;
       }
       
-      return <span key={i}>{element}</span>;
+      return <span key={i}>{part}</span>;
     });
   };
 
@@ -213,18 +295,6 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
       }
     } catch (e) {
       console.error(e);
-    }
-  };
-
-  const handleLike = async () => {
-    setIsLiked(!isLiked);
-    setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
-    try {
-      await fetch(`/api/posts/${post.id}/like`, { method: "POST" });
-    } catch (e) {
-      console.error(e);
-      setIsLiked(isLiked);
-      setLikeCount(prev => isLiked ? prev + 1 : prev - 1);
     }
   };
 
@@ -594,9 +664,83 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
           </div>
         ) : (
           <>
-            <div className="animate-fade-in" style={{ fontSize: "1.05rem", padding: "4px 0" }}>
+            {post.location && (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.8rem", color: "var(--color-primary)", fontWeight: 600, marginBottom: "4px" }}>
+                <MapPin size={13} /> {post.location}
+              </div>
+            )}
+
+            <div className="animate-fade-in" style={{ fontSize: "0.95rem", padding: "2px 0" }}>
               {renderContent(post.content)}
             </div>
+
+            {/* Interactive Poll Component */}
+            {pollState && (
+              <div style={{ marginTop: "10px", padding: "12px 14px", borderRadius: "16px", border: "1px solid var(--color-border)", background: "var(--color-bg-surface)", display: "flex", flexDirection: "column", gap: "10px" }}>
+                {(() => {
+                  const totalVotes = pollState.options.reduce((acc: number, opt: any) => acc + (opt.votes?.length || 0), 0);
+                  
+                  return (
+                    <>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {pollState.options.map((opt: any) => {
+                          const votes = opt.votes?.length || 0;
+                          const hasVotedThisOption = currentUserId ? opt.votes?.includes(currentUserId) : false;
+                          const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => handleVotePoll(opt.id)}
+                              style={{
+                                position: "relative",
+                                overflow: "hidden",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "10px 14px",
+                                borderRadius: "12px",
+                                border: hasVotedThisOption ? "2px solid var(--color-primary)" : "1px solid var(--color-border)",
+                                background: "var(--color-bg-base)",
+                                color: "var(--color-text-main)",
+                                fontWeight: hasVotedThisOption ? 700 : 500,
+                                fontSize: "0.9rem",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease"
+                              }}
+                            >
+                              {/* Background Progress Bar */}
+                              {totalVotes > 0 && (
+                                <div style={{
+                                  position: "absolute",
+                                  left: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: `${pct}%`,
+                                  background: hasVotedThisOption ? "rgba(29, 155, 240, 0.25)" : "rgba(239, 243, 244, 0.08)",
+                                  zIndex: 0,
+                                  transition: "width 0.3s ease"
+                                }} />
+                              )}
+                              <span style={{ zIndex: 1, position: "relative" }}>{opt.text}</span>
+                              <span style={{ zIndex: 1, position: "relative", fontWeight: 700, fontSize: "0.85rem", color: "var(--color-text-muted)" }}>
+                                {totalVotes > 0 ? `${pct}%` : ""}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--color-text-muted)", marginTop: "2px" }}>
+                        <span>{totalVotes} {totalVotes === 1 ? "vote" : "votes"}</span>
+                        <span>Final results</span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
             
             {post.repost && (
               <div className="animate-fade-in" style={{ border: "1px solid var(--color-border)", padding: "16px", borderRadius: "var(--radius-lg)", marginTop: "12px", background: "rgba(0,0,0,0.01)" }}>
@@ -651,70 +795,123 @@ export function PostCard({ post, currentUserId, isPrivacyPage }: { post: Post, c
       )}
 
       <div className={styles.actions}>
-        <button 
-          className={`${styles.actionBtn} ${styles.likeBtn} ${isLiked ? styles.activeLike : ""}`} 
-          onClick={handleLike}
-        >
-          <Heart size={22} fill={isLiked ? "#f91880" : "none"} stroke={isLiked ? "#f91880" : "currentColor"} />
-          <span className={styles.actionText}>{likeCount || "Like"}</span>
-        </button>
+        {/* Like (Floating heart bubbles effect) */}
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+          {heartBubbles.map((bubble) => (
+            <span
+              key={bubble.id}
+              className="heart-bubble-particle"
+              style={{
+                "--tx": `${bubble.tx}px`,
+                "--ty": `${bubble.ty}px`,
+                "--ty-end": `${bubble.tyEnd}px`,
+                "--rot": `${bubble.rot}deg`,
+                left: "12px",
+                top: "-4px"
+              } as React.CSSProperties}
+            >
+              {bubble.icon}
+            </span>
+          ))}
+          <button 
+            className={`${styles.actionBtn} ${styles.likeBtn} ${isLiked ? styles.activeLike : ""}`} 
+            onClick={handleLike}
+            title="Like"
+          >
+            <Heart size={18} fill={isLiked ? "#f91880" : "none"} stroke={isLiked ? "#f91880" : "currentColor"} className={animateLike ? "animate-like-burst" : ""} />
+            {likeCount > 0 && <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>{likeCount}</span>}
+          </button>
+        </div>
 
-        <button 
-          className={`${styles.actionBtn} ${styles.replyBtn} ${showComments ? styles.activeReply : ""}`} 
-          onClick={() => setShowComments(!showComments)}
-        >
-          <MessageCircle size={22} fill={showComments ? "var(--color-primary)" : "none"} />
-          <span className={styles.actionText}>{commentCount || "Reply"}</span>
-        </button>
-        
+        {/* Reply (Audio soundwave / ripple effect) */}
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+          {commentRipples.map((ripple) => (
+            <span key={ripple.id} className="comment-ripple-effect" />
+          ))}
+          <button 
+            className={`${styles.actionBtn} ${styles.replyBtn} ${showComments ? styles.activeReply : ""}`} 
+            onClick={() => {
+              triggerCommentRipple();
+              setShowComments(!showComments);
+            }}
+            title="Reply"
+          >
+            <MessageCircle size={18} fill={showComments ? "var(--color-primary)" : "none"} color={showComments ? "var(--color-primary)" : "currentColor"} />
+            {commentCount > 0 && <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>{commentCount}</span>}
+          </button>
+        </div>
+
+        {/* Repost */}
         <div style={{ position: "relative" }}>
           <button 
             className={`${styles.actionBtn} ${styles.repostBtn} ${post.repost ? styles.activeRepost : ""}`} 
             onClick={() => setShowRepostMenu(!showRepostMenu)}
+            title="Repost"
           >
-            <Repeat size={22} />
-            <span className={styles.actionText}>Repost</span>
+            <Repeat size={18} color={post.repost ? "#00ba7c" : "currentColor"} />
           </button>
           
           {showRepostMenu && (
             <div className="glass animate-scale-in" style={{
               position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: "100%", zIndex: 10,
-              display: "flex", flexDirection: "column", minWidth: "150px",
-              padding: "var(--space-2)", borderRadius: "var(--radius-md)", gap: "var(--space-1)",
-              marginBottom: "12px", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-lg)"
+              display: "flex", flexDirection: "column", minWidth: "140px",
+              padding: "4px", borderRadius: "12px", gap: "2px",
+              marginBottom: "8px", border: "1px solid var(--color-border)", boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
             }}>
               <button 
                 onClick={() => { handleRepost(); }}
-                style={{ display: "flex", alignItems: "center", gap: "10px", background: "none", border: "none", color: "var(--color-text-main)", cursor: "pointer", padding: "10px", borderRadius: "var(--radius-sm)", textAlign: "left" }}
+                style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "var(--color-text-main)", cursor: "pointer", padding: "8px 12px", borderRadius: "8px", textAlign: "left", fontSize: "0.85rem", fontWeight: 600 }}
                 className="hover-bg"
               >
-                <Repeat size={18} style={{ color: "#00ba7c" }} /> Repost
+                <Repeat size={16} style={{ color: "#00ba7c" }} /> Repost
               </button>
               <button 
                 onClick={() => { setShowQuoteInput(true); setShowRepostMenu(false); }}
-                style={{ display: "flex", alignItems: "center", gap: "10px", background: "none", border: "none", color: "var(--color-text-main)", cursor: "pointer", padding: "10px", borderRadius: "var(--radius-sm)", textAlign: "left" }}
+                style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "var(--color-text-main)", cursor: "pointer", padding: "8px 12px", borderRadius: "8px", textAlign: "left", fontSize: "0.85rem", fontWeight: 600 }}
                 className="hover-bg"
               >
-                <Edit2 size={18} style={{ color: "var(--color-primary)" }} /> Quote
+                <Edit2 size={16} style={{ color: "var(--color-primary)" }} /> Quote
               </button>
             </div>
           )}
         </div>
 
-        <button 
-          className={`${styles.actionBtn} ${styles.bookmarkBtn} ${isBookmarked ? styles.activeBookmark : ""}`} 
-          onClick={handleBookmark}
-        >
-          <BookmarkIcon size={22} fill={isBookmarked ? "var(--color-primary)" : "none"} />
-        </button>
+        {/* Views */}
+        <div className={styles.actionBtn} style={{ cursor: "default" }} title="Views">
+          <BarChart3 size={18} />
+          {views > 0 && <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>{views}</span>}
+        </div>
 
-        <button className={`${styles.actionBtn} ${styles.shareBtn}`} onClick={handleShare}>
-          <Share2 size={22} />
-        </button>
+        {/* Right Edge: Bookmark & Share */}
+        <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+          <button 
+            className={`${styles.actionBtn} ${styles.bookmarkBtn} ${isBookmarked ? styles.activeBookmark : ""}`} 
+            onClick={handleBookmark}
+            title="Bookmark"
+          >
+            <BookmarkIcon size={18} fill={isBookmarked ? "var(--color-primary)" : "none"} color={isBookmarked ? "var(--color-primary)" : "currentColor"} />
+          </button>
 
-        <div className={styles.actionBtn} style={{ cursor: "default" }}>
-          <BarChart3 size={20} />
-          <span className={styles.actionText}>{views}</span>
+          <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+            {shareSparkles.map((sparkle) => (
+              <span
+                key={sparkle.id}
+                className="share-sparkle-particle"
+                style={{
+                  "--stx": `${sparkle.stx}px`,
+                  "--sty": `${sparkle.sty}px`,
+                  "--srot": `${sparkle.srot}deg`,
+                  left: "10px",
+                  top: "-2px"
+                } as React.CSSProperties}
+              >
+                {sparkle.symbol}
+              </span>
+            ))}
+            <button className={`${styles.actionBtn} ${styles.shareBtn}`} onClick={handleShare} title="Share">
+              <Share2 size={18} />
+            </button>
+          </div>
         </div>
       </div>
 

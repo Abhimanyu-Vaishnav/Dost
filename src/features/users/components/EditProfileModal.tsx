@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 interface EditProfileModalProps {
   user: {
     name: string | null;
+    username?: string | null;
     bio: string | null;
     avatar: string | null;
     coverImage: string | null;
@@ -20,7 +21,9 @@ interface EditProfileModalProps {
 
 export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
   const [name, setName] = useState(user.name || "");
+  const [username, setUsername] = useState(user.username || "");
   const [bio, setBio] = useState(user.bio || "");
+  const [errorMsg, setErrorMsg] = useState("");
   const [avatar, setAvatar] = useState(user.avatar || "");
   const [coverImage, setCoverImage] = useState(user.coverImage || "");
   const [gender, setGender] = useState(user.gender || "");
@@ -52,19 +55,24 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
 
   const handleSave = async () => {
     setLoading(true);
+    setErrorMsg("");
     try {
       const res = await fetch("/api/users/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, bio, avatar, coverImage, gender, dob, accountType, accountSubType }),
+        body: JSON.stringify({ name, username, bio, avatar, coverImage, gender, dob, accountType, accountSubType }),
       });
 
+      const data = await res.json();
       if (res.ok) {
         onClose();
         router.refresh();
+      } else {
+        setErrorMsg(data.error || "Failed to update profile");
       }
     } catch (e) {
       console.error(e);
+      setErrorMsg("Error saving changes");
     } finally {
       setLoading(false);
     }
@@ -138,7 +146,13 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
           </div>
 
           {/* Form Fields */}
-          <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "24px" }}>
+          <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+            {errorMsg && (
+              <div style={{ padding: "12px 16px", borderRadius: "12px", background: "rgba(255, 77, 77, 0.15)", color: "#ff4d4d", fontSize: "0.9rem", fontWeight: 600 }}>
+                {errorMsg}
+              </div>
+            )}
+
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               <label style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--color-text-muted)" }}>Name</label>
               <input 
@@ -146,10 +160,27 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 style={{
-                  width: "100%", padding: "16px", borderRadius: "12px", border: "1px solid var(--color-border)",
-                  background: "transparent", color: "var(--color-text-main)", outline: "none", fontSize: "1.1rem"
+                  width: "100%", padding: "14px 16px", borderRadius: "12px", border: "1px solid var(--color-border)",
+                  background: "transparent", color: "var(--color-text-main)", outline: "none", fontSize: "1rem"
                 }}
               />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <label style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--color-text-muted)" }}>Username (@unique)</label>
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <span style={{ position: "absolute", left: "16px", color: "var(--color-text-muted)", fontWeight: 700 }}>@</span>
+                <input 
+                  type="text" 
+                  value={username}
+                  onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  placeholder="username"
+                  style={{
+                    width: "100%", padding: "14px 16px 14px 34px", borderRadius: "12px", border: "1px solid var(--color-border)",
+                    background: "transparent", color: "var(--color-text-main)", outline: "none", fontSize: "1rem"
+                  }}
+                />
+              </div>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

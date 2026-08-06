@@ -30,9 +30,11 @@ async function main() {
   const users = [];
   for (let i = 0; i < 100; i++) {
     const name = faker.person.fullName();
+    const cleanUsername = name.toLowerCase().replace(/[^a-z0-9]/g, '') || `user${i}`;
     const user = await prisma.user.create({
       data: {
         email: faker.internet.email().toLowerCase(),
+        username: cleanUsername,
         password,
         name,
         bio: faker.lorem.sentence(),

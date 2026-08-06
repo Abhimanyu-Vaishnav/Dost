@@ -104,10 +104,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { content, imageUrl, videoUrl, linkUrl } = await request.json();
+    const { content, imageUrl, videoUrl, linkUrl, location, pollData, scheduledAt } = await request.json();
 
-    if (!content && !imageUrl && !videoUrl) {
-      return NextResponse.json({ error: "Content or media is required" }, { status: 400 });
+    if (!content && !imageUrl && !videoUrl && !pollData) {
+      return NextResponse.json({ error: "Content, media, or poll is required" }, { status: 400 });
     }
 
     // AI Moderation check
@@ -124,6 +124,9 @@ export async function POST(request: NextRequest) {
         imageUrl,
         videoUrl,
         linkUrl,
+        location: location || null,
+        pollData: pollData ? (typeof pollData === "string" ? pollData : JSON.stringify(pollData)) : null,
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         authorId: user.userId as string,
       },
       include: {
