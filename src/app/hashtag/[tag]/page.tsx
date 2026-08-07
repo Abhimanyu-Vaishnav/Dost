@@ -22,7 +22,12 @@ export default async function HashtagPage({ params }: { params: Promise<{ tag: s
       content: { contains: `#${decodedTag}` },
     },
     include: {
-      author: { select: { id: true, name: true, avatar: true } },
+      author: { select: { id: true, name: true, avatar: true, username: true } },
+      parent: {
+        include: {
+          author: { select: { id: true, name: true, avatar: true, username: true } }
+        }
+      },
       likes: true,
       bookmarkedBy: { where: { userId: user.userId as string } },
       comments: {

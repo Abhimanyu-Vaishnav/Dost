@@ -71,12 +71,21 @@ export default async function UniversalProfilePage({ params }: { params: Promise
   const posts = (isBlockedByMe || hasBlockedMe) ? [] : await prisma.post.findMany({
     where: { 
       authorId: profileUserId,
-      hiddenBy: { none: { userId: currentUser.userId as string } }
+      hiddenBy: { none: { userId: currentUser.userId as string } },
+      OR: [
+        { threadId: null, parentId: null },
+        { isThreadStart: true }
+      ]
     },
     orderBy: { createdAt: "desc" },
     include: {
       author: {
-        select: { id: true, name: true, avatar: true },
+        select: { id: true, name: true, avatar: true, username: true },
+      },
+      parent: {
+        include: {
+          author: { select: { id: true, name: true, avatar: true, username: true } }
+        }
       },
       likes: true,
       bookmarkedBy: {

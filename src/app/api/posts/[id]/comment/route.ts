@@ -32,6 +32,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
 
+    // Also create a reply Post record so that replies appear as posts with parent indicator in feed
+    await prisma.post.create({
+      data: {
+        content,
+        authorId: userId,
+        parentId: postId,
+      },
+    }).catch(() => null);
+
     // Create notification
     const post = await prisma.post.findUnique({
       where: { id: postId },

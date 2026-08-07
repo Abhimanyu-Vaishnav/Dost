@@ -285,9 +285,8 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         {children}
       </main>
 
-      {!fullWidth && (
+      {!fullWidth && rightSidebar && (
         <aside className={styles.rightSidebar}>
-
           {rightSidebar}
         </aside>
       )}

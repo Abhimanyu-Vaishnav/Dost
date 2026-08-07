@@ -57,6 +57,16 @@ export async function GET(
       data: { views: { increment: 1 } }
     }).catch(() => {});
 
+    // Fetch full thread posts if part of a multi-post thread
+    let threadPosts: any[] = [];
+    if (post.threadId) {
+      threadPosts = await (prisma.post as any).findMany({
+        where: { threadId: post.threadId },
+        orderBy: { threadPosition: "asc" },
+        include: buildInclude(currentUserId)
+      }).catch(() => []);
+    }
+
     // Fetch parent chain (ancestors)
     const ancestors: any[] = [];
     let currentParentId = post.parentId;
@@ -91,7 +101,7 @@ export async function GET(
       include: replyInclude
     }).catch(() => []);
 
-    return NextResponse.json({ post, ancestors, replies }, { status: 200 });
+    return NextResponse.json({ post, threadPosts, ancestors, replies }, { status: 200 });
   } catch (error: any) {
     console.error("Get post thread error:", error);
     return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });

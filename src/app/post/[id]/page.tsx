@@ -11,6 +11,9 @@ import {
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PostCard } from "@/features/posts/components/PostCard";
 import { uploadMediaFile } from "@/lib/upload";
+import { SearchBar } from "@/features/search/components/SearchBar";
+import { TrendingSection } from "@/features/search/components/TrendingSection";
+import { FollowSuggestions } from "@/features/users/components/FollowSuggestions";
 import styles from "@/features/posts/components/PostCard.module.css";
 
 const POPULAR_GIFS = [
@@ -28,6 +31,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [postId, setPostId] = useState<string>("");
   const [postData, setPostData] = useState<any>(null);
   const [ancestors, setAncestors] = useState<any[]>([]);
+  const [threadPosts, setThreadPosts] = useState<any[]>([]);
   const [replies, setReplies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +85,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
       .then(data => {
         setPostData(data.post);
         setAncestors(data.ancestors || []);
+        setThreadPosts(data.threadPosts || []);
         setReplies(data.replies || []);
       })
       .catch(err => setError(err.message))
@@ -159,9 +164,17 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     }
   };
 
+  const RightSidebar = (
+    <>
+      <SearchBar />
+      <TrendingSection />
+      <FollowSuggestions />
+    </>
+  );
+
   if (loading) {
     return (
-      <AppLayout>
+      <AppLayout rightSidebar={RightSidebar}>
         <div style={{ padding: "60px", textAlign: "center", color: "var(--color-text-muted)", fontSize: "1.1rem" }}>
           Loading post thread...
         </div>
@@ -171,7 +184,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
   if (error || !postData) {
     return (
-      <AppLayout>
+      <AppLayout rightSidebar={RightSidebar}>
         <div style={{ padding: "60px", textAlign: "center", color: "var(--color-text-muted)" }}>
           <h2>Post not found</h2>
           <button 
@@ -189,8 +202,8 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <AppLayout>
-      <div style={{ maxWidth: "600px", margin: "0 auto", borderRight: "1px solid var(--color-border)", borderLeft: "1px solid var(--color-border)", minHeight: "100vh", background: "var(--color-bg-base)" }}>
+    <AppLayout rightSidebar={RightSidebar}>
+      <div style={{ width: "100%", minHeight: "100vh", background: "var(--color-bg-base)" }}>
         
         {/* Sticky Header */}
         <div style={{ 
@@ -209,26 +222,44 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
 
-        {/* Parent Thread Chain (Ancestors leading to this post) */}
-        {ancestors.map((ancestorPost) => (
-          <PostCard 
-            key={ancestorPost.id} 
-            post={ancestorPost} 
-            currentUserId={currentUser?.id}
-            isThreadParent={true}
-            hasThreadChild={true}
-          />
-        ))}
-
-        {/* Focused Target Post */}
-        <div style={{ borderBottom: "1px solid var(--color-border)" }}>
-          <PostCard 
-            post={postData} 
-            currentUserId={currentUser?.id}
-            isThreadParent={replies.length > 0}
-            hasThreadChild={false}
-          />
-        </div>
+        {/* If post is part of a multi-post Thread, render all posts in sequential chronological order */}
+        {threadPosts.length > 0 ? (
+          <div>
+            {threadPosts.map((tPost, idx) => (
+              <PostCard
+                key={tPost.id}
+                post={tPost}
+                currentUserId={currentUser?.id}
+                inThreadView={true}
+                isThreadParent={idx < threadPosts.length - 1}
+                hasThreadChild={idx > 0}
+              />
+            ))}
+          </div>
+        ) : (
+          /* Focused Single Post with Ancestors */
+          <div>
+            {ancestors.map((ancestorPost) => (
+              <PostCard 
+                key={ancestorPost.id} 
+                post={ancestorPost} 
+                currentUserId={currentUser?.id}
+                inThreadView={true}
+                isThreadParent={true}
+                hasThreadChild={true}
+              />
+            ))}
+            <div style={{ borderBottom: "1px solid var(--color-border)" }}>
+              <PostCard 
+                post={postData} 
+                currentUserId={currentUser?.id}
+                inThreadView={true}
+                isThreadParent={replies.length > 0}
+                hasThreadChild={ancestors.length > 0}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Inline X-Style "Post your reply" Composer Box */}
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--color-border)", display: "flex", gap: "12px", background: "var(--color-bg-base)" }}>

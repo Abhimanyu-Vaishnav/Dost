@@ -219,8 +219,30 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
 
     setIsSubmitting(true);
     try {
-      for (let idx = 0; idx < validItems.length; idx++) {
-        const item = validItems[idx];
+      if (validItems.length > 1) {
+        // Send as batch thread
+        const res = await fetch("/api/posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            threadPosts: validItems.map(item => ({
+              content: item.content,
+              imageUrl: item.imageUrl || null,
+              videoUrl: item.videoUrl || null,
+              linkUrl: item.linkUrl || null,
+            }))
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          alert(errData.error || "Failed to create thread");
+          setIsSubmitting(false);
+          return;
+        }
+      } else {
+        // Single post
+        const item = validItems[0];
         const res = await fetch("/api/posts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -229,13 +251,13 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
             imageUrl: item.imageUrl,
             videoUrl: item.videoUrl,
             linkUrl: item.linkUrl,
-            location: idx === 0 ? location : null,
-            pollData: idx === 0 && pollData ? {
+            location: location,
+            pollData: pollData ? {
               question: item.content || "Poll",
               options: pollData.options.map((text, i) => ({ id: i + 1, text, votes: [] })),
               expiresAt: new Date(Date.now() + pollData.durationHours * 3600 * 1000).toISOString()
             } : null,
-            scheduledAt: idx === 0 && scheduledAt ? scheduledAt : null,
+            scheduledAt: scheduledAt,
           }),
         });
 

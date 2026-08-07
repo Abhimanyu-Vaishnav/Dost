@@ -68,7 +68,17 @@ export default async function FeedPage(props: { searchParams: Promise<{ tab?: st
     orderBy: { createdAt: "desc" },
     include: {
       author: {
-        select: { id: true, name: true, avatar: true },
+        select: { id: true, name: true, avatar: true, username: true },
+      },
+      parent: {
+        include: {
+          author: { select: { id: true, name: true, avatar: true, username: true } }
+        }
+      },
+      quotePost: {
+        include: {
+          author: { select: { id: true, name: true, avatar: true, username: true } }
+        }
       },
       likes: true,
       bookmarkedBy: {
@@ -76,14 +86,14 @@ export default async function FeedPage(props: { searchParams: Promise<{ tab?: st
       },
       comments: {
         include: { 
-          user: { select: { id: true, name: true, avatar: true } },
+          user: { select: { id: true, name: true, avatar: true, username: true } },
           likes: true
         },
         orderBy: { createdAt: "asc" }
       },
       repost: {
         include: {
-          author: { select: { id: true, name: true, avatar: true } }
+          author: { select: { id: true, name: true, avatar: true, username: true } }
         }
       }
     },

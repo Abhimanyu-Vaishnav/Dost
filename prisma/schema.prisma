@@ -124,6 +124,10 @@ model Post {
   parent    Post?    @relation("PostReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   Post[]   @relation("PostReplies")
 
+  threadId       String?
+  threadPosition Int?
+  isThreadStart  Boolean  @default(false)
+
   quotePostId String?
   quotePost   Post?    @relation("PostQuotes", fields: [quotePostId], references: [id], onDelete: SetNull)
   quotePosts  Post[]   @relation("PostQuotes")

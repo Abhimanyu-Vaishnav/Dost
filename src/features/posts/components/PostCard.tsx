@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
@@ -67,6 +67,9 @@ interface Post {
     replies?: number;
     reposts?: number;
   };
+  threadId?: string | null;
+  threadPosition?: number | null;
+  isThreadStart?: boolean | null;
 }
 
 interface PostCardProps {
@@ -75,14 +78,16 @@ interface PostCardProps {
   isPrivacyPage?: boolean;
   isThreadParent?: boolean;
   hasThreadChild?: boolean;
+  inThreadView?: boolean;
 }
 
-export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, hasThreadChild }: PostCardProps) {
+export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, hasThreadChild, inThreadView }: PostCardProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
   const [showMenu, setShowMenu] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false);
   
   // Interactive Poll state
   const [pollState, setPollState] = useState<any>(() => {
@@ -282,7 +287,10 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDelete = async () => {
-    console.log("Delete button clicked for post:", post.id);
+    setShowDeleteConfirm(false);
+    setShowMenu(false);
+    setIsDeleted(true); // Instant smooth removal from UI!
+
     try {
       const res = await fetch(`/api/posts/${post.id}`, { 
         method: "DELETE",
@@ -291,17 +299,15 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
       
       if (res.ok) {
         router.refresh();
-        // Use a faster way to update UI if possible, but refresh + reload is safe
-        window.location.reload();
       } else {
+        setIsDeleted(false); // Restore if server error
         const data = await res.json();
-        alert(`Failed: ${data.error || "Unknown error"}`);
+        alert(`Delete failed: ${data.error || "Unknown error"}`);
       }
     } catch (e) {
       console.error("Delete error:", e);
-      alert("An error occurred. Check console.");
-    } finally {
-      setShowDeleteConfirm(false);
+      setIsDeleted(false); // Restore if network error
+      alert("Network error occurred while deleting.");
     }
   };
 
@@ -522,10 +528,11 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
 
 
 
-  if (isHidden) return null;
+  if (isHidden || isDeleted) return null;
 
   return (
-    <div 
+    <React.Fragment>
+      <div 
       className={`glass ${styles.card} animate-scale-in`}
       onClick={(e) => {
         const target = e.target as HTMLElement;
@@ -542,12 +549,13 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
       
       <div className={styles.threadWrapper}>
         <div className={styles.avatarColumn}>
+          {hasThreadChild && <div className={styles.threadLineTop} />}
           <Link href={`/profile/${post.author.id}`} className={styles.avatar}>
             {post.author.avatar ? (
               <img src={post.author.avatar} alt={post.author.name || ""} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
             ) : getInitials(post.author.name)}
           </Link>
-          {(isThreadParent || hasThreadChild) && <div className={styles.threadLine} />}
+          {isThreadParent && <div className={styles.threadLineBottom} />}
         </div>
 
         <div className={styles.mainColumn}>
@@ -557,8 +565,15 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
                 {post.author.name || "Unknown User"}
               </Link>
               {post.parent?.author && (
-                <div className={styles.replyHeader}>
-                  Replying to <Link href={`/profile/${post.parent.author.id}`}>@{post.parent.author.username || post.parent.author.name}</Link>
+                <div className={styles.replyHeader} style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", marginTop: "2px" }}>
+                  Replying to{" "}
+                  <Link 
+                    href={`/profile/${post.parent.author.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ color: "var(--color-primary)", textDecoration: "none", fontWeight: 600 }}
+                  >
+                    @{post.parent.author.username || post.parent.author.name}&apos;s Post
+                  </Link>
                 </div>
               )}
               <span className="text-muted" style={{ fontSize: "0.85rem" }} suppressHydrationWarning>{formattedDate}</span>
@@ -584,55 +599,14 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
                   <button 
                     onClick={(e) => { 
                       e.stopPropagation(); 
-                      setShowDeleteConfirm(true);
                       setShowMenu(false); 
+                      setShowDeleteConfirm(true);
                     }} 
                     style={{ display: "flex", alignItems: "center", gap: "10px", background: "none", border: "none", color: "#ff4d4d", cursor: "pointer", padding: "12px", borderRadius: "var(--radius-sm)", textAlign: "left", width: "100%" }} 
                     className="hover-bg"
                   >
                     <Trash2 size={18} /> <span style={{ fontWeight: 600 }}>Delete</span>
                   </button>
-
-                  {showDeleteConfirm && (
-                    <div style={{
-                      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-                      backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center",
-                      justifyContent: "center", zIndex: 1000, padding: "20px"
-                    }} onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(false); }}>
-                      <div className="glass animate-scale-in" style={{
-                        width: "100%", maxWidth: "320px", padding: "24px",
-                        borderRadius: "20px", background: "var(--color-bg-base)",
-                        boxShadow: "var(--shadow-xl)", border: "1px solid var(--color-border)"
-                      }} onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-h3" style={{ marginBottom: "12px" }}>Delete Post?</h3>
-                        <p className="text-muted" style={{ marginBottom: "24px", fontSize: "0.95rem" }}>
-                          This can’t be undone and it will be removed from your profile and the timeline.
-                        </p>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                          <button 
-                            onClick={handleDelete}
-                            style={{ 
-                              padding: "12px", borderRadius: "var(--radius-full)", 
-                              background: "#ff4d4d", color: "white", fontWeight: 700, 
-                              border: "none", cursor: "pointer" 
-                            }}
-                          >
-                            Delete
-                          </button>
-                          <button 
-                            onClick={() => setShowDeleteConfirm(false)}
-                            style={{ 
-                              padding: "12px", borderRadius: "var(--radius-full)", 
-                              background: "transparent", color: "var(--color-text-main)", 
-                              fontWeight: 700, border: "1px solid var(--color-border)", cursor: "pointer" 
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   <button onClick={() => alert("Boosted!")} style={{ display: "flex", alignItems: "center", gap: "10px", background: "none", border: "none", color: "var(--color-text-main)", cursor: "pointer", padding: "12px", borderRadius: "var(--radius-sm)", textAlign: "left" }} className="hover-bg">
                     <Zap size={18} /> <span style={{ fontWeight: 600 }}>Boost</span>
                   </button>
@@ -960,7 +934,29 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
             </button>
           </div>
         </div>
-      </div>
+      {/* Show this thread indicator if part of a multi-post thread and not inside thread view */}
+      {!inThreadView && ((post as any).isThreadStart || ((post as any).threadId && !post.parentId)) && (
+        <div 
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/post/${post.id}`);
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            color: "var(--color-primary)",
+            fontWeight: 700,
+            fontSize: "0.88rem",
+            marginTop: "10px",
+            paddingTop: "6px",
+            cursor: "pointer"
+          }}
+        >
+          <div style={{ width: "2px", height: "16px", backgroundColor: "var(--color-primary)", borderRadius: "2px" }} />
+          <span>Show this thread</span>
+        </div>
+      )}
 
       {showComments && (
         <div className="animate-slide-up" style={{ marginTop: "16px", borderTop: "1px solid var(--color-border)", paddingTop: "20px" }}>
@@ -1090,8 +1086,58 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
           </div>
         </div>
       )}
-        </div>
       </div>
-    </div>
+      </div>
+
+      {showDeleteConfirm && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 10000, padding: "20px"
+        }} onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(false); }}>
+          <div className="glass animate-scale-in" style={{
+            width: "100%", maxWidth: "340px", padding: "24px",
+            borderRadius: "20px", background: "var(--color-bg-surface)",
+            boxShadow: "0 20px 50px rgba(0,0,0,0.5)", border: "1px solid var(--color-border)"
+          }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-h3" style={{ marginBottom: "12px", color: "var(--color-text-main)", fontSize: "1.25rem", fontWeight: 800 }}>Delete Post?</h3>
+            <p className="text-muted" style={{ marginBottom: "24px", fontSize: "0.95rem", lineHeight: 1.4 }}>
+              This cannot be undone and it will be removed from your profile and the timeline.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete();
+                }}
+                style={{ 
+                  padding: "12px", borderRadius: "var(--radius-full)", 
+                  background: "#ff4d4d", color: "white", fontWeight: 700, fontSize: "0.95rem",
+                  border: "none", cursor: "pointer", transition: "opacity 0.15s ease"
+                }}
+              >
+                Delete
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteConfirm(false);
+                }}
+                style={{ 
+                  padding: "12px", borderRadius: "var(--radius-full)", 
+                  background: "transparent", color: "var(--color-text-main)", 
+                  fontWeight: 700, fontSize: "0.95rem", border: "1px solid var(--color-border)", cursor: "pointer" 
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
+      </div>
+    </React.Fragment>
   );
 }

@@ -36,7 +36,12 @@ export default async function BookmarksPage() {
     orderBy: { createdAt: "desc" },
     include: {
       author: {
-        select: { id: true, name: true, avatar: true },
+        select: { id: true, name: true, avatar: true, username: true },
+      },
+      parent: {
+        include: {
+          author: { select: { id: true, name: true, avatar: true, username: true } }
+        }
       },
       likes: true,
       bookmarkedBy: {

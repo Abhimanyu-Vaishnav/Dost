@@ -18,12 +18,15 @@ export async function GET(request: NextRequest) {
 
     let where: any = {
       hiddenBy: { none: { userId: user.userId as string } },
-      parentId: null // Main feeds display top-level posts/threads by default
+      OR: [
+        { threadId: null, parentId: null },
+        { isThreadStart: true }
+      ]
     };
 
     if (hashtag) {
       where.content = { contains: `#${hashtag}` };
-      delete where.parentId; // Hashtag search includes replies
+      delete where.OR;
     } else if (tab === "following") {
       const following = await prisma.follows.findMany({
         where: { followerId: user.userId as string },
@@ -109,6 +112,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const body = await request.json();
+
+    // Check if this is a Batch Thread creation request
+    if (body.threadPosts && Array.isArray(body.threadPosts) && body.threadPosts.length > 0) {
+      const threadId = `th_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const createdThreadPosts: any[] = [];
+
+      for (let i = 0; i < body.threadPosts.length; i++) {
+        const draft = body.threadPosts[i];
+        if (draft.content) {
+          const modResult = moderateContent(draft.content);
+          if (!modResult.allowed) {
+            return NextResponse.json({ error: `Post ${i + 1}: ${modResult.reason}` }, { status: 422 });
+          }
+        }
+
+        const postData: any = {
+          content: draft.content || "",
+          authorId: user.userId as string,
+          threadId,
+          threadPosition: i + 1,
+          isThreadStart: i === 0,
+        };
+
+        if (draft.imageUrl) postData.imageUrl = draft.imageUrl;
+        if (draft.videoUrl) postData.videoUrl = draft.videoUrl;
+        if (draft.gifUrl) postData.gifUrl = draft.gifUrl;
+
+        const created = await (prisma.post as any).create({
+          data: postData,
+          include: {
+            author: { select: { id: true, name: true, avatar: true, username: true } },
+            _count: { select: { likes: true, comments: true } },
+          },
+        });
+
+        if (draft.content) {
+          await processPostHashtags(draft.content);
+        }
+
+        createdThreadPosts.push(created);
+      }
+
+      return NextResponse.json({ post: createdThreadPosts[0], thread: createdThreadPosts }, { status: 201 });
+    }
+
     const {
       content,
       imageUrl,
@@ -120,8 +169,11 @@ export async function POST(request: NextRequest) {
       scheduledAt,
       parentId,
       quotePostId,
-      isCodeBlock
-    } = await request.json();
+      isCodeBlock,
+      threadId,
+      threadPosition,
+      isThreadStart
+    } = body;
 
     if (!content && !imageUrl && !videoUrl && !gifUrl && !pollData && !quotePostId) {
       return NextResponse.json({ error: "Content, media, GIF, quote, or poll is required" }, { status: 400 });
@@ -150,6 +202,9 @@ export async function POST(request: NextRequest) {
     if (scheduledAt) createData.scheduledAt = new Date(scheduledAt);
     if (parentId) createData.parentId = parentId;
     if (quotePostId) createData.quotePostId = quotePostId;
+    if (threadId) createData.threadId = threadId;
+    if (threadPosition) createData.threadPosition = threadPosition;
+    if (isThreadStart) createData.isThreadStart = isThreadStart;
 
     let post: any;
     try {
@@ -185,6 +240,11 @@ export async function POST(request: NextRequest) {
         include: {
           author: {
             select: { id: true, name: true, avatar: true, username: true }
+          },
+          parent: {
+            include: {
+              author: { select: { id: true, name: true, avatar: true, username: true } }
+            }
           },
           _count: {
             select: { likes: true, comments: true }

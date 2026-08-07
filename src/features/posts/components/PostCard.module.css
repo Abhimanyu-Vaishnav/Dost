@@ -147,10 +147,32 @@
 
 .threadLine {
   width: 2px;
-  background-color: var(--color-border);
+  background-color: #2F3336;
   flex-grow: 1;
   margin-top: 4px;
   border-radius: 2px;
+}
+
+.threadLineBottom {
+  position: absolute;
+  top: 40px;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  background-color: #2F3336;
+  z-index: 1;
+}
+
+.threadLineTop {
+  position: absolute;
+  top: -16px;
+  height: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  background-color: #2F3336;
+  z-index: 1;
 }
 
 .mainColumn {
