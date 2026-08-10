@@ -32,7 +32,13 @@ export function AuthForm({ mode }: AuthFormProps) {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type");
+      let data: any = {};
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        throw new Error(`Server returned non-JSON response (${res.status})`);
+      }
 
       if (!res.ok) {
         throw new Error(data.error || "Authentication failed");

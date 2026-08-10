@@ -42,6 +42,28 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
 
   const formattedJoinDate = new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
+  const getCategoryBadgeLabel = (accountType?: string | null, accountSubType?: string | null) => {
+    if (accountSubType) {
+      const formatted = accountSubType
+        .split("_")
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+      
+      if (accountSubType.includes("developer") || accountSubType.includes("engineer")) return `💻 ${formatted}`;
+      if (accountSubType.includes("creator") || accountSubType.includes("designer")) return `✨ ${formatted}`;
+      if (accountSubType.includes("student")) return `🎓 ${formatted}`;
+      if (accountSubType.includes("company") || accountSubType.includes("startup") || accountSubType.includes("business")) return `🏢 ${formatted}`;
+      return `🏷️ ${formatted}`;
+    }
+    
+    if (accountType === "CREATOR") return "✨ Digital Creator";
+    if (accountType === "BUSINESS") return "🏢 Business Account";
+    if (accountType === "PERSON") return "👤 Personal Account";
+    return null;
+  };
+
+  const categoryBadge = getCategoryBadgeLabel(user.accountType, user.accountSubType);
+
   return (
     <div style={{ marginBottom: "var(--space-6)" }}>
       {/* Cover Image Container */}
@@ -146,7 +168,25 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
 
         {/* User Info Section */}
         <div style={{ marginBottom: "20px" }}>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--color-text-main)", marginBottom: "2px" }}>{user.name}</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>{user.name}</h1>
+            {categoryBadge && (
+              <span style={{
+                padding: "4px 12px",
+                borderRadius: "99px",
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                background: "rgba(29, 155, 240, 0.12)",
+                border: "1px solid rgba(29, 155, 240, 0.3)",
+                color: "var(--color-primary, #1d9bf0)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px"
+              }}>
+                {categoryBadge}
+              </span>
+            )}
+          </div>
           <p className="text-muted" style={{ fontSize: "1rem", marginBottom: "16px" }}>@{user.username || user.name?.toLowerCase().replace(/\s+/g, '')}</p>
           
           <div style={{ fontSize: "1.05rem", color: "var(--color-text-main)", marginBottom: "16px", whiteSpace: "pre-wrap" }}>

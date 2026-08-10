@@ -281,7 +281,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         )}
       </aside>
 
-      <main className={styles.mainContent} style={fullWidth ? { flex: 1, minWidth: 0, width: "auto", borderRight: "none", overflow: "hidden" } : {}}>
+      <main className={styles.mainContent} style={fullWidth ? { flex: 1, minWidth: 0, width: "auto", borderRight: "none", overflowY: "auto" } : {}}>
         {children}
       </main>
 
