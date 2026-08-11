@@ -44,19 +44,30 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
   const formattedJoinDate = new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const getCategoryBadgeLabel = (accountType?: string | null, accountSubType?: string | null) => {
-    if (accountSubType) {
+    if (accountSubType && accountSubType.trim()) {
+      const cleanType = accountSubType.toLowerCase();
       const formatted = accountSubType
         .split("_")
         .map(w => w.charAt(0).toUpperCase() + w.slice(1))
         .join(" ");
-      
-      if (accountSubType.includes("developer") || accountSubType.includes("engineer")) return `💻 ${formatted}`;
-      if (accountSubType.includes("creator") || accountSubType.includes("designer")) return `✨ ${formatted}`;
-      if (accountSubType.includes("student")) return `🎓 ${formatted}`;
-      if (accountSubType.includes("company") || accountSubType.includes("startup") || accountSubType.includes("business")) return `🏢 ${formatted}`;
+
+      if (cleanType.includes("developer") || cleanType.includes("engineer")) return `💻 ${formatted}`;
+      if (cleanType.includes("teacher") || cleanType.includes("educator")) return `🎓 ${formatted}`;
+      if (cleanType.includes("designer")) return `🎨 ${formatted}`;
+      if (cleanType.includes("founder")) return `🚀 ${formatted}`;
+      if (cleanType.includes("ai") || cleanType.includes("researcher")) return `🤖 ${formatted}`;
+      if (cleanType.includes("creator")) return `✨ ${formatted}`;
+      if (cleanType.includes("influencer")) return `🏷️ ${formatted}`;
+      if (cleanType.includes("photographer")) return `📸 ${formatted}`;
+      if (cleanType.includes("animator") || cleanType.includes("3d")) return `🎬 ${formatted}`;
+      if (cleanType.includes("musician") || cleanType.includes("producer")) return `🎵 ${formatted}`;
+      if (cleanType.includes("trainer") || cleanType.includes("fitness")) return `🏋️ ${formatted}`;
+      if (cleanType.includes("analyst") || cleanType.includes("financial")) return `📊 ${formatted}`;
+      if (cleanType.includes("architect")) return `🏛️ ${formatted}`;
+      if (cleanType.includes("company") || cleanType.includes("startup") || cleanType.includes("business")) return `🏢 ${formatted}`;
       return `🏷️ ${formatted}`;
     }
-    
+
     if (accountType === "CREATOR") return "✨ Digital Creator";
     if (accountType === "BUSINESS") return "🏢 Business Account";
     if (accountType === "PERSON") return "👤 Personal Account";

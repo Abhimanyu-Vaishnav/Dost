@@ -20,8 +20,9 @@ interface EditProfileModalProps {
 }
 
 const CATEGORY_OPTIONS = [
-  { group: "Tech & Product", items: [
+  { group: "Tech & Engineering", items: [
     { value: "software_developer", label: "💻 Software Developer" },
+    { value: "teacher", label: "🎓 Educator / Teacher" },
     { value: "ui_ux_designer", label: "🎨 UI/UX Designer" },
     { value: "tech_founder", label: "🚀 Tech Founder" },
     { value: "ai_researcher", label: "🤖 AI Researcher" },
@@ -35,12 +36,11 @@ const CATEGORY_OPTIONS = [
     { value: "musician_producer", label: "🎵 Musician / Producer" },
   ]},
   { group: "Business & Professional", items: [
-    { value: "startup_company", label: "🏢 Tech Startup" },
+    { value: "startup_company", label: "🏢 Tech Startup / Business" },
     { value: "vc_investor", label: "💼 VC Investor" },
     { value: "fitness_trainer", label: "🏋️ Fitness Coach" },
     { value: "financial_analyst", label: "📊 Financial Analyst" },
     { value: "architect", label: "🏛️ Architect" },
-    { value: "educator", label: "🎓 Educator / Teacher" },
   ]}
 ];
 
@@ -94,14 +94,59 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
     reader.readAsDataURL(file);
   };
 
+  // Helper to bake zoomed/positioned image onto HTML5 canvas before saving
+  const bakeImageAdjustments = (imageSrc: string, zoom: number, posY: number, isCover: boolean): Promise<string> => {
+    return new Promise((resolve) => {
+      if (!imageSrc || (zoom === 1 && posY === 50)) return resolve(imageSrc);
+
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const targetW = isCover ? 1200 : 400;
+        const targetH = isCover ? 400 : 400;
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) return resolve(imageSrc);
+
+        const scaledW = img.width / zoom;
+        const scaledH = img.height / zoom;
+        const overflowY = img.height - scaledH;
+        const sourceY = Math.max(0, Math.min(img.height - scaledH, (posY / 100) * overflowY));
+        const sourceX = (img.width - scaledW) / 2;
+
+        ctx.drawImage(img, sourceX, sourceY, scaledW, scaledH, 0, 0, targetW, targetH);
+        resolve(canvas.toDataURL("image/jpeg", 0.92));
+      };
+      img.onerror = () => resolve(imageSrc);
+      img.src = imageSrc;
+    });
+  };
+
   const handleSave = async () => {
     setLoading(true);
     setErrorMsg("");
     try {
+      // Bake any zoom / vertical position adjustments into permanent base64 image strings
+      const bakedAvatar = await bakeImageAdjustments(avatar, avatarZoom, avatarPosY, false);
+      const bakedCover = await bakeImageAdjustments(coverImage, coverZoom, coverPosY, true);
+
       const res = await fetch("/api/users/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, username, bio, avatar, coverImage, gender, dob, accountType, accountSubType }),
+        body: JSON.stringify({ 
+          name, 
+          username, 
+          bio, 
+          avatar: bakedAvatar, 
+          coverImage: bakedCover, 
+          gender, 
+          dob, 
+          accountType, 
+          accountSubType 
+        }),
       });
 
       const data = await res.json();
@@ -430,7 +475,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
 
             {/* Sub-Category Dropdown */}
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-muted)" }}>Professional Sub-Category</label>
+              <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-muted)" }}>Professional Tag / Sub-Category</label>
               <select
                 value={accountSubType}
                 onChange={e => setAccountSubType(e.target.value)}

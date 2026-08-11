@@ -121,6 +121,20 @@ export default async function UniversalProfilePage({ params }: { params: Promise
     take: 30
   });
 
+  // Fetch Reposts & Quote Posts by User
+  const repostPosts = (isBlockedByMe || hasBlockedMe) ? [] : await prisma.post.findMany({
+    where: {
+      authorId: profileUserId,
+      OR: [
+        { repostId: { not: null } },
+        { quotePostId: { not: null } }
+      ]
+    },
+    orderBy: { createdAt: "desc" },
+    include: postInclude as any,
+    take: 30
+  });
+
   // Fetch Media Posts (Image / Video)
   const mediaPosts = (isBlockedByMe || hasBlockedMe) ? [] : await prisma.post.findMany({
     where: {
@@ -169,12 +183,14 @@ export default async function UniversalProfilePage({ params }: { params: Promise
       <ProfileTabs
         posts={posts}
         replies={replies}
+        repostPosts={repostPosts}
         mediaPosts={mediaPosts}
         likedPosts={likedPosts}
         currentUserId={currentUser.userId as string}
         isOwnProfile={isOwnProfile}
         isBlockedByMe={isBlockedByMe}
         hasBlockedMe={hasBlockedMe}
+        username={dbUser.username || dbUser.name?.toLowerCase().replace(/\s+/g, '') || "user"}
       />
     </AppLayout>
   );
