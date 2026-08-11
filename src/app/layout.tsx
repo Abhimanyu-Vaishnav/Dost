@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
+import { ThemeProvider } from "@/context/ThemeContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "DOST - Social Media App",
-  description: "A modern social media app",
+  description: "A modern social media app for real-time connection",
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
@@ -31,8 +33,6 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-import { ThemeProvider } from "@/context/ThemeContext";
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -48,6 +48,7 @@ export default function RootLayout({
         <ThemeProvider>
           {children}
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
