@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
 
       const streamPosts = await (prisma.post as any).findMany({
         where: streamWhere,
-        orderBy: { views: "desc" },
+        orderBy: { createdAt: "desc" },
         include: {
           author: {
             select: { id: true, name: true, avatar: true, username: true }

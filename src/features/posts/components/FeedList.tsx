@@ -53,7 +53,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     try {
       const topPostId = posts[0]?.id || "";
       const excludeIds = [...posts.map((p) => p.id), ...newPostsQueue.map((p) => p.id)]
-        .slice(0, 50)
+        .slice(0, 500)
         .join(",");
 
       const res = await fetch(
@@ -80,9 +80,9 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   }, [posts, newPostsQueue, activeTab]);
 
-  // Ultra-fast live accumulator polling every 4 seconds
+  // Ultra-fast live accumulator polling every 3 seconds
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 4000);
+    const interval = setInterval(fetchNewPosts, 3000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
