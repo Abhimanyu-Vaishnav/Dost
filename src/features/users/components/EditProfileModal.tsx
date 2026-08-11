@@ -94,42 +94,54 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
     reader.readAsDataURL(file);
   };
 
-  // Helper to bake zoomed/positioned image onto HTML5 canvas before saving
-  const bakeImageAdjustments = (imageSrc: string, zoom: number, posY: number, isCover: boolean): Promise<string> => {
-    return new Promise((resolve) => {
-      if (!imageSrc || (zoom === 1 && posY === 50)) return resolve(imageSrc);
+  // Helper to bake zoomed/positioned image onto HTML5 canvas before saving (with Blob fetch CORS bypass)
+  const bakeImageAdjustments = async (imageSrc: string, zoom: number, posY: number, isCover: boolean): Promise<string> => {
+    if (!imageSrc) return imageSrc;
+    if (zoom === 1 && posY === 50 && !imageSrc.startsWith("data:")) return imageSrc;
 
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const targetW = isCover ? 1200 : 400;
-        const targetH = isCover ? 400 : 400;
-        canvas.width = targetW;
-        canvas.height = targetH;
-        const ctx = canvas.getContext("2d");
+    try {
+      let imgElement: HTMLImageElement;
+      if (imageSrc.startsWith("data:")) {
+        imgElement = new Image();
+        imgElement.src = imageSrc;
+        await new Promise((res, rej) => { imgElement.onload = res; imgElement.onerror = rej; });
+      } else {
+        const resp = await fetch(imageSrc);
+        const blob = await resp.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        imgElement = new Image();
+        imgElement.src = objectUrl;
+        await new Promise((res, rej) => { imgElement.onload = res; imgElement.onerror = rej; });
+      }
 
-        if (!ctx) return resolve(imageSrc);
+      const canvas = document.createElement("canvas");
+      const targetW = isCover ? 1200 : 400;
+      const targetH = isCover ? 400 : 400;
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext("2d");
 
-        const scaledW = img.width / zoom;
-        const scaledH = img.height / zoom;
-        const overflowY = img.height - scaledH;
-        const sourceY = Math.max(0, Math.min(img.height - scaledH, (posY / 100) * overflowY));
-        const sourceX = (img.width - scaledW) / 2;
+      if (!ctx) return imageSrc;
 
-        ctx.drawImage(img, sourceX, sourceY, scaledW, scaledH, 0, 0, targetW, targetH);
-        resolve(canvas.toDataURL("image/jpeg", 0.92));
-      };
-      img.onerror = () => resolve(imageSrc);
-      img.src = imageSrc;
-    });
+      const scaledW = imgElement.width / zoom;
+      const scaledH = imgElement.height / zoom;
+      const overflowY = Math.max(0, imgElement.height - scaledH);
+      const sourceY = Math.max(0, Math.min(imgElement.height - scaledH, (posY / 100) * overflowY));
+      const sourceX = Math.max(0, (imgElement.width - scaledW) / 2);
+
+      ctx.drawImage(imgElement, sourceX, sourceY, scaledW, scaledH, 0, 0, targetW, targetH);
+      return canvas.toDataURL("image/jpeg", 0.92);
+    } catch (err) {
+      console.error("Cropping error:", err);
+      return imageSrc;
+    }
   };
 
   const handleSave = async () => {
     setLoading(true);
     setErrorMsg("");
     try {
-      // Bake any zoom / vertical position adjustments into permanent base64 image strings
+      // Bake zoom / vertical position adjustments into permanent base64 image strings
       const bakedAvatar = await bakeImageAdjustments(avatar, avatarZoom, avatarPosY, false);
       const bakedCover = await bakeImageAdjustments(coverImage, coverZoom, coverPosY, true);
 
@@ -163,6 +175,8 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
       setLoading(false);
     }
   };
+
+  const isCurrentSubTypeInOptions = CATEGORY_OPTIONS.some(g => g.items.some(i => i.value === accountSubType));
 
   return (
     <div 
@@ -484,6 +498,11 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
                   background: "var(--color-bg-base)", color: "var(--color-text-main)", outline: "none", fontSize: "0.95rem", fontWeight: 600
                 }}
               >
+                {!isCurrentSubTypeInOptions && accountSubType && (
+                  <option value={accountSubType}>
+                    🏷️ {accountSubType.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
+                  </option>
+                )}
                 {CATEGORY_OPTIONS.map((group, gIdx) => (
                   <optgroup key={gIdx} label={group.group}>
                     {group.items.map(opt => (

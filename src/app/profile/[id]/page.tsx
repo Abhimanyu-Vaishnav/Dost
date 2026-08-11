@@ -5,10 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SearchBar } from "@/features/search/components/SearchBar";
 import { FollowSuggestions } from "@/features/users/components/FollowSuggestions";
-import { ProfileHeader } from "@/features/users/components/ProfileHeader";
 import { TrendingSection } from "@/features/search/components/TrendingSection";
-import { PageHeader } from "@/components/common/PageHeader";
-import { ProfileTabs } from "@/features/users/components/ProfileTabs";
+import { ProfileClientView } from "@/features/users/components/ProfileClientView";
 
 export default async function UniversalProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const cookieStore = await cookies();
@@ -173,24 +171,18 @@ export default async function UniversalProfilePage({ params }: { params: Promise
 
   return (
     <AppLayout rightSidebar={RightSidebar}>
-      <PageHeader title={dbUser.name || "Profile"} subtitle={`${dbUser._count.posts} posts`} showBackButton />
-      <ProfileHeader 
-        user={dbUser as any} 
-        isOwnProfile={isOwnProfile} 
-        initialIsFollowing={isFollowing} 
-      />
-
-      <ProfileTabs
+      <ProfileClientView
+        dbUser={dbUser}
+        isOwnProfile={isOwnProfile}
+        isFollowing={isFollowing}
         posts={posts}
         replies={replies}
         repostPosts={repostPosts}
         mediaPosts={mediaPosts}
         likedPosts={likedPosts}
         currentUserId={currentUser.userId as string}
-        isOwnProfile={isOwnProfile}
         isBlockedByMe={isBlockedByMe}
         hasBlockedMe={hasBlockedMe}
-        username={dbUser.username || dbUser.name?.toLowerCase().replace(/\s+/g, '') || "user"}
       />
     </AppLayout>
   );
