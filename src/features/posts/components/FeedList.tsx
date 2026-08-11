@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { PostCard } from "./PostCard";
-import { Loader2, ArrowUp } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Loader2, ArrowUp, Sparkles, RefreshCw } from "lucide-react";
 
 interface FeedListProps {
   initialPosts: any[];
@@ -13,86 +12,209 @@ interface FeedListProps {
 
 export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListProps) {
   const [posts, setPosts] = useState(initialPosts);
-  const [newPosts, setNewPosts] = useState<any[]>([]);
+  const [newPostsQueue, setNewPostsQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [hasMore, setHasMore] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const topFeedRef = useRef<HTMLDivElement>(null);
 
-  // Reset state when tab changes
+  // Reset feed state when activeTab or initialPosts change
   useEffect(() => {
     setPosts(initialPosts);
-    setNewPosts([]);
-  }, [initialPosts]);
+    setNewPostsQueue([]);
+  }, [initialPosts, activeTab]);
 
+  // Polling function for brand-new posts
   const fetchNewPosts = useCallback(async () => {
     try {
-      const lastPostId = posts[0]?.id;
-      const res = await fetch(`/api/posts?tab=${activeTab}&since=${lastPostId || ""}`);
+      const topPostId = posts[0]?.id || "";
+      const res = await fetch(`/api/posts?tab=${activeTab}&since=${topPostId}`);
       if (res.ok) {
         const data = await res.json();
-        const incoming = data.posts || [];
-        
-        // Filter out posts we already have
-        const actuallyNew = incoming.filter((np: any) => !posts.some(p => p.id === np.id));
-        
-        if (actuallyNew.length > 0) {
-          setNewPosts(prev => {
-            const combined = [...actuallyNew, ...prev];
-            // Remove duplicates
-            return Array.from(new Set(combined.map(p => p.id))).map(id => combined.find(p => p.id === id));
+        const incoming: any[] = data.posts || [];
+
+        if (incoming.length > 0) {
+          setNewPostsQueue((prev) => {
+            const existingIds = new Set([...posts.map((p) => p.id), ...prev.map((p) => p.id)]);
+            const brandNew = incoming.filter((np) => !existingIds.has(np.id));
+            if (brandNew.length > 0) {
+              return [...brandNew, ...prev];
+            }
+            return prev;
           });
         }
       }
     } catch (e) {
-      console.error("Poll error:", e);
+      console.error("Live feed polling error:", e);
     }
   }, [posts, activeTab]);
 
-  // Polling effect every 30 seconds
+  // Fast live polling every 10 seconds
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 30000);
+    const interval = setInterval(fetchNewPosts, 10000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
-  const showNewPosts = () => {
-    setPosts(prev => [...newPosts, ...prev]);
-    setNewPosts([]);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // Function to reveal and prepend queued new posts (Twitter/X style)
+  const handleRevealNewPosts = () => {
+    if (newPostsQueue.length === 0) return;
+
+    setPosts((prev) => {
+      const existingIds = new Set(prev.map((p) => p.id));
+      const filteredQueue = newPostsQueue.filter((p) => !existingIds.has(p.id));
+      return [...filteredQueue, ...prev];
+    });
+
+    setNewPostsQueue([]);
+
+    // Smooth scroll to top of feed
+    if (topFeedRef.current) {
+      topFeedRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
+  // Pull / manual refresh handler
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`/api/posts?tab=${activeTab}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.posts) {
+          setPosts(data.posts);
+          setNewPostsQueue([]);
+        }
+      }
+    } catch (e) {
+      console.error("Manual refresh error:", e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Get up to 3 author avatars for stacked avatar preview on the pill button
+  const avatarStack = Array.from(
+    new Set(newPostsQueue.map((p) => p.author?.avatar).filter(Boolean))
+  ).slice(0, 3);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", position: "relative" }}>
-      {/* New Posts Banner */}
-      {newPosts.length > 0 && (
-        <button 
-          onClick={showNewPosts}
+    <div ref={topFeedRef} style={{ display: "flex", flexDirection: "column", position: "relative", width: "100%" }}>
+      {/* Twitter/X Style Floating "Show N Posts" Banner */}
+      {newPostsQueue.length > 0 && (
+        <div
           style={{
-            position: "fixed",
-            top: "80px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 100,
-            backgroundColor: "var(--color-primary)",
-            color: "white",
-            padding: "10px 20px",
-            borderRadius: "var(--radius-full)",
-            border: "none",
-            boxShadow: "var(--shadow-lg)",
-            cursor: "pointer",
+            position: "sticky",
+            top: "64px",
+            zIndex: 40,
             display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            fontWeight: 700,
-            fontSize: "0.9rem"
+            justifyContent: "center",
+            width: "100%",
+            padding: "8px 0",
+            pointerEvents: "none"
           }}
-          className="animate-bounce"
         >
-          <ArrowUp size={16} /> Show {newPosts.length} new posts
-        </button>
+          <button
+            onClick={handleRevealNewPosts}
+            style={{
+              pointerEvents: "auto",
+              backgroundColor: "var(--color-primary, #1d9bf0)",
+              color: "#ffffff",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              borderRadius: "9999px",
+              padding: "10px 20px",
+              boxShadow: "0 8px 24px rgba(29, 155, 240, 0.45)",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              fontWeight: 700,
+              fontSize: "0.9rem",
+              cursor: "pointer",
+              transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s",
+              backdropFilter: "blur(8px)"
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+          >
+            {/* Stacked Avatar Previews */}
+            {avatarStack.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", marginRight: "2px" }}>
+                {avatarStack.map((url, i) => (
+                  <img
+                    key={i}
+                    src={url as string}
+                    alt="avatar"
+                    style={{
+                      width: "22px",
+                      height: "22px",
+                      borderRadius: "50%",
+                      border: "2px solid var(--color-primary, #1d9bf0)",
+                      marginLeft: i > 0 ? "-8px" : "0px",
+                      objectFit: "cover"
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            <ArrowUp size={16} style={{ strokeWidth: 3 }} />
+            <span>Show {newPostsQueue.length} {newPostsQueue.length === 1 ? "post" : "posts"}</span>
+          </button>
+        </div>
       )}
 
+      {/* Manual Refresh Bar if feed has posts */}
+      {posts.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            padding: "8px 16px",
+            borderBottom: "1px solid var(--color-border, #2f3336)"
+          }}
+        >
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--color-primary, #1d9bf0)",
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+          >
+            <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
+            {isRefreshing ? "Refreshing..." : "Refresh Feed"}
+          </button>
+        </div>
+      )}
+
+      {/* Posts List */}
       {posts.length === 0 ? (
-        <div className="glass" style={{ padding: "var(--space-6)", borderRadius: "var(--radius-lg)", textAlign: "center" }}>
-          <p className="text-muted">No posts yet. Be the first to share something!</p>
+        <div
+          style={{
+            padding: "40px 20px",
+            textAlign: "center",
+            color: "var(--color-text-muted, #8b98a5)",
+            background: "rgba(255, 255, 255, 0.02)",
+            borderRadius: "16px",
+            margin: "20px 0",
+            border: "1px solid var(--color-border, #2f3336)"
+          }}
+        >
+          <Sparkles size={36} style={{ margin: "0 auto 12px", color: "var(--color-primary, #1d9bf0)" }} />
+          <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--color-text-main, #fff)", marginBottom: "6px" }}>
+            Welcome to your feed!
+          </h3>
+          <p style={{ fontSize: "0.9rem" }}>
+            No posts found in this tab right now. Be the first to share an update or switch tabs!
+          </p>
         </div>
       ) : (
         posts.map((post) => (
@@ -101,8 +223,8 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       )}
 
       {loading && (
-        <div style={{ display: "flex", justifyContent: "center", padding: "20px" }}>
-          <Loader2 className="animate-spin" />
+        <div style={{ display: "flex", justifyContent: "center", padding: "24px" }}>
+          <Loader2 className="animate-spin" style={{ color: "var(--color-primary, #1d9bf0)" }} size={24} />
         </div>
       )}
     </div>
