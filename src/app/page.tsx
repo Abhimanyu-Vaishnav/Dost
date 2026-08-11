@@ -3,26 +3,35 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTheme } from "@/context/ThemeContext";
 import styles from "./page.module.css";
-import { 
-  Shield, 
-  Zap, 
-  Image as ImageIcon, 
-  Users, 
-  Globe, 
-  ArrowRight, 
-  Lock, 
-  Mail, 
-  User, 
-  Loader2, 
-  Sparkles, 
-  MessageSquare, 
-  Hash, 
-  ShieldCheck 
+import {
+  Shield,
+  Users,
+  ArrowRight,
+  Lock,
+  Mail,
+  User,
+  Loader2,
+  Sparkles,
+  ShieldCheck,
+  Heart,
+  Repeat,
+  MessageCircle,
+  Share2,
+  Flame,
+  Sun,
+  Moon,
+  Check,
+  Award,
+  Hash
 } from "lucide-react";
 
 export default function Home() {
   const router = useRouter();
+  const { theme, setTheme, accentColor, setAccentColor } = useTheme();
+
+  // Auth Form State
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [registerStep, setRegisterStep] = useState(1);
   const [email, setEmail] = useState("");
@@ -30,6 +39,12 @@ export default function Home() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Showcase Preview Active Tab
+  const [previewTab, setPreviewTab] = useState<"feed" | "stories" | "communities" | "themes">("feed");
+
+  // Sample Poll Option Selected State for interactive preview
+  const [pollVotedOption, setPollVotedOption] = useState<number | null>(0);
 
   const handleNextStep = () => {
     if (email && password.length >= 6) {
@@ -54,7 +69,7 @@ export default function Home() {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
       const contentType = res.headers.get("content-type");
@@ -78,9 +93,23 @@ export default function Home() {
     }
   };
 
+  const scrollToAuth = (mode: "login" | "register") => {
+    setAuthMode(mode);
+    if (mode === "register") setRegisterStep(1);
+    setError("");
+    const el = document.getElementById("auth-card");
+    if (el) {
+      try {
+        el.scrollIntoView({ behavior: "smooth" });
+      } catch (e) {
+        el.scrollIntoView();
+      }
+    }
+  };
+
   return (
     <main className={styles.landingContainer}>
-      {/* Dynamic abstract background visual lines */}
+      {/* Background Visual Effects */}
       <div className={styles.bgGridPattern} />
       <div className={styles.meshGradient} />
 
@@ -88,119 +117,281 @@ export default function Home() {
       <header className={styles.header}>
         <div className={styles.logoArea}>
           <div className={styles.logoIcon}>
-            <Sparkles size={24} />
+            <Sparkles size={22} />
           </div>
           <span className={styles.logoText}>DOST</span>
+          <span className={styles.badgeVersion}>v2.0</span>
         </div>
+
         <div className={styles.headerRight}>
-          <button 
-            onClick={() => {
-              setAuthMode("login");
-              setError("");
-              setTimeout(() => {
-                const el = document.getElementById("auth-card");
-                if (el) {
-                  try {
-                    el.scrollIntoView({ behavior: "smooth" });
-                  } catch (e) {
-                    el.scrollIntoView();
-                  }
-                }
-              }, 50);
-            }}
-            className={styles.headerLink}
-          >
+          <button onClick={() => scrollToAuth("login")} className={styles.headerLink}>
             Sign In
           </button>
-          <button 
-            onClick={() => {
-              setAuthMode("register");
-              setRegisterStep(1);
-              setError("");
-              setTimeout(() => {
-                const el = document.getElementById("auth-card");
-                if (el) {
-                  try {
-                    el.scrollIntoView({ behavior: "smooth" });
-                  } catch (e) {
-                    el.scrollIntoView();
-                  }
-                }
-              }, 50);
-            }}
-            className={styles.headerBtn}
-          >
-            Join Now
+          <button onClick={() => scrollToAuth("register")} className={styles.headerBtn}>
+            Join DOST Free
           </button>
         </div>
       </header>
 
-      {/* Hero / Auth Section (Split Pane on Desktop) */}
+      {/* HERO SECTION: Split Pane */}
       <section className={styles.heroSplitSection}>
-        {/* Left Column: Premium Branding & Live Previews */}
+        {/* Left Column: Value Proposition & Dynamic Live Feature Switcher */}
         <div className={styles.brandingCol}>
           <div className={styles.brandingBadge}>
-            <Zap size={14} className={styles.iconYellow} />
-            <span>The next generation of digital connection</span>
+            <Flame size={14} className={styles.iconYellow} />
+            <span>The Next Generation Social Network</span>
           </div>
+
           <h1 className={styles.brandingTitle}>
-            Where conversations <br />
-            <span className={styles.gradientText}>happen naturally.</span>
+            Where Conversations <br />
+            <span className={styles.gradientText}>Happen Naturally.</span>
           </h1>
+
           <p className={styles.brandingSubtitle}>
-            A beautifully designed, secure, and lightning-fast social space built for meaningful updates and private discussions.
+            Experience lightning-fast X-style feeds, 24-hour visual stories with polls, vibrant topic communities, 
+            and custom accent theme engine — built for meaningful connections.
           </p>
 
           {/* Social Proof Badges */}
           <div className={styles.badgeRow}>
             <div className={styles.badgeCard}>
-              <Users size={18} />
+              <Users size={18} style={{ color: "var(--color-primary, #1d9bf0)" }} />
               <div>
                 <span className={styles.badgeNum}>10k+</span>
                 <span className={styles.badgeLabel}>Active Members</span>
               </div>
             </div>
+
             <div className={styles.badgeCard}>
-              <ShieldCheck size={18} />
+              <Award size={18} style={{ color: "#8b5cf6" }} />
               <div>
-                <span className={styles.badgeNum}>Secure</span>
-                <span className={styles.badgeLabel}>Privacy Guaranteed</span>
+                <span className={styles.badgeNum}>Creator Ready</span>
+                <span className={styles.badgeLabel}>Professional Badges</span>
+              </div>
+            </div>
+
+            <div className={styles.badgeCard}>
+              <ShieldCheck size={18} style={{ color: "#10b981" }} />
+              <div>
+                <span className={styles.badgeNum}>100% Safe</span>
+                <span className={styles.badgeLabel}>Privacy Controls</span>
               </div>
             </div>
           </div>
 
-          {/* Mini Interactive Preview Area */}
+          {/* INTERACTIVE LIVE PRODUCT DEMO PREVIEW */}
           <div className={styles.interactivePreview}>
             <div className={styles.previewHeader}>
-              <div className={styles.dotGroup}>
-                <span className={styles.dot}></span>
-                <span className={styles.dot}></span>
-                <span className={styles.dot}></span>
+              <div className={styles.previewTabsRow}>
+                <button
+                  type="button"
+                  className={`${styles.previewTabBtn} ${previewTab === "feed" ? styles.previewTabBtnActive : ""}`}
+                  onClick={() => setPreviewTab("feed")}
+                >
+                  💬 Timeline Feed
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.previewTabBtn} ${previewTab === "stories" ? styles.previewTabBtnActive : ""}`}
+                  onClick={() => setPreviewTab("stories")}
+                >
+                  📸 24h Stories & Polls
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.previewTabBtn} ${previewTab === "communities" ? styles.previewTabBtnActive : ""}`}
+                  onClick={() => setPreviewTab("communities")}
+                >
+                  👥 Communities
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.previewTabBtn} ${previewTab === "themes" ? styles.previewTabBtnActive : ""}`}
+                  onClick={() => setPreviewTab("themes")}
+                >
+                  🎨 Live Theme Engine
+                </button>
               </div>
-              <span className={styles.previewTitle}>dost.feed</span>
             </div>
+
             <div className={styles.previewBody}>
-              <div className={styles.previewPost}>
-                <div className={styles.previewAvatar}>A</div>
-                <div className={styles.previewContent}>
-                  <div className={styles.previewUserRow}>
-                    <span className={styles.previewName}>Alex Rivera</span>
-                    <span className={styles.previewHandle}>@alexr</span>
+              {/* PREVIEW 1: TIMELINE FEED */}
+              {previewTab === "feed" && (
+                <div className={styles.previewPostCard}>
+                  <div className={styles.previewAvatar}>A</div>
+                  <div className={styles.previewPostContent}>
+                    <div className={styles.previewUserRow}>
+                      <span className={styles.previewName}>Alex Rivera</span>
+                      <span className={styles.previewBadge}>💻 Software Developer</span>
+                      <span className={styles.previewHandle}>@alexr • 2m</span>
+                    </div>
+                    <p className={styles.previewText}>
+                      Just pushed the brand new release on DOST! Rich code snippets, particle like bursts, and dark mode feel insanely crisp! 🚀✨
+                    </p>
+
+                    <div className={styles.codeSnippetBlock}>
+                      <code>const status = "DOST 2.0 Released!";</code>
+                    </div>
+
+                    <div className={styles.previewActions}>
+                      <span><MessageCircle size={15} /> 24</span>
+                      <span><Repeat size={15} /> 12</span>
+                      <span style={{ color: "#ec4899" }}><Heart size={15} fill="#ec4899" /> 148</span>
+                      <span><Share2 size={15} /></span>
+                    </div>
                   </div>
-                  <p className={styles.previewText}>
-                    Redesigning the portal today. Loving the clean aesthetics and responsiveness! ✨🚀
-                  </p>
                 </div>
-              </div>
+              )}
+
+              {/* PREVIEW 2: 24H STORIES & POLLS */}
+              {previewTab === "stories" && (
+                <div className={styles.storiesPreviewWrapper}>
+                  <div className={styles.pollHeaderRow}>
+                    <span className={styles.pollHeaderText}>Interactive Story Poll Preview</span>
+                    <span className={styles.pollTimerText}>Expires in 18h</span>
+                  </div>
+
+                  <div className={styles.pollContainer}>
+                    <p className={styles.pollQuestion}>
+                      📊 Which stack do you prefer for high-scale apps in 2026?
+                    </p>
+                    <div className={styles.pollOptionsGroup}>
+                      <div
+                        className={`${styles.pollOptionCard} ${pollVotedOption === 0 ? styles.pollOptionCardActive : ""}`}
+                        onClick={() => setPollVotedOption(0)}
+                      >
+                        <span>Next.js 16 + React 19 Engine</span>
+                        <span className={styles.pollPctText}>72%</span>
+                      </div>
+
+                      <div
+                        className={`${styles.pollOptionCard} ${pollVotedOption === 1 ? styles.pollOptionCardActive : ""}`}
+                        onClick={() => setPollVotedOption(1)}
+                      >
+                        <span>Vite + Custom Micro-frontends</span>
+                        <span className={styles.pollPctText}>28%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* PREVIEW 3: COMMUNITIES */}
+              {previewTab === "communities" && (
+                <div className={styles.communityListGroup}>
+                  <div className={styles.communityCard}>
+                    <div className={styles.communityLeft}>
+                      <div className={styles.communityIconBox} style={{ background: "rgba(29, 155, 240, 0.15)" }}>
+                        💻
+                      </div>
+                      <div>
+                        <div className={styles.communityTitle}>Full-Stack Devs Hub</div>
+                        <div className={styles.communityMembers}>4.2k Members</div>
+                      </div>
+                    </div>
+                    <button className={styles.communityJoinBtn} style={{ background: "#1d9bf0" }}>
+                      Join Hub
+                    </button>
+                  </div>
+
+                  <div className={styles.communityCard}>
+                    <div className={styles.communityLeft}>
+                      <div className={styles.communityIconBox} style={{ background: "rgba(236, 72, 153, 0.15)" }}>
+                        🎨
+                      </div>
+                      <div>
+                        <div className={styles.communityTitle}>UI/UX Designers Guild</div>
+                        <div className={styles.communityMembers}>2.8k Members</div>
+                      </div>
+                    </div>
+                    <button className={styles.communityJoinBtn} style={{ background: "#ec4899" }}>
+                      Join Hub
+                    </button>
+                  </div>
+
+                  <div className={styles.communityCard}>
+                    <div className={styles.communityLeft}>
+                      <div className={styles.communityIconBox} style={{ background: "rgba(16, 185, 129, 0.15)" }}>
+                        🚀
+                      </div>
+                      <div>
+                        <div className={styles.communityTitle}>Indie Hackers & Founders</div>
+                        <div className={styles.communityMembers}>3.1k Members</div>
+                      </div>
+                    </div>
+                    <button className={styles.communityJoinBtn} style={{ background: "#10b981" }}>
+                      Join Hub
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* PREVIEW 4: LIVE THEME PLAYGROUND */}
+              {previewTab === "themes" && (
+                <div className={styles.themePlaygroundGroup}>
+                  <div className={styles.themePlaygroundTitle}>
+                    ✨ Test Accent Colors & Themes Right Now:
+                  </div>
+
+                  {/* Accent Color Swatches */}
+                  <div className={styles.swatchesRow}>
+                    {[
+                      { hex: "#1d9bf0", name: "Sky Blue" },
+                      { hex: "#8b5cf6", name: "Royal Purple" },
+                      { hex: "#ec4899", name: "Hot Pink" },
+                      { hex: "#10b981", name: "Emerald Green" },
+                      { hex: "#f59e0b", name: "Amber Orange" },
+                      { hex: "#ef4444", name: "Crimson Red" }
+                    ].map((c) => (
+                      <div
+                        key={c.hex}
+                        onClick={() => setAccentColor(c.hex)}
+                        className={`${styles.swatchCircle} ${accentColor === c.hex ? styles.swatchCircleActive : ""}`}
+                        style={{ backgroundColor: c.hex }}
+                        title={c.name}
+                      >
+                        {accentColor === c.hex && <Check size={16} />}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Theme Mode Buttons */}
+                  <div className={styles.themeModesGrid}>
+                    <button
+                      type="button"
+                      onClick={() => setTheme("dark")}
+                      className={`${styles.themeModeOptionBtn} ${theme === "dark" ? styles.themeModeOptionBtnActive : ""}`}
+                    >
+                      <Moon size={14} /> Pitch Dark
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTheme("dim")}
+                      className={`${styles.themeModeOptionBtn} ${theme === "dim" ? styles.themeModeOptionBtnActive : ""}`}
+                    >
+                      <Shield size={14} /> Dim Navy
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTheme("light")}
+                      className={`${styles.themeModeOptionBtn} ${theme === "light" ? styles.themeModeOptionBtnActive : ""}`}
+                    >
+                      <Sun size={14} /> Light Mode
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Right Column: Embedded Form Card */}
+        {/* Right Column: Embedded Auth Form */}
         <div className={styles.authCol}>
           <div id="auth-card" className={styles.authCard}>
             <div className={styles.authTabs}>
-              <button 
+              <button
                 type="button"
                 className={`${styles.tabBtn} ${authMode === "register" ? styles.activeTab : ""}`}
                 onClick={() => {
@@ -211,7 +402,7 @@ export default function Home() {
               >
                 Create Account
               </button>
-              <button 
+              <button
                 type="button"
                 className={`${styles.tabBtn} ${authMode === "login" ? styles.activeTab : ""}`}
                 onClick={() => {
@@ -225,20 +416,18 @@ export default function Home() {
 
             <div className={styles.authFormWrapper}>
               <h2 className={styles.authTitle}>
-                {authMode === "register" 
-                  ? registerStep === 1 
-                    ? "Join DOST Today" 
-                    : "Tell us about you"
-                  : "Welcome Back"
-                }
+                {authMode === "register"
+                  ? registerStep === 1
+                    ? "Join DOST Today"
+                    : "Tell us your name"
+                  : "Welcome Back"}
               </h2>
               <p className={styles.authSubtitle}>
                 {authMode === "register"
-                  ? registerStep === 1 
-                    ? "Get started with your free secure account." 
-                    : "Please enter your full name."
-                  : "Access your social feed and messages."
-                }
+                  ? registerStep === 1
+                    ? "Get started with your free social account."
+                    : "Enter your full display name."
+                  : "Access your feed, stories & messages."}
               </p>
 
               {error && (
@@ -249,9 +438,8 @@ export default function Home() {
 
               <form onSubmit={handleAuthSubmit} className={styles.formElement}>
                 {authMode === "register" && registerStep === 2 ? (
-                  /* Step 2: Name Input */
                   <div className={styles.inputField}>
-                    <label htmlFor="name">Your Name</label>
+                    <label htmlFor="name">Full Name</label>
                     <div className={styles.inputWrapper}>
                       <User size={18} className={styles.inputIcon} />
                       <input
@@ -266,7 +454,6 @@ export default function Home() {
                     </div>
                   </div>
                 ) : (
-                  /* Step 1 or Sign In: Email and Password */
                   <>
                     <div className={styles.inputField}>
                       <label htmlFor="email">Email Address</label>
@@ -302,10 +489,10 @@ export default function Home() {
                   </>
                 )}
 
-                {/* Form Buttons */}
+                {/* Form Action Buttons */}
                 {authMode === "register" && registerStep === 1 ? (
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={handleNextStep}
                     disabled={!email || password.length < 6}
                     className={styles.submitBtn}
@@ -314,40 +501,30 @@ export default function Home() {
                     <ArrowRight size={18} />
                   </button>
                 ) : (
-                  <button 
-                    type="submit" 
-                    disabled={isLoading}
-                    className={styles.submitBtn}
-                  >
+                  <button type="submit" disabled={isLoading} className={styles.submitBtn}>
                     {isLoading ? (
                       <Loader2 className={styles.spinner} size={20} />
                     ) : (
                       <>
-                        <span>{authMode === "login" ? "Sign In" : "Register"}</span>
+                        <span>{authMode === "login" ? "Sign In" : "Get Started"}</span>
                         <ArrowRight size={18} />
                       </>
                     )}
                   </button>
                 )}
 
-                {/* Switch back link (register step 2) */}
                 {authMode === "register" && registerStep === 2 && (
-                  <button 
-                    type="button"
-                    onClick={() => setRegisterStep(1)}
-                    className={styles.backStepBtn}
-                  >
-                    Back to step 1
+                  <button type="button" onClick={() => setRegisterStep(1)} className={styles.backStepBtn}>
+                    ← Back to step 1
                   </button>
                 )}
 
-                {/* Inline Toggle Link for Mobile/Tablets */}
                 <div className={styles.authToggleFooter}>
                   {authMode === "login" ? (
                     <p>
                       New to DOST?{" "}
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => {
                           setAuthMode("register");
                           setRegisterStep(1);
@@ -361,8 +538,8 @@ export default function Home() {
                   ) : (
                     <p>
                       Already have an account?{" "}
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => {
                           setAuthMode("login");
                           setError("");
@@ -380,22 +557,26 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Bento Grid Features Section */}
+      {/* BENTO GRID: APP FEATURE HIGHLIGHTS */}
       <section className={styles.bentoSection}>
         <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>Built for the modern digital era</h2>
-          <p className={styles.sectionSubtitle}>Simple, elegant, and packed with everything you need to stay connected.</p>
+          <h2 className={styles.sectionTitle}>Everything You Need To Connect & Share</h2>
+          <p className={styles.sectionSubtitle}>
+            Packed with modern social features designed for speed, beauty, and privacy.
+          </p>
         </div>
 
         <div className={styles.bentoGrid}>
-          {/* Feature 1: Real-time Feed */}
+          {/* Card 1: X-Style Rich Timeline Feed */}
           <div className={`${styles.bentoItem} ${styles.colSpan2}`}>
             <div className={styles.bentoIconWrapper}>
               <Sparkles size={24} />
             </div>
             <div className={styles.bentoContent}>
-              <h3>Next-Gen Feed</h3>
-              <p>Explore real-time posts, rich media attachments, and interactive comments. Clean design with absolutely no ads.</p>
+              <h3>Next-Gen Interactive Timeline</h3>
+              <p>
+                Post text, code snippets, poll questions, videos, and photos. Enjoy threaded replies, quote posts, reposts, and like burst particle animations.
+              </p>
             </div>
             <div className={styles.feedPreviewVisual}>
               <div className={styles.visualCard}>
@@ -407,45 +588,47 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Feature 2: Secure Chats */}
+          {/* Card 2: 24h Visual Stories */}
           <div className={styles.bentoItem}>
             <div className={styles.bentoIconWrapper}>
-              <MessageSquare size={24} />
+              <Flame size={24} style={{ color: "#f59e0b" }} />
             </div>
             <div className={styles.bentoContent}>
-              <h3>Direct Messaging</h3>
-              <p>Instant personal messaging with custom thread options to talk to friends securely.</p>
+              <h3>24-Hour Stories & Polls</h3>
+              <p>Share ephemeral stories with background music, sticker overlays, and interactive polls.</p>
             </div>
             <div className={styles.chatPreviewVisual}>
-              <div className={styles.bubbleLeft}>Hey, did you see this?</div>
-              <div className={styles.bubbleRight}>Yes, looks clean! 🚀</div>
+              <div className={styles.bubbleLeft}>📊 Live Story Polls</div>
+              <div className={styles.bubbleRight}>72% Voted Yes! 🔥</div>
             </div>
           </div>
 
-          {/* Feature 3: Global Explore */}
+          {/* Card 3: Topic Communities */}
           <div className={styles.bentoItem}>
             <div className={styles.bentoIconWrapper}>
-              <Hash size={24} />
+              <Hash size={24} style={{ color: "#8b5cf6" }} />
             </div>
             <div className={styles.bentoContent}>
-              <h3>Topic Explore</h3>
-              <p>Filter posts by popular trends and browse content categories with clean search navigation.</p>
+              <h3>Dedicated Communities</h3>
+              <p>Join or build specialized groups for Software Engineers, Creators, Designers & Tech Startups.</p>
             </div>
             <div className={styles.explorePreviewVisual}>
-              <span className={styles.trendTag}>#nextjs</span>
-              <span className={styles.trendTag}>#uiux</span>
-              <span className={styles.trendTag}>#coding</span>
+              <span className={styles.trendTag}>#software_dev</span>
+              <span className={styles.trendTag}>#digital_creator</span>
+              <span className={styles.trendTag}>#tech_startup</span>
             </div>
           </div>
 
-          {/* Feature 4: Safety & Shield */}
+          {/* Card 4: Privacy & Safety Shield */}
           <div className={`${styles.bentoItem} ${styles.colSpan2}`}>
             <div className={styles.bentoIconWrapper}>
-              <Shield size={24} />
+              <ShieldCheck size={24} style={{ color: "#10b981" }} />
             </div>
             <div className={styles.bentoContent}>
-              <h3>Privacy Controls</h3>
-              <p>Take charge of your profile presence. Block users, choose who can interact with you, and keep control of your posts.</p>
+              <h3>Granular Privacy & Safety Shield</h3>
+              <p>
+                Private accounts, custom block & mute controls, close friends story privacy, 2FA security, and unrecognized login alerts.
+              </p>
             </div>
             <div className={styles.shieldPreviewVisual}>
               <ShieldCheck size={72} className={styles.shieldIconBig} />
@@ -454,16 +637,31 @@ export default function Home() {
         </div>
       </section>
 
+      {/* CALL TO ACTION BANNER */}
+      <section className={styles.ctaBannerSection}>
+        <div className={styles.ctaCard}>
+          <div className={styles.ctaContent}>
+            <h2 className={styles.ctaTitle}>Ready to Experience DOST?</h2>
+            <p className={styles.ctaDesc}>
+              Join thousands of creators, software engineers, and friends sharing updates today.
+            </p>
+            <button onClick={() => scrollToAuth("register")} className={styles.ctaBtn}>
+              Create Free Account <ArrowRight size={18} />
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className={styles.footer}>
         <div className={styles.footerMain}>
           <span className={styles.footerLogo}>DOST</span>
-          <p className={styles.footerCopyright}>© {new Date().getFullYear()} DOST. All rights reserved.</p>
+          <p className={styles.footerCopyright}>© {new Date().getFullYear()} DOST Social Network. All rights reserved.</p>
         </div>
         <div className={styles.footerLinks}>
-          <Link href="/privacy">Privacy</Link>
-          <Link href="/terms">Terms</Link>
-          <Link href="/about">About</Link>
+          <Link href="/settings">Privacy & Security</Link>
+          <Link href="/settings">Terms & Guidelines</Link>
+          <Link href="/settings">Help Center</Link>
         </div>
       </footer>
     </main>
