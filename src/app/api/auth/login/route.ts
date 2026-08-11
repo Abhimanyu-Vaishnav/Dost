@@ -47,10 +47,10 @@ export async function POST(request: Request) {
       { message: "Login successful", user: { id: user.id, email: user.email, name: user.name } },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Login error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error?.message || "Internal server error" },
       { status: 500 }
     );
   }
