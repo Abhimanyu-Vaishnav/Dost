@@ -52,7 +52,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   const fetchNewPosts = useCallback(async () => {
     try {
       const topPostId = posts[0]?.id || "";
-      const res = await fetch(`/api/posts?tab=${activeTab}&since=${topPostId}`);
+      const res = await fetch(`/api/posts?tab=${activeTab}&since=${topPostId}&stream=true`);
       if (res.ok) {
         const data = await res.json();
         const incoming: any[] = data.posts || [];
@@ -62,21 +62,12 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
           const brandNew = incoming.filter((np) => !existingIds.has(np.id));
 
           if (brandNew.length > 0) {
-            // If user is at top of feed (< 50px scroll), auto-inject seamlessly
-            if (typeof window !== "undefined" && window.scrollY < 50) {
-              setPosts((prev) => {
-                const prevIds = new Set(prev.map((p) => p.id));
-                const fresh = brandNew.filter((p) => !prevIds.has(p.id));
-                return [...fresh, ...prev];
-              });
-            } else {
-              // Otherwise queue for "Show N Posts" floating pill
-              setNewPostsQueue((prev) => {
-                const queueIds = new Set(prev.map((p) => p.id));
-                const fresh = brandNew.filter((p) => !queueIds.has(p.id));
-                return [...fresh, ...prev];
-              });
-            }
+            // Queue ALL incoming posts into newPostsQueue so reading is NEVER interrupted
+            setNewPostsQueue((prev) => {
+              const queueIds = new Set(prev.map((p) => p.id));
+              const fresh = brandNew.filter((p) => !queueIds.has(p.id));
+              return [...fresh, ...prev];
+            });
           }
         }
       }
@@ -85,9 +76,9 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   }, [posts, activeTab]);
 
-  // Fast live polling every 8 seconds
+  // Ultra-fast live polling every 6 seconds
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 8000);
+    const interval = setInterval(fetchNewPosts, 6000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
