@@ -81,8 +81,56 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      take: 50,
+      take: 50
     });
+
+    // If since query returned 0 new posts, and stream mode is enabled, fetch active posts from other creators
+    if (since && posts.length === 0 && searchParams.get("stream") === "true") {
+      const fallbackWhere = { ...where };
+      delete fallbackWhere.createdAt;
+      fallbackWhere.id = { not: since };
+
+      posts = await (prisma.post as any).findMany({
+        where: fallbackWhere,
+        orderBy: { views: "desc" },
+        include: {
+          author: {
+            select: { id: true, name: true, avatar: true, username: true }
+          },
+          parent: {
+            include: {
+              author: { select: { id: true, name: true, avatar: true, username: true } }
+            }
+          },
+          quotePost: {
+            include: {
+              author: { select: { id: true, name: true, avatar: true, username: true } }
+            }
+          },
+          _count: {
+            select: { likes: true, comments: true, replies: true, reposts: true }
+          },
+          likes: {
+            where: { userId: user.userId as string },
+            select: { userId: true }
+          },
+          reposts: {
+            where: { authorId: user.userId as string },
+            select: { id: true }
+          },
+          bookmarkedBy: {
+            where: { userId: user.userId as string },
+            select: { userId: true }
+          },
+          repost: {
+            include: {
+              author: { select: { id: true, name: true, avatar: true, username: true } }
+            }
+          }
+        },
+        take: 4
+      });
+    }
 
     // Smart Feed (For You) Algorithmic Ranking: Score = (likes * 3 + replies * 5 + views) / hours_old
     if (tab === "for-you" && posts.length > 0) {

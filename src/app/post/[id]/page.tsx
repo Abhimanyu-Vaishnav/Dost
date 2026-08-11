@@ -23,7 +23,7 @@ const POPULAR_GIFS = [
   "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Z0bjJ6MndsdHJqNGNxbDZqZDRkYzNmNHk3amptdmthdmFzbWNxeiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26u4cqiYI30juCOGY/giphy.gif"
 ];
 
-export default function PostDetailPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
+export default function PostDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
