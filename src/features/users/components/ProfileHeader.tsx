@@ -363,6 +363,27 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
             <span className="text-muted" style={{ marginLeft: "4px" }}>Followers</span>
           </Link>
         </div>
+
+        {/* Story Highlights Section */}
+        <div style={{ display: "flex", gap: "16px", padding: "16px 0 6px", overflowX: "auto", scrollbarWidth: "none" }}>
+          {[
+            { id: "h1", title: "✨ Highlights", emoji: "✨", bg: "var(--color-primary-light)" },
+            { id: "h2", title: "💻 Tech", emoji: "💻", bg: "rgba(29, 155, 240, 0.15)" },
+            { id: "h3", title: "✈️ Travel", emoji: "✈️", bg: "rgba(255, 170, 0, 0.15)" },
+            { id: "h4", title: "🎵 Music", emoji: "🎵", bg: "rgba(235, 64, 52, 0.15)" }
+          ].map((hl) => (
+            <div key={hl.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", cursor: "pointer", flexShrink: 0 }} className="hover-scale">
+              <div style={{
+                width: "60px", height: "60px", borderRadius: "50%", border: "2px solid var(--color-border)",
+                background: hl.bg, display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "1.5rem", boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+              }}>
+                {hl.emoji}
+              </div>
+              <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-main)" }}>{hl.title}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Edit Profile Modal */}

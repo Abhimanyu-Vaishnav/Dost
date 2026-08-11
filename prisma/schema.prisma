@@ -44,6 +44,7 @@ model User {
   
   storyReactions StoryReaction[]
   storyPollVotes StoryPollVote[]
+  highlights     StoryHighlight[]
   createdCommunities Community[]
   communities    CommunityMember[]
   communityPosts CommunityPost[]
@@ -362,4 +363,16 @@ model CallSession {
   createdAt      DateTime @default(now())
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model StoryHighlight {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  coverImage String?
+  storyIds   String   // JSON string array of story IDs
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
