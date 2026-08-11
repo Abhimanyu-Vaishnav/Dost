@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { X, Camera, Loader2, ZoomIn, ZoomOut, Move, Sparkles, Check, ChevronRight } from "lucide-react";
+import { X, Camera, Loader2, Move, Sparkles, Check, ZoomIn } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface EditProfileModalProps {
@@ -53,7 +53,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
   const [avatar, setAvatar] = useState(user.avatar || "");
   const [coverImage, setCoverImage] = useState(user.coverImage || "");
   
-  // Image Adjustment Controls (Zoom & Position)
+  // Modern Image Adjustment Controls
   const [avatarZoom, setAvatarZoom] = useState(1);
   const [avatarPosY, setAvatarPosY] = useState(50);
   const [coverZoom, setCoverZoom] = useState(1);
@@ -94,7 +94,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
     reader.readAsDataURL(file);
   };
 
-  // Helper to bake zoomed/positioned image onto HTML5 canvas before saving (with Blob fetch CORS bypass)
+  // Modern Aspect-Ratio Preserving Canvas Cropper Engine (Prevents any horizontal/vertical stretching)
   const bakeImageAdjustments = async (imageSrc: string, zoom: number, posY: number, isCover: boolean): Promise<string> => {
     if (!imageSrc) return imageSrc;
     if (zoom === 1 && posY === 50 && !imageSrc.startsWith("data:")) return imageSrc;
@@ -123,13 +123,27 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
 
       if (!ctx) return imageSrc;
 
-      const scaledW = imgElement.width / zoom;
-      const scaledH = imgElement.height / zoom;
-      const overflowY = Math.max(0, imgElement.height - scaledH);
-      const sourceY = Math.max(0, Math.min(imgElement.height - scaledH, (posY / 100) * overflowY));
-      const sourceX = Math.max(0, (imgElement.width - scaledW) / 2);
+      const targetRatio = targetW / targetH;
+      const imgRatio = imgElement.width / imgElement.height;
 
-      ctx.drawImage(imgElement, sourceX, sourceY, scaledW, scaledH, 0, 0, targetW, targetH);
+      let cropW: number;
+      let cropH: number;
+
+      if (imgRatio > targetRatio) {
+        cropH = imgElement.height / zoom;
+        cropW = cropH * targetRatio;
+      } else {
+        cropW = imgElement.width / zoom;
+        cropH = cropW / targetRatio;
+      }
+
+      const maxSourceX = Math.max(0, imgElement.width - cropW);
+      const maxSourceY = Math.max(0, imgElement.height - cropH);
+
+      const sourceX = maxSourceX / 2;
+      const sourceY = (posY / 100) * maxSourceY;
+
+      ctx.drawImage(imgElement, sourceX, sourceY, cropW, cropH, 0, 0, targetW, targetH);
       return canvas.toDataURL("image/jpeg", 0.92);
     } catch (err) {
       console.error("Cropping error:", err);
@@ -141,7 +155,6 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
     setLoading(true);
     setErrorMsg("");
     try {
-      // Bake zoom / vertical position adjustments into permanent base64 image strings
       const bakedAvatar = await bakeImageAdjustments(avatar, avatarZoom, avatarPosY, false);
       const bakedCover = await bakeImageAdjustments(coverImage, coverZoom, coverPosY, true);
 
@@ -182,8 +195,8 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
     <div 
       style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 1100, backdropFilter: "blur(12px)", padding: "16px"
+        backgroundColor: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1100, backdropFilter: "blur(14px)", padding: "16px"
       }} 
       onClick={onClose}
     >
@@ -193,7 +206,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
           width: "100%", maxWidth: "640px", padding: "0", borderRadius: "28px",
           display: "flex", flexDirection: "column", border: "1px solid var(--color-border)",
           maxHeight: "92vh", overflowY: "auto", background: "var(--color-bg-surface)",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.4)"
+          boxShadow: "0 24px 60px rgba(0,0,0,0.5)"
         }} 
         onClick={e => e.stopPropagation()}
       >
@@ -238,7 +251,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
         {/* Modal Body */}
         <div style={{ display: "flex", flexDirection: "column" }}>
           
-          {/* Cover Photo Adjuster Canvas */}
+          {/* Modern Cover Photo Frame (3:1 Natural Aspect Ratio, No Squishing) */}
           <div style={{ position: "relative", height: "190px", background: "var(--color-primary-light)", overflow: "hidden" }}>
              {coverImage ? (
                <img 
@@ -258,12 +271,12 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
 
              <div style={{ 
                position: "absolute", top: 0, left: 0, right: 0, bottom: 0, 
-               background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px" 
+               background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px" 
              }}>
                 <button 
                   onClick={() => coverInputRef.current?.click()}
                   style={{ 
-                    padding: "10px 18px", borderRadius: "99px", background: "rgba(0,0,0,0.65)", 
+                    padding: "10px 18px", borderRadius: "99px", background: "rgba(0,0,0,0.75)", 
                     color: "white", display: "flex", alignItems: "center", gap: "8px", 
                     border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" 
                   }}
@@ -277,7 +290,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
                     onClick={() => setActiveAdjustTarget(activeAdjustTarget === "cover" ? null : "cover")}
                     style={{ 
                       padding: "10px 18px", borderRadius: "99px", 
-                      background: activeAdjustTarget === "cover" ? "var(--color-primary)" : "rgba(0,0,0,0.65)", 
+                      background: activeAdjustTarget === "cover" ? "var(--color-primary)" : "rgba(0,0,0,0.75)", 
                       color: "white", display: "flex", alignItems: "center", gap: "8px", 
                       border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" 
                     }}
@@ -290,10 +303,10 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
              <input type="file" ref={coverInputRef} onChange={e => handleFileChange(e, "cover")} accept="image/*" style={{ display: "none" }} />
           </div>
 
-          {/* Interactive Cover Adjustment Slider Bar */}
+          {/* Futuristic Floating Control Pill for Cover Adjustment */}
           {activeAdjustTarget === "cover" && (
-            <div style={{
-              background: "var(--color-bg-base)", padding: "12px 24px", borderBottom: "1px solid var(--color-border)",
+            <div className="animate-slide-up" style={{
+              background: "var(--color-bg-base)", padding: "14px 24px", borderBottom: "1px solid var(--color-border)",
               display: "flex", alignItems: "center", gap: "20px"
             }}>
               <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "10px" }}>
@@ -318,12 +331,12 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
             </div>
           )}
 
-          {/* Avatar Photo Adjuster Canvas */}
+          {/* Avatar Photo Frame */}
           <div style={{ padding: "0 24px", position: "relative" }}>
              <div style={{ 
                width: "124px", height: "124px", borderRadius: "50%", border: "4px solid var(--color-bg-surface)",
                background: "var(--color-bg-base)", marginTop: "-62px", overflow: "hidden", position: "relative",
-               boxShadow: "0 8px 24px rgba(0,0,0,0.2)"
+               boxShadow: "0 8px 24px rgba(0,0,0,0.3)"
              }}>
                 {avatar ? (
                   <img 
@@ -344,13 +357,13 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
 
                 <div style={{ 
                   position: "absolute", top: 0, left: 0, right: 0, bottom: 0, 
-                  background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" 
+                  background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" 
                 }}>
                   <button 
                     onClick={() => avatarInputRef.current?.click()}
                     style={{ 
                       width: "40px", height: "40px", borderRadius: "50%", 
-                      background: "rgba(0,0,0,0.7)", color: "white", 
+                      background: "rgba(0,0,0,0.75)", color: "white", 
                       display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" 
                     }}
                     title="Upload Avatar"
@@ -363,7 +376,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
                       onClick={() => setActiveAdjustTarget(activeAdjustTarget === "avatar" ? null : "avatar")}
                       style={{ 
                         width: "40px", height: "40px", borderRadius: "50%", 
-                        background: activeAdjustTarget === "avatar" ? "var(--color-primary)" : "rgba(0,0,0,0.7)", 
+                        background: activeAdjustTarget === "avatar" ? "var(--color-primary)" : "rgba(0,0,0,0.75)", 
                         color: "white", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" 
                       }}
                       title="Adjust Avatar Position"
@@ -376,10 +389,10 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
              </div>
           </div>
 
-          {/* Interactive Avatar Adjustment Slider Bar */}
+          {/* Futuristic Control Pill for Avatar Adjustment */}
           {activeAdjustTarget === "avatar" && (
-            <div style={{
-              background: "var(--color-bg-base)", padding: "12px 24px", marginTop: "12px", borderTop: "1px solid var(--color-border)", borderBottom: "1px solid var(--color-border)",
+            <div className="animate-slide-up" style={{
+              background: "var(--color-bg-base)", padding: "14px 24px", marginTop: "12px", borderTop: "1px solid var(--color-border)", borderBottom: "1px solid var(--color-border)",
               display: "flex", alignItems: "center", gap: "20px"
             }}>
               <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "10px" }}>

@@ -28,26 +28,26 @@ export function PageHeader({
     <div style={{
       position: "sticky",
       top: 0,
-      zIndex: 10,
+      zIndex: 20,
       background: "var(--color-bg-glass)",
       backdropFilter: "blur(16px)",
       borderBottom: "1px solid var(--color-border)",
-      padding: "0 16px",
+      padding: "8px 16px",
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
       gap: "16px",
-      height: "53px",
+      minHeight: "58px",
       width: "100%"
     }}>
       {isSearchExpanded && onSearchChange ? (
-        <div className="animate-fade-in" style={{ display: "flex", alignItems: "center", gap: "12px", width: "100%" }}>
+        <div className="animate-fade-in" style={{ display: "flex", alignItems: "center", gap: "12px", width: "100%", padding: "2px 0" }}>
           <div style={{
             flex: 1, display: "flex", alignItems: "center", gap: "10px",
             background: "var(--color-bg-surface)", border: "1px solid var(--color-primary)",
-            borderRadius: "99px", padding: "6px 14px"
+            borderRadius: "99px", padding: "8px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.2)"
           }}>
-            <Search size={16} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
+            <Search size={17} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
             <input
               type="text"
               autoFocus
@@ -56,7 +56,7 @@ export function PageHeader({
               onChange={(e) => onSearchChange(e.target.value)}
               style={{
                 flex: 1, background: "none", border: "none", outline: "none",
-                color: "var(--color-text-main)", fontSize: "0.9rem", fontWeight: 600
+                color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 600
               }}
             />
             {searchQuery && (
@@ -75,7 +75,7 @@ export function PageHeader({
             }}
             style={{
               background: "none", border: "none", color: "var(--color-primary)",
-              fontWeight: 700, fontSize: "0.9rem", cursor: "pointer"
+              fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", padding: "4px 8px"
             }}
           >
             Cancel
@@ -117,7 +117,8 @@ export function PageHeader({
                 width: "38px", height: "38px", borderRadius: "50%",
                 background: "var(--color-bg-surface)", border: "1px solid var(--color-border)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: "var(--color-text-main)", cursor: "pointer", transition: "all 0.2s"
+                color: "var(--color-text-main)", cursor: "pointer", transition: "all 0.2s",
+                flexShrink: 0
               }}
               className="hover-bg"
               title="Search User Posts"
