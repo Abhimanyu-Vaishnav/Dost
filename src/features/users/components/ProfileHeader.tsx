@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { FollowButton } from "./FollowButton";
 import { EditProfileModal } from "./EditProfileModal";
-import { Edit2, MoreHorizontal, EyeOff, Ban, VolumeX, Calendar, MapPin, Link as LinkIcon, MessageSquare, CheckCircle2 } from "lucide-react";
+import { MoreHorizontal, VolumeX, Ban, Calendar, MessageSquare, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface ProfileHeaderProps {
@@ -43,46 +43,47 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
 
   const formattedJoinDate = new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  const getCategoryBadgeLabel = (accountType?: string | null, accountSubType?: string | null) => {
-    if (accountSubType && accountSubType.trim()) {
-      const cleanType = accountSubType.toLowerCase();
-      const formatted = accountSubType
-        .split("_")
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" ");
+  // Format ONLY chosen sub-category tags — NEVER force "Influencer"
+  const getCategoryBadgeLabel = (accountSubType?: string | null) => {
+    if (!accountSubType || !accountSubType.trim()) return null;
 
-      if (cleanType.includes("developer") || cleanType.includes("engineer")) return `💻 ${formatted}`;
-      if (cleanType.includes("teacher") || cleanType.includes("educator")) return `🎓 ${formatted}`;
-      if (cleanType.includes("designer")) return `🎨 ${formatted}`;
-      if (cleanType.includes("founder")) return `🚀 ${formatted}`;
-      if (cleanType.includes("ai") || cleanType.includes("researcher")) return `🤖 ${formatted}`;
-      if (cleanType.includes("creator")) return `✨ ${formatted}`;
-      if (cleanType.includes("influencer")) return `🏷️ ${formatted}`;
-      if (cleanType.includes("photographer")) return `📸 ${formatted}`;
-      if (cleanType.includes("animator") || cleanType.includes("3d")) return `🎬 ${formatted}`;
-      if (cleanType.includes("musician") || cleanType.includes("producer")) return `🎵 ${formatted}`;
-      if (cleanType.includes("trainer") || cleanType.includes("fitness")) return `🏋️ ${formatted}`;
-      if (cleanType.includes("analyst") || cleanType.includes("financial")) return `📊 ${formatted}`;
-      if (cleanType.includes("architect")) return `🏛️ ${formatted}`;
-      if (cleanType.includes("company") || cleanType.includes("startup") || cleanType.includes("business")) return `🏢 ${formatted}`;
-      return `🏷️ ${formatted}`;
-    }
+    const cleanType = accountSubType.toLowerCase().trim();
+    const formatted = accountSubType
+      .split("_")
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
 
-    if (accountType === "CREATOR") return "✨ Digital Creator";
-    if (accountType === "BUSINESS") return "🏢 Business Account";
-    if (accountType === "PERSON") return "👤 Personal Account";
-    return null;
+    if (cleanType.includes("developer") || cleanType.includes("engineer")) return `💻 ${formatted}`;
+    if (cleanType.includes("teacher") || cleanType.includes("educator")) return `🎓 ${formatted}`;
+    if (cleanType.includes("designer")) return `🎨 ${formatted}`;
+    if (cleanType.includes("founder")) return `🚀 ${formatted}`;
+    if (cleanType.includes("ai") || cleanType.includes("researcher")) return `🤖 ${formatted}`;
+    if (cleanType.includes("creator")) return `✨ ${formatted}`;
+    if (cleanType.includes("influencer")) return `🌟 ${formatted}`;
+    if (cleanType.includes("photographer")) return `📸 ${formatted}`;
+    if (cleanType.includes("animator") || cleanType.includes("3d")) return `🎬 ${formatted}`;
+    if (cleanType.includes("musician") || cleanType.includes("producer")) return `🎵 ${formatted}`;
+    if (cleanType.includes("trainer") || cleanType.includes("fitness")) return `🏋️ ${formatted}`;
+    if (cleanType.includes("analyst") || cleanType.includes("financial")) return `📊 ${formatted}`;
+    if (cleanType.includes("architect")) return `🏛️ ${formatted}`;
+    if (cleanType.includes("company") || cleanType.includes("startup") || cleanType.includes("business")) return `🏢 ${formatted}`;
+    
+    return `🏷️ ${formatted}`;
   };
 
-  const categoryBadge = getCategoryBadgeLabel(user.accountType, user.accountSubType);
+  const categoryBadge = getCategoryBadgeLabel(user.accountSubType);
   const isVerified = user.isVerified || user.accountType === "PREMIUM" || user.accountType === "VERIFIED";
 
   return (
     <div style={{ marginBottom: "var(--space-6)" }}>
-      {/* Cover Image Container */}
+      {/* Cover Image Container with Proper Aspect Ratio Fit (No Stretching) */}
       <div style={{ height: "200px", width: "100%", background: "var(--color-primary-light)", position: "relative", overflow: "hidden" }}>
         {user.coverImage ? (
-          <img src={user.coverImage} alt="Cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img 
+            src={user.coverImage} 
+            alt="Cover" 
+            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} 
+          />
         ) : (
           <div style={{ width: "100%", height: "100%", background: "linear-gradient(45deg, var(--color-primary), var(--color-primary-light))" }} />
         )}
@@ -91,16 +92,20 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
       <div style={{ padding: "0 16px", position: "relative" }}>
         {/* Top Section: Avatar and Actions */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "16px" }}>
-          {/* Avatar */}
+          {/* Avatar with Aspect Ratio Preservation */}
           <div style={{
             width: "140px", height: "140px", borderRadius: "50%", border: "4px solid var(--color-bg-base)",
             backgroundColor: "var(--color-primary)", color: "white", fontSize: "3.5rem",
             display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700,
             overflow: "hidden", marginTop: "-70px", background: "var(--color-bg-base)", boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-            zIndex: 2
+            zIndex: 2, flexShrink: 0
           }}>
             {user.avatar ? (
-              <img src={user.avatar} alt={user.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img 
+                src={user.avatar} 
+                alt={user.name} 
+                style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} 
+              />
             ) : (
               <div style={{ width: "100%", height: "100%", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                  {user.name?.charAt(0).toUpperCase() || "?"}
@@ -193,20 +198,20 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
             @{user.username || user.name?.toLowerCase().replace(/\s+/g, '')}
           </p>
 
-          {/* Account Category Badge: Positioned strictly BELOW username as requested */}
+          {/* Account Sub-Category Badge: Light Grey Pill (Renders ONLY chosen sub-category tag) */}
           {categoryBadge && (
             <div style={{ marginBottom: "12px" }}>
               <span style={{
                 padding: "4px 12px",
                 borderRadius: "99px",
                 fontSize: "0.8rem",
-                fontWeight: 700,
-                background: "rgba(29, 155, 240, 0.12)",
-                border: "1px solid rgba(29, 155, 240, 0.3)",
-                color: "var(--color-primary, #1d9bf0)",
+                fontWeight: 600,
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid var(--color-border)",
+                color: "var(--color-text-muted)",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "4px"
+                gap: "6px"
               }}>
                 {categoryBadge}
               </span>

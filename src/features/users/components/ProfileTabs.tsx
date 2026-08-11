@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PostCard } from "@/features/posts/components/PostCard";
-import { Sparkles, Search, X } from "lucide-react";
+import { Sparkles, FileText, MessageSquare, Repeat, Image as ImageIcon, Heart } from "lucide-react";
 
 interface ProfileTabsProps {
   posts: any[];
@@ -32,11 +32,8 @@ export function ProfileTabs({
   externalSearchQuery
 }: ProfileTabsProps) {
   const [activeTab, setActiveTab] = useState<"posts" | "replies" | "reposts" | "media" | "likes">("posts");
-  const [localSearchQuery, setLocalSearchQuery] = useState("");
 
-  const searchQuery = externalSearchQuery !== undefined && externalSearchQuery !== "" 
-    ? externalSearchQuery 
-    : localSearchQuery;
+  const searchQuery = externalSearchQuery || "";
 
   if (isBlockedByMe) {
     return (
@@ -66,7 +63,7 @@ export function ProfileTabs({
       ? likedPosts
       : posts;
 
-  // Filter list by search query
+  // Filter list by top header search query
   const filteredList = searchQuery.trim()
     ? rawList.filter(p => {
         const text = (p.content || "").toLowerCase();
@@ -77,51 +74,21 @@ export function ProfileTabs({
       })
     : rawList;
 
+  const TABS = [
+    { key: "posts", label: "Posts", icon: FileText, count: posts.length },
+    { key: "replies", label: "Replies", icon: MessageSquare, count: replies.length },
+    { key: "reposts", label: "Reposts", icon: Repeat, count: repostPosts.length },
+    { key: "media", label: "Media", icon: ImageIcon, count: mediaPosts.length },
+    { key: "likes", label: "Likes", icon: Heart, count: likedPosts.length }
+  ];
+
   return (
     <div style={{ width: "100%" }}>
-      {/* Inline Search Bar (Rendered if external top search is empty) */}
-      {!externalSearchQuery && (
-        <div style={{ padding: "0 16px 14px 16px" }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: "10px",
-            background: "var(--color-bg-surface)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "99px", padding: "10px 16px",
-            transition: "border-color 0.2s"
-          }}>
-            <Search size={18} style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
-            <input
-              type="text"
-              placeholder={`Search @${username}'s posts...`}
-              value={localSearchQuery}
-              onChange={(e) => setLocalSearchQuery(e.target.value)}
-              style={{
-                flex: 1, background: "none", border: "none", outline: "none",
-                color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 500
-              }}
-            />
-            {localSearchQuery && (
-              <button
-                onClick={() => setLocalSearchQuery("")}
-                style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", display: "flex" }}
-              >
-                <X size={16} />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Tab Navigation: Posts | Replies | Reposts | Media | Likes */}
+      {/* Responsive Tab Navigation with Icons + Text for effortless mobile/desktop navigation */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: "8px" }}>
-        {[
-          { key: "posts", label: "Posts", count: posts.length },
-          { key: "replies", label: "Replies", count: replies.length },
-          { key: "reposts", label: "Reposts", count: repostPosts.length },
-          { key: "media", label: "Media", count: mediaPosts.length },
-          { key: "likes", label: "Likes", count: likedPosts.length }
-        ].map((t) => {
+        {TABS.map((t) => {
           const isActive = activeTab === t.key;
+          const Icon = t.icon;
           return (
             <button
               key={t.key}
@@ -130,10 +97,12 @@ export function ProfileTabs({
                 flex: 1, padding: "14px 0", background: "none", border: "none",
                 fontSize: "0.92rem", fontWeight: isActive ? 800 : 500,
                 color: isActive ? "var(--color-text-main)" : "var(--color-text-muted)",
-                cursor: "pointer", position: "relative", transition: "color 0.2s"
+                cursor: "pointer", position: "relative", transition: "color 0.2s",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px"
               }}
             >
-              <span>{t.label}</span>
+              <Icon size={18} style={{ color: isActive ? "var(--color-primary)" : "inherit" }} />
+              <span className="tab-label-text">{t.label}</span>
               {isActive && (
                 <div style={{
                   position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
