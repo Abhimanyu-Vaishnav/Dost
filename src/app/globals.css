@@ -177,6 +177,14 @@ body {
   animation: float 6s ease-in-out infinite;
 }
 
+[data-reduced-motion="true"] *,
+[data-reduced-motion="true"] *::before,
+[data-reduced-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
 @keyframes likePop {
   0% { transform: scale(1); }
   35% { transform: scale(1.45); }

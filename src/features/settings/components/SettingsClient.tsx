@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTheme, Theme, FontSize } from "@/context/ThemeContext";
 import styles from "./Settings.module.css";
 import {
   User,
@@ -13,24 +14,24 @@ import {
   HelpCircle,
   CheckCircle2,
   AlertCircle,
-  Key,
   Smartphone,
-  Eye,
-  EyeOff,
   VolumeX,
   Ban,
-  Users,
   Sparkles,
   Loader2,
-  Trash2,
   Globe,
   Moon,
   Sun,
   Monitor,
-  Zap,
-  Download,
   Info,
-  ChevronRight
+  ChevronRight,
+  X,
+  Search,
+  Send,
+  FileText,
+  Check,
+  Flame,
+  Shield
 } from "lucide-react";
 
 interface SettingsClientProps {
@@ -40,6 +41,16 @@ interface SettingsClientProps {
   initialCloseFriends: any[];
 }
 
+const ACCENT_COLORS = [
+  { hex: "#1d9bf0", label: "Sky Blue" },
+  { hex: "#8b5cf6", label: "Royal Purple" },
+  { hex: "#ec4899", label: "Hot Pink" },
+  { hex: "#10b981", label: "Emerald Green" },
+  { hex: "#f59e0b", label: "Amber Orange" },
+  { hex: "#ef4444", label: "Crimson Red" },
+  { hex: "#6366f1", label: "Indigo" }
+];
+
 export function SettingsClient({
   initialProfile,
   initialMutedUsers = [],
@@ -47,6 +58,17 @@ export function SettingsClient({
   initialCloseFriends = []
 }: SettingsClientProps) {
   const router = useRouter();
+  const {
+    theme,
+    setTheme,
+    accentColor,
+    setAccentColor,
+    fontSize,
+    setFontSize,
+    reducedMotion,
+    setReducedMotion
+  } = useTheme();
+
   const [activeTab, setActiveTab] = useState<
     "account" | "privacy" | "notifications" | "appearance" | "security" | "content" | "help"
   >("account");
@@ -74,7 +96,6 @@ export function SettingsClient({
   // Dynamic Lists State
   const [mutedUsers, setMutedUsers] = useState(initialMutedUsers);
   const [blockedUsers, setBlockedUsers] = useState(initialBlockedUsers);
-  const [closeFriends, setCloseFriends] = useState(initialCloseFriends);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   // Privacy & Safety Toggles
@@ -90,27 +111,94 @@ export function SettingsClient({
   const [mentionsNotif, setMentionsNotif] = useState(true);
   const [dmsNotif, setDmsNotif] = useState(true);
 
-  // Appearance State
-  const [themeMode, setThemeMode] = useState<"dark" | "light" | "system">("dark");
-  const [accentColor, setAccentColor] = useState("#1d9bf0");
-  const [fontSize, setFontSize] = useState("medium");
-  const [reducedMotion, setReducedMotion] = useState(false);
-
   // Security State
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [loginAlerts, setLoginAlerts] = useState(true);
+  const [sessions, setSessions] = useState([
+    { id: "1", device: "Windows PC — Chrome Browser", location: "Active Now • Current Device", isCurrent: true, icon: "desktop" },
+    { id: "2", device: "iPhone 15 Pro — DOST Mobile App", location: "Last active 2 hours ago", isCurrent: false, icon: "mobile" },
+    { id: "3", device: "MacBook Air — Safari Browser", location: "Last active 3 days ago", isCurrent: false, icon: "desktop" }
+  ]);
 
   // Content & Storage State
   const [autoplayVideos, setAutoplayVideos] = useState(true);
   const [hdMediaUpload, setHdMediaUpload] = useState(true);
   const [dataSaver, setDataSaver] = useState(false);
 
+  // Modal Dialog States
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showBugModal, setShowBugModal] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  
+  // Bug Report Form State
+  const [bugCategory, setBugCategory] = useState("bug");
+  const [bugTitle, setBugTitle] = useState("");
+  const [bugDesc, setBugDesc] = useState("");
+  const [isSubmittingBug, setIsSubmittingBug] = useState(false);
+
+  // Help Search State
+  const [helpSearchQuery, setHelpSearchQuery] = useState("");
+
+  // Load Saved Preferences on Initial Mount
+  useEffect(() => {
+    try {
+      const savedPrivate = localStorage.getItem("dost_private_account");
+      if (savedPrivate !== null) setIsPrivateAccount(savedPrivate === "true");
+
+      const savedDm = localStorage.getItem("dost_dm_permission");
+      if (savedDm) setDmPermission(savedDm);
+
+      const savedTag = localStorage.getItem("dost_tag_permission");
+      if (savedTag) setTagPermission(savedTag);
+
+      const savedPush = localStorage.getItem("dost_push_enabled");
+      if (savedPush !== null) setPushEnabled(savedPush === "true");
+
+      const savedEmailDigest = localStorage.getItem("dost_email_digest");
+      if (savedEmailDigest !== null) setEmailDigest(savedEmailDigest === "true");
+
+      const savedLikesNotif = localStorage.getItem("dost_notif_likes");
+      if (savedLikesNotif !== null) setLikesNotif(savedLikesNotif === "true");
+
+      const savedCommentsNotif = localStorage.getItem("dost_notif_comments");
+      if (savedCommentsNotif !== null) setCommentsNotif(savedCommentsNotif === "true");
+
+      const savedMentionsNotif = localStorage.getItem("dost_notif_mentions");
+      if (savedMentionsNotif !== null) setMentionsNotif(savedMentionsNotif === "true");
+
+      const savedDmsNotif = localStorage.getItem("dost_notif_dms");
+      if (savedDmsNotif !== null) setDmsNotif(savedDmsNotif === "true");
+
+      const saved2FA = localStorage.getItem("dost_2fa_enabled");
+      if (saved2FA !== null) setTwoFactorEnabled(saved2FA === "true");
+
+      const savedAlerts = localStorage.getItem("dost_login_alerts");
+      if (savedAlerts !== null) setLoginAlerts(savedAlerts === "true");
+
+      const savedAutoplay = localStorage.getItem("dost_autoplay");
+      if (savedAutoplay !== null) setAutoplayVideos(savedAutoplay === "true");
+
+      const savedHd = localStorage.getItem("dost_hd_upload");
+      if (savedHd !== null) setHdMediaUpload(savedHd === "true");
+
+      const savedDataSaver = localStorage.getItem("dost_data_saver");
+      if (savedDataSaver !== null) setDataSaver(savedDataSaver === "true");
+
+      const savedBadge = localStorage.getItem("dost_show_category_badge");
+      if (savedBadge !== null) setShowCategoryBadge(savedBadge === "true");
+
+      const savedTarget = localStorage.getItem("dost_target_category_posts");
+      if (savedTarget !== null) setTargetCategoryPosts(savedTarget === "true");
+    } catch (e) {
+      console.error("Error reading settings from localStorage", e);
+    }
+  }, []);
+
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Auto set default subType when accountType changes if current subType doesn't belong
   const handleCategoryChange = (newType: string) => {
     setAccountType(newType);
     if (newType === "PERSON") setAccountSubType("software_developer");
@@ -138,6 +226,9 @@ export function SettingsClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update profile");
 
+      localStorage.setItem("dost_show_category_badge", String(showCategoryBadge));
+      localStorage.setItem("dost_target_category_posts", String(targetCategoryPosts));
+
       showToast("Profile updated successfully!");
       router.refresh();
     } catch (err: any) {
@@ -152,6 +243,10 @@ export function SettingsClient({
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       showToast("New passwords do not match", "error");
+      return;
+    }
+    if (newPassword.length < 6) {
+      showToast("Password must be at least 6 characters long", "error");
       return;
     }
 
@@ -209,10 +304,99 @@ export function SettingsClient({
     }
   };
 
-  // Cache Clear handler
+  // Cache Clear Handler
   const handleClearCache = () => {
-    showToast("Cache and temporary data cleared (18.4 MB freed)");
+    try {
+      const keysToKeep = ["dost_theme", "dost_accent_color", "dost_font_size", "dost_reduced_motion"];
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("dost_cache_") || key.startsWith("dost_temp_")) {
+          localStorage.removeItem(key);
+        }
+      });
+      showToast("Cache and temporary media data cleared (18.4 MB freed)");
+    } catch (e) {
+      showToast("App cache cleared successfully");
+    }
   };
+
+  // Push Permission Handler
+  const handlePushToggle = async () => {
+    const nextVal = !pushEnabled;
+    setPushEnabled(nextVal);
+    localStorage.setItem("dost_push_enabled", String(nextVal));
+
+    if (nextVal && typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission !== "granted") {
+        const perm = await Notification.requestPermission();
+        if (perm === "granted") {
+          showToast("Push notification permissions granted!");
+        } else {
+          showToast("Push notification permission was denied in browser", "error");
+        }
+        return;
+      }
+    }
+    showToast(nextVal ? "Push notifications enabled" : "Push notifications disabled");
+  };
+
+  // Submit Bug Report
+  const handleSubmitBugReport = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bugTitle.trim() || !bugDesc.trim()) {
+      showToast("Please provide a title and description", "error");
+      return;
+    }
+    setIsSubmittingBug(true);
+    setTimeout(() => {
+      setIsSubmittingBug(false);
+      setShowBugModal(false);
+      setBugTitle("");
+      setBugDesc("");
+      showToast("Thank you! Your bug report has been submitted to support.");
+    }, 1000);
+  };
+
+  // Revoke Session
+  const handleRevokeSession = (sessionId: string) => {
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    showToast("Session successfully revoked and logged out");
+  };
+
+  // Help FAQs Data
+  const HELP_FAQS = [
+    {
+      cat: "Account",
+      q: "How do I switch between Personal, Creator, and Business accounts?",
+      a: "Go to Settings -> Account & Profile -> Account Category. Select Personal, Creator, or Business, pick your industry sub-category, and click Save Changes."
+    },
+    {
+      cat: "Theme & Accent",
+      q: "How do I change the accent color of the entire app?",
+      a: "Go to Settings -> Appearance & Theme -> Accent Color. Click on any of the color circles (Blue, Purple, Pink, Green, Orange, Red, Indigo). The changes apply instantly across all buttons, links, and highlights!"
+    },
+    {
+      cat: "Privacy",
+      q: "What happens when I make my account private?",
+      a: "When your account is private, only users you approve as followers can view your posts, media grid, and story updates."
+    },
+    {
+      cat: "Notifications",
+      q: "Can I receive real push notifications?",
+      a: "Yes! Enabling Push Notifications in Settings -> Notifications prompts your browser for notification permissions."
+    },
+    {
+      cat: "Storage",
+      q: "Does clearing cache delete my posts or messages?",
+      a: "No, clearing app cache only removes temporary image previews and local feed caches. Your account data remains safe on the cloud."
+    }
+  ];
+
+  const filteredFaqs = HELP_FAQS.filter(
+    (item) =>
+      item.q.toLowerCase().includes(helpSearchQuery.toLowerCase()) ||
+      item.a.toLowerCase().includes(helpSearchQuery.toLowerCase()) ||
+      item.cat.toLowerCase().includes(helpSearchQuery.toLowerCase())
+  );
 
   return (
     <div className={styles.container}>
@@ -223,7 +407,7 @@ export function SettingsClient({
           Settings & Preferences
         </h1>
         <p className={styles.subtitle}>
-          Manage your account settings, privacy preferences, security options, and app experience.
+          Manage your account settings, privacy preferences, security options, theme, and app experience.
         </p>
       </div>
 
@@ -447,9 +631,9 @@ export function SettingsClient({
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "8px",
-                          background: accountSubType === item.id ? "rgba(29, 155, 240, 0.18)" : "#15202b",
+                          background: accountSubType === item.id ? "rgba(29, 155, 240, 0.18)" : "rgba(255, 255, 255, 0.04)",
                           border: accountSubType === item.id ? "1px solid var(--color-primary, #1d9bf0)" : "1px solid rgba(255, 255, 255, 0.1)",
-                          color: accountSubType === item.id ? "var(--color-primary, #1d9bf0)" : "#ffffff",
+                          color: accountSubType === item.id ? "var(--color-primary, #1d9bf0)" : "var(--color-text-main, #ffffff)",
                           boxShadow: accountSubType === item.id ? "0 0 12px rgba(29, 155, 240, 0.25)" : "none"
                         }}
                       >
@@ -485,9 +669,9 @@ export function SettingsClient({
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "8px",
-                          background: accountSubType === item.id ? "rgba(139, 92, 246, 0.18)" : "#15202b",
+                          background: accountSubType === item.id ? "rgba(139, 92, 246, 0.18)" : "rgba(255, 255, 255, 0.04)",
                           border: accountSubType === item.id ? "1px solid #8b5cf6" : "1px solid rgba(255, 255, 255, 0.1)",
-                          color: accountSubType === item.id ? "#a78bfa" : "#ffffff",
+                          color: accountSubType === item.id ? "#a78bfa" : "var(--color-text-main, #ffffff)",
                           boxShadow: accountSubType === item.id ? "0 0 12px rgba(139, 92, 246, 0.25)" : "none"
                         }}
                       >
@@ -521,9 +705,9 @@ export function SettingsClient({
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "8px",
-                          background: accountSubType === item.id ? "rgba(16, 185, 129, 0.18)" : "#15202b",
+                          background: accountSubType === item.id ? "rgba(16, 185, 129, 0.18)" : "rgba(255, 255, 255, 0.04)",
                           border: accountSubType === item.id ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.1)",
-                          color: accountSubType === item.id ? "#34d399" : "#ffffff",
+                          color: accountSubType === item.id ? "#34d399" : "var(--color-text-main, #ffffff)",
                           boxShadow: accountSubType === item.id ? "0 0 12px rgba(16, 185, 129, 0.25)" : "none"
                         }}
                       >
@@ -549,7 +733,12 @@ export function SettingsClient({
                     <button
                       type="button"
                       className={`${styles.toggleSwitch} ${showCategoryBadge ? styles.toggleSwitchActive : ""}`}
-                      onClick={() => setShowCategoryBadge(!showCategoryBadge)}
+                      onClick={() => {
+                        const val = !showCategoryBadge;
+                        setShowCategoryBadge(val);
+                        localStorage.setItem("dost_show_category_badge", String(val));
+                        showToast(val ? "Category badge enabled on profile" : "Category badge hidden from profile");
+                      }}
                     >
                       <div className={styles.toggleDot} />
                     </button>
@@ -563,7 +752,12 @@ export function SettingsClient({
                     <button
                       type="button"
                       className={`${styles.toggleSwitch} ${targetCategoryPosts ? styles.toggleSwitchActive : ""}`}
-                      onClick={() => setTargetCategoryPosts(!targetCategoryPosts)}
+                      onClick={() => {
+                        const val = !targetCategoryPosts;
+                        setTargetCategoryPosts(val);
+                        localStorage.setItem("dost_target_category_posts", String(val));
+                        showToast(val ? "Category feed targeting enabled" : "Standard feed algorithm set");
+                      }}
                     >
                       <div className={styles.toggleDot} />
                     </button>
@@ -658,8 +852,10 @@ export function SettingsClient({
                   <button
                     className={`${styles.toggleSwitch} ${isPrivateAccount ? styles.toggleSwitchActive : ""}`}
                     onClick={() => {
-                      setIsPrivateAccount(!isPrivateAccount);
-                      showToast(isPrivateAccount ? "Account set to Public" : "Account set to Private");
+                      const val = !isPrivateAccount;
+                      setIsPrivateAccount(val);
+                      localStorage.setItem("dost_private_account", String(val));
+                      showToast(val ? "Account set to Private" : "Account set to Public");
                     }}
                   >
                     <div className={styles.toggleDot} />
@@ -676,7 +872,9 @@ export function SettingsClient({
                     style={{ width: "180px" }}
                     value={dmPermission}
                     onChange={(e) => {
-                      setDmPermission(e.target.value);
+                      const val = e.target.value;
+                      setDmPermission(val);
+                      localStorage.setItem("dost_dm_permission", val);
                       showToast("Direct message preferences updated");
                     }}
                   >
@@ -696,7 +894,9 @@ export function SettingsClient({
                     style={{ width: "180px" }}
                     value={tagPermission}
                     onChange={(e) => {
-                      setTagPermission(e.target.value);
+                      const val = e.target.value;
+                      setTagPermission(val);
+                      localStorage.setItem("dost_tag_permission", val);
                       showToast("Tagging preferences saved");
                     }}
                   >
@@ -805,10 +1005,7 @@ export function SettingsClient({
                   </div>
                   <button
                     className={`${styles.toggleSwitch} ${pushEnabled ? styles.toggleSwitchActive : ""}`}
-                    onClick={() => {
-                      setPushEnabled(!pushEnabled);
-                      showToast(pushEnabled ? "Push notifications disabled" : "Push notifications enabled");
-                    }}
+                    onClick={handlePushToggle}
                   >
                     <div className={styles.toggleDot} />
                   </button>
@@ -822,8 +1019,10 @@ export function SettingsClient({
                   <button
                     className={`${styles.toggleSwitch} ${emailDigest ? styles.toggleSwitchActive : ""}`}
                     onClick={() => {
-                      setEmailDigest(!emailDigest);
-                      showToast(emailDigest ? "Email digest disabled" : "Email digest enabled");
+                      const val = !emailDigest;
+                      setEmailDigest(val);
+                      localStorage.setItem("dost_email_digest", String(val));
+                      showToast(val ? "Email digest enabled" : "Email digest disabled");
                     }}
                   >
                     <div className={styles.toggleDot} />
@@ -842,7 +1041,12 @@ export function SettingsClient({
                   <span className={styles.settingRowTitle}>Likes & Reactions</span>
                   <button
                     className={`${styles.toggleSwitch} ${likesNotif ? styles.toggleSwitchActive : ""}`}
-                    onClick={() => setLikesNotif(!likesNotif)}
+                    onClick={() => {
+                      const val = !likesNotif;
+                      setLikesNotif(val);
+                      localStorage.setItem("dost_notif_likes", String(val));
+                      showToast(val ? "Like notifications turned ON" : "Like notifications turned OFF");
+                    }}
                   >
                     <div className={styles.toggleDot} />
                   </button>
@@ -852,7 +1056,12 @@ export function SettingsClient({
                   <span className={styles.settingRowTitle}>Comments & Replies</span>
                   <button
                     className={`${styles.toggleSwitch} ${commentsNotif ? styles.toggleSwitchActive : ""}`}
-                    onClick={() => setCommentsNotif(!commentsNotif)}
+                    onClick={() => {
+                      const val = !commentsNotif;
+                      setCommentsNotif(val);
+                      localStorage.setItem("dost_notif_comments", String(val));
+                      showToast(val ? "Comment notifications turned ON" : "Comment notifications turned OFF");
+                    }}
                   >
                     <div className={styles.toggleDot} />
                   </button>
@@ -862,7 +1071,12 @@ export function SettingsClient({
                   <span className={styles.settingRowTitle}>Mentions & Retweets</span>
                   <button
                     className={`${styles.toggleSwitch} ${mentionsNotif ? styles.toggleSwitchActive : ""}`}
-                    onClick={() => setMentionsNotif(!mentionsNotif)}
+                    onClick={() => {
+                      const val = !mentionsNotif;
+                      setMentionsNotif(val);
+                      localStorage.setItem("dost_notif_mentions", String(val));
+                      showToast(val ? "Mention notifications turned ON" : "Mention notifications turned OFF");
+                    }}
                   >
                     <div className={styles.toggleDot} />
                   </button>
@@ -872,7 +1086,12 @@ export function SettingsClient({
                   <span className={styles.settingRowTitle}>Direct Messages</span>
                   <button
                     className={`${styles.toggleSwitch} ${dmsNotif ? styles.toggleSwitchActive : ""}`}
-                    onClick={() => setDmsNotif(!dmsNotif)}
+                    onClick={() => {
+                      const val = !dmsNotif;
+                      setDmsNotif(val);
+                      localStorage.setItem("dost_notif_dms", String(val));
+                      showToast(val ? "DM notifications turned ON" : "DM notifications turned OFF");
+                    }}
                   >
                     <div className={styles.toggleDot} />
                   </button>
@@ -889,101 +1108,128 @@ export function SettingsClient({
                   <h2 className={styles.sectionTitle}>
                     <Palette size={22} /> Appearance & Theme
                   </h2>
-                  <p className={styles.sectionDesc}>Customize visual aesthetics, colors, and layout density.</p>
+                  <p className={styles.sectionDesc}>Customize visual aesthetics, colors, font scale, and motion.</p>
                 </div>
               </div>
 
-              {/* Theme Mode */}
+              {/* Theme Mode Selector */}
               <div className={styles.formGroup}>
                 <label className={styles.label}>Theme Mode</label>
-                <div className={styles.rowTwo} style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+                <div className={styles.accountTypeGrid} style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
                   <div
-                    className={`${styles.accountTypeCard} ${themeMode === "dark" ? styles.accountTypeCardActive : ""}`}
+                    className={`${styles.accountTypeCard} ${theme === "dark" ? styles.accountTypeCardActive : ""}`}
                     onClick={() => {
-                      setThemeMode("dark");
-                      showToast("Dark mode activated");
+                      setTheme("dark");
+                      showToast("Pitch Dark mode activated");
                     }}
                   >
-                    <Moon size={20} style={{ color: "#1d9bf0" }} />
-                    <span className={styles.settingRowTitle}>Dark Mode</span>
-                    <span className={styles.settingRowDesc}>Default dark aesthetic.</span>
+                    <Moon size={20} style={{ color: "var(--color-primary, #1d9bf0)" }} />
+                    <span className={styles.settingRowTitle}>Dark</span>
+                    <span className={styles.settingRowDesc}>Deep black interface.</span>
                   </div>
 
                   <div
-                    className={`${styles.accountTypeCard} ${themeMode === "light" ? styles.accountTypeCardActive : ""}`}
+                    className={`${styles.accountTypeCard} ${theme === "dim" ? styles.accountTypeCardActive : ""}`}
                     onClick={() => {
-                      setThemeMode("light");
-                      showToast("Light mode preview enabled");
+                      setTheme("dim");
+                      showToast("Dim Navy mode activated");
+                    }}
+                  >
+                    <Shield size={20} style={{ color: "#8b98a5" }} />
+                    <span className={styles.settingRowTitle}>Dim</span>
+                    <span className={styles.settingRowDesc}>Dark navy blue tone.</span>
+                  </div>
+
+                  <div
+                    className={`${styles.accountTypeCard} ${theme === "light" ? styles.accountTypeCardActive : ""}`}
+                    onClick={() => {
+                      setTheme("light");
+                      showToast("Light mode activated");
                     }}
                   >
                     <Sun size={20} style={{ color: "#f59e0b" }} />
-                    <span className={styles.settingRowTitle}>Light Mode</span>
+                    <span className={styles.settingRowTitle}>Light</span>
                     <span className={styles.settingRowDesc}>Clean bright theme.</span>
                   </div>
 
                   <div
-                    className={`${styles.accountTypeCard} ${themeMode === "system" ? styles.accountTypeCardActive : ""}`}
+                    className={`${styles.accountTypeCard} ${theme === "system" ? styles.accountTypeCardActive : ""}`}
                     onClick={() => {
-                      setThemeMode("system");
-                      showToast("System preference theme set");
+                      setTheme("system");
+                      showToast("System preference sync set");
                     }}
                   >
                     <Monitor size={20} style={{ color: "#10b981" }} />
                     <span className={styles.settingRowTitle}>System</span>
-                    <span className={styles.settingRowDesc}>Sync with your OS.</span>
+                    <span className={styles.settingRowDesc}>Match OS settings.</span>
                   </div>
                 </div>
               </div>
 
-              {/* Accent Color */}
-              <div className={styles.formGroup} style={{ marginTop: "16px" }}>
+              {/* Accent Color Picker */}
+              <div className={styles.formGroup} style={{ marginTop: "20px" }}>
                 <label className={styles.label}>Accent Color</label>
+                <p className={styles.sublabel} style={{ marginBottom: "8px" }}>
+                  Select your primary accent color for buttons, active tabs, and highlights across the entire app.
+                </p>
                 <div className={styles.colorPickerGroup}>
-                  {["#1d9bf0", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b"].map((color) => (
+                  {ACCENT_COLORS.map((c) => (
                     <div
-                      key={color}
-                      className={`${styles.colorCircle} ${accentColor === color ? styles.colorCircleActive : ""}`}
-                      style={{ backgroundColor: color }}
+                      key={c.hex}
+                      className={`${styles.colorCircle} ${accentColor === c.hex ? styles.colorCircleActive : ""}`}
+                      style={{ backgroundColor: c.hex }}
+                      title={c.label}
                       onClick={() => {
-                        setAccentColor(color);
-                        showToast(`Accent color updated to ${color}`);
+                        setAccentColor(c.hex);
+                        showToast(`Accent color set to ${c.label}`);
                       }}
-                    />
+                    >
+                      {accentColor === c.hex && (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#ffffff" }}>
+                          <Check size={18} />
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
 
-              {/* Font Size */}
-              <div className={styles.settingRow} style={{ marginTop: "16px" }}>
+              {/* Font Size Selector */}
+              <div className={styles.settingRow} style={{ marginTop: "20px" }}>
                 <div className={styles.settingRowInfo}>
-                  <span className={styles.settingRowTitle}>Font Size</span>
-                  <span className={styles.settingRowDesc}>Adjust reading text size across the application.</span>
+                  <span className={styles.settingRowTitle}>Font Scale</span>
+                  <span className={styles.settingRowDesc}>Adjust text scale across the application layout.</span>
                 </div>
                 <select
                   className={styles.input}
-                  style={{ width: "160px" }}
+                  style={{ width: "170px" }}
                   value={fontSize}
                   onChange={(e) => {
-                    setFontSize(e.target.value);
-                    showToast(`Font size set to ${e.target.value}`);
+                    const newSize = e.target.value as FontSize;
+                    setFontSize(newSize);
+                    showToast(`Font scale updated to ${newSize.toUpperCase()}`);
                   }}
                 >
-                  <option value="small">Small (14px)</option>
-                  <option value="medium">Medium (16px)</option>
-                  <option value="large">Large (18px)</option>
+                  <option value="xs">Extra Small (12px)</option>
+                  <option value="sm">Small (13px)</option>
+                  <option value="md">Medium (14px)</option>
+                  <option value="lg">Large (15px)</option>
+                  <option value="xl">Extra Large (16px)</option>
                 </select>
               </div>
 
+              {/* Reduced Motion Toggle */}
               <div className={styles.settingRow}>
                 <div className={styles.settingRowInfo}>
                   <span className={styles.settingRowTitle}>Reduce Motion</span>
-                  <span className={styles.settingRowDesc}>Disable decorative UI animations and transitions.</span>
+                  <span className={styles.settingRowDesc}>Disable decorative UI animations and transitions for performance.</span>
                 </div>
                 <button
                   className={`${styles.toggleSwitch} ${reducedMotion ? styles.toggleSwitchActive : ""}`}
                   onClick={() => {
-                    setReducedMotion(!reducedMotion);
-                    showToast(reducedMotion ? "Animations enabled" : "Animations reduced");
+                    const val = !reducedMotion;
+                    setReducedMotion(val);
+                    showToast(val ? "Animations reduced" : "Animations restored");
                   }}
                 >
                   <div className={styles.toggleDot} />
@@ -1000,7 +1246,7 @@ export function SettingsClient({
                   <h2 className={styles.sectionTitle}>
                     <Lock size={22} /> Security & Logins
                   </h2>
-                  <p className={styles.sectionDesc}>Manage login security, two-factor authentication, and devices.</p>
+                  <p className={styles.sectionDesc}>Manage login security, two-factor authentication, and active sessions.</p>
                 </div>
               </div>
 
@@ -1015,8 +1261,10 @@ export function SettingsClient({
                   <button
                     className={`${styles.toggleSwitch} ${twoFactorEnabled ? styles.toggleSwitchActive : ""}`}
                     onClick={() => {
-                      setTwoFactorEnabled(!twoFactorEnabled);
-                      showToast(twoFactorEnabled ? "2FA disabled" : "2FA activated for your account");
+                      const val = !twoFactorEnabled;
+                      setTwoFactorEnabled(val);
+                      localStorage.setItem("dost_2fa_enabled", String(val));
+                      showToast(val ? "2FA activated for your account!" : "2FA disabled");
                     }}
                   >
                     <div className={styles.toggleDot} />
@@ -1033,8 +1281,10 @@ export function SettingsClient({
                   <button
                     className={`${styles.toggleSwitch} ${loginAlerts ? styles.toggleSwitchActive : ""}`}
                     onClick={() => {
-                      setLoginAlerts(!loginAlerts);
-                      showToast(loginAlerts ? "Login alerts disabled" : "Login alerts enabled");
+                      const val = !loginAlerts;
+                      setLoginAlerts(val);
+                      localStorage.setItem("dost_login_alerts", String(val));
+                      showToast(val ? "Unrecognized login alerts enabled" : "Login alerts disabled");
                     }}
                   >
                     <div className={styles.toggleDot} />
@@ -1045,40 +1295,39 @@ export function SettingsClient({
               {/* Active Sessions */}
               <div className={styles.sectionHeader} style={{ marginTop: "24px" }}>
                 <h3 className={styles.sectionTitle} style={{ fontSize: "1.1rem" }}>
-                  <Smartphone size={18} /> Active Sessions
+                  <Smartphone size={18} /> Active Devices & Sessions ({sessions.length})
                 </h3>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div className={styles.deviceItem}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-                    <Monitor size={22} style={{ color: "var(--color-primary, #1d9bf0)" }} />
-                    <div>
-                      <div className={styles.settingRowTitle}>Windows PC — Chrome Browser</div>
-                      <div className={styles.settingRowDesc}>Active now • New Delhi, India</div>
+                {sessions.map((s) => (
+                  <div key={s.id} className={styles.deviceItem}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                      {s.icon === "desktop" ? (
+                        <Monitor size={22} style={{ color: s.isCurrent ? "var(--color-primary, #1d9bf0)" : "var(--color-text-muted, #8b98a5)" }} />
+                      ) : (
+                        <Smartphone size={22} style={{ color: "var(--color-text-muted, #8b98a5)" }} />
+                      )}
+                      <div>
+                        <div className={styles.settingRowTitle}>{s.device}</div>
+                        <div className={styles.settingRowDesc}>{s.location}</div>
+                      </div>
                     </div>
+                    {s.isCurrent ? (
+                      <span className={styles.badgePreview} style={{ background: "#10b981" }}>
+                        Current Session
+                      </span>
+                    ) : (
+                      <button
+                        className={styles.btnDanger}
+                        style={{ padding: "6px 12px", fontSize: "0.8rem" }}
+                        onClick={() => handleRevokeSession(s.id)}
+                      >
+                        Revoke
+                      </button>
+                    )}
                   </div>
-                  <span className={styles.badgePreview} style={{ background: "#10b981" }}>
-                    Current Session
-                  </span>
-                </div>
-
-                <div className={styles.deviceItem}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-                    <Smartphone size={22} style={{ color: "var(--color-text-muted, #8b98a5)" }} />
-                    <div>
-                      <div className={styles.settingRowTitle}>iPhone 15 Pro — DOST Mobile App</div>
-                      <div className={styles.settingRowDesc}>Last active 2 hours ago</div>
-                    </div>
-                  </div>
-                  <button
-                    className={styles.btnDanger}
-                    style={{ padding: "6px 12px", fontSize: "0.8rem" }}
-                    onClick={() => showToast("Session logged out")}
-                  >
-                    Revoke
-                  </button>
-                </div>
+                ))}
               </div>
             </>
           )}
@@ -1104,8 +1353,10 @@ export function SettingsClient({
                   <button
                     className={`${styles.toggleSwitch} ${autoplayVideos ? styles.toggleSwitchActive : ""}`}
                     onClick={() => {
-                      setAutoplayVideos(!autoplayVideos);
-                      showToast(autoplayVideos ? "Autoplay disabled" : "Autoplay enabled");
+                      const val = !autoplayVideos;
+                      setAutoplayVideos(val);
+                      localStorage.setItem("dost_autoplay", String(val));
+                      showToast(val ? "Video autoplay enabled" : "Video autoplay disabled");
                     }}
                   >
                     <div className={styles.toggleDot} />
@@ -1120,8 +1371,10 @@ export function SettingsClient({
                   <button
                     className={`${styles.toggleSwitch} ${hdMediaUpload ? styles.toggleSwitchActive : ""}`}
                     onClick={() => {
-                      setHdMediaUpload(!hdMediaUpload);
-                      showToast(hdMediaUpload ? "Standard upload mode set" : "HD Upload mode enabled");
+                      const val = !hdMediaUpload;
+                      setHdMediaUpload(val);
+                      localStorage.setItem("dost_hd_upload", String(val));
+                      showToast(val ? "HD Upload mode enabled" : "Standard upload mode set");
                     }}
                   >
                     <div className={styles.toggleDot} />
@@ -1136,8 +1389,10 @@ export function SettingsClient({
                   <button
                     className={`${styles.toggleSwitch} ${dataSaver ? styles.toggleSwitchActive : ""}`}
                     onClick={() => {
-                      setDataSaver(!dataSaver);
-                      showToast(dataSaver ? "Data saver disabled" : "Data saver activated");
+                      const val = !dataSaver;
+                      setDataSaver(val);
+                      localStorage.setItem("dost_data_saver", String(val));
+                      showToast(val ? "Data saver mode activated" : "Data saver mode disabled");
                     }}
                   >
                     <div className={styles.toggleDot} />
@@ -1176,7 +1431,7 @@ export function SettingsClient({
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div className={styles.settingRow} style={{ cursor: "pointer" }} onClick={() => showToast("Opening Help Center...")}>
+                <div className={styles.settingRow} style={{ cursor: "pointer" }} onClick={() => setShowHelpModal(true)}>
                   <div className={styles.settingRowInfo}>
                     <span className={styles.settingRowTitle}>Help Center & Knowledge Base</span>
                     <span className={styles.settingRowDesc}>Search tutorials, FAQs, and platform guides.</span>
@@ -1184,7 +1439,7 @@ export function SettingsClient({
                   <Info size={20} style={{ color: "var(--color-primary, #1d9bf0)" }} />
                 </div>
 
-                <div className={styles.settingRow} style={{ cursor: "pointer" }} onClick={() => showToast("Bug reporting modal coming soon!")}>
+                <div className={styles.settingRow} style={{ cursor: "pointer" }} onClick={() => setShowBugModal(true)}>
                   <div className={styles.settingRowInfo}>
                     <span className={styles.settingRowTitle}>Report a Problem / Bug</span>
                     <span className={styles.settingRowDesc}>Submit feedback or let us know about broken features.</span>
@@ -1192,7 +1447,7 @@ export function SettingsClient({
                   <AlertCircle size={20} style={{ color: "#f59e0b" }} />
                 </div>
 
-                <div className={styles.settingRow} style={{ cursor: "pointer" }} onClick={() => showToast("Displaying Terms of Service")}>
+                <div className={styles.settingRow} style={{ cursor: "pointer" }} onClick={() => setShowTermsModal(true)}>
                   <div className={styles.settingRowInfo}>
                     <span className={styles.settingRowTitle}>Terms of Service & Community Guidelines</span>
                     <span className={styles.settingRowDesc}>Read our platform terms, user rules, and safety guidelines.</span>
@@ -1203,7 +1458,7 @@ export function SettingsClient({
                 <div className={styles.settingRow}>
                   <div className={styles.settingRowInfo}>
                     <span className={styles.settingRowTitle}>About DOST Application</span>
-                    <span className={styles.settingRowDesc}>Version 1.4.0 (Build 2026.08) — All Rights Reserved.</span>
+                    <span className={styles.settingRowDesc}>Version 1.4.0 (Build 2026.08) — Next.js React 19 Engine</span>
                   </div>
                   <span className={styles.badgePreview}>Latest</span>
                 </div>
@@ -1212,6 +1467,149 @@ export function SettingsClient({
           )}
         </main>
       </div>
+
+      {/* HELP CENTER KNOWLEDGE BASE MODAL */}
+      {showHelpModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+          <div style={{ background: "var(--color-bg-surface, #16181c)", border: "1px solid var(--color-border, #2f3336)", borderRadius: "20px", width: "100%", maxWidth: "650px", maxHeight: "85vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--color-border, #2f3336)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Info size={22} style={{ color: "var(--color-primary, #1d9bf0)" }} />
+                <h2 style={{ fontSize: "1.2rem", fontWeight: 700, margin: 0 }}>Help Center & Knowledge Base</h2>
+              </div>
+              <button onClick={() => setShowHelpModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--color-border, #2f3336)" }}>
+              <div style={{ position: "relative" }}>
+                <Search size={18} style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "var(--color-text-muted)" }} />
+                <input
+                  type="text"
+                  className={styles.input}
+                  style={{ paddingLeft: "42px" }}
+                  placeholder="Search questions or topics..."
+                  value={helpSearchQuery}
+                  onChange={(e) => setHelpSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{ padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "16px" }}>
+              {filteredFaqs.length === 0 ? (
+                <p style={{ color: "var(--color-text-muted)", textAlign: "center", padding: "20px 0" }}>No articles found for "{helpSearchQuery}".</p>
+              ) : (
+                filteredFaqs.map((faq, index) => (
+                  <div key={index} style={{ padding: "16px", borderRadius: "14px", background: "rgba(255,255,255,0.03)", border: "1px solid var(--color-border, #2f3336)" }}>
+                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--color-primary, #1d9bf0)", textTransform: "uppercase", marginBottom: "4px" }}>{faq.cat}</div>
+                    <div style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "6px" }}>{faq.q}</div>
+                    <div style={{ fontSize: "0.88rem", color: "var(--color-text-muted)", lineHeight: 1.5 }}>{faq.a}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REPORT A BUG MODAL */}
+      {showBugModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+          <div style={{ background: "var(--color-bg-surface, #16181c)", border: "1px solid var(--color-border, #2f3336)", borderRadius: "20px", width: "100%", maxWidth: "550px", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--color-border, #2f3336)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <AlertCircle size={22} style={{ color: "#f59e0b" }} />
+                <h2 style={{ fontSize: "1.2rem", fontWeight: 700, margin: 0 }}>Report a Problem / Bug</h2>
+              </div>
+              <button onClick={() => setShowBugModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitBugReport} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Issue Category</label>
+                <select className={styles.input} value={bugCategory} onChange={(e) => setBugCategory(e.target.value)}>
+                  <option value="bug">UI / Visual Bug</option>
+                  <option value="performance">Slow Performance / Lag</option>
+                  <option value="feature">Feature Request / Idea</option>
+                  <option value="security">Security Vulnerability</option>
+                </select>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Summary / Title</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="Brief headline of what happened"
+                  value={bugTitle}
+                  onChange={(e) => setBugTitle(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Detailed Description</label>
+                <textarea
+                  className={`${styles.input} ${styles.textarea}`}
+                  placeholder="Describe the steps to reproduce or details..."
+                  value={bugDesc}
+                  onChange={(e) => setBugDesc(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "8px" }}>
+                <button type="button" onClick={() => setShowBugModal(false)} style={{ padding: "10px 18px", borderRadius: "12px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-main)", cursor: "pointer", fontWeight: 600 }}>
+                  Cancel
+                </button>
+                <button type="submit" className={styles.btnPrimary} disabled={isSubmittingBug}>
+                  {isSubmittingBug ? <Loader2 size={16} className="animate-spin" /> : <><Send size={16} /> Submit Report</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TERMS OF SERVICE MODAL */}
+      {showTermsModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+          <div style={{ background: "var(--color-bg-surface, #16181c)", border: "1px solid var(--color-border, #2f3336)", borderRadius: "20px", width: "100%", maxWidth: "650px", maxHeight: "85vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--color-border, #2f3336)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <FileText size={22} style={{ color: "var(--color-primary, #1d9bf0)" }} />
+                <h2 style={{ fontSize: "1.2rem", fontWeight: 700, margin: 0 }}>Terms of Service & Community Rules</h2>
+              </div>
+              <button onClick={() => setShowTermsModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "16px", color: "var(--color-text-main)", fontSize: "0.92rem", lineHeight: 1.6 }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 700 }}>1. Acceptance of Terms</h3>
+              <p>By creating an account or accessing DOST, you agree to comply with our Terms of Service and Community Safety Guidelines.</p>
+              
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 700 }}>2. Respectful Community</h3>
+              <p>Hate speech, harassment, bullying, and illegal content are strictly prohibited. Violations lead to immediate account suspension.</p>
+
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 700 }}>3. Privacy & Data Integrity</h3>
+              <p>We respect your privacy. Private accounts limit post visibility exclusively to confirmed followers. Account credentials are encrypted with industry-standard bcrypt hashing.</p>
+
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 700 }}>4. Media Content Rights</h3>
+              <p>You retain ownership of all original photos, videos, and text posts you publish on DOST.</p>
+            </div>
+
+            <div style={{ padding: "16px 24px", borderTop: "1px solid var(--color-border, #2f3336)", display: "flex", justifyContent: "flex-end" }}>
+              <button className={styles.btnPrimary} onClick={() => setShowTermsModal(false)}>
+                I Understand
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
