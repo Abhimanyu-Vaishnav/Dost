@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { FollowButton } from "./FollowButton";
 import { EditProfileModal } from "./EditProfileModal";
-import { MoreHorizontal, VolumeX, Ban, Calendar, MessageSquare, CheckCircle2 } from "lucide-react";
+import { StoryViewer } from "@/features/stories/components/StoryViewer";
+import { MoreHorizontal, VolumeX, Ban, Calendar, MessageSquare, CheckCircle2, User, Play, X, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface ProfileHeaderProps {
@@ -16,7 +17,41 @@ interface ProfileHeaderProps {
 export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: ProfileHeaderProps) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  
+  // Story & Profile Picture Viewers
+  const [hasActiveStory, setHasActiveStory] = useState(false);
+  const [userStories, setUserStories] = useState<any[]>([]);
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
+  const [showPhotoViewer, setShowPhotoViewer] = useState(false);
+  const [showStoryViewer, setShowStoryViewer] = useState(false);
+
   const router = useRouter();
+
+  // Check active stories for target profile user on mount
+  useEffect(() => {
+    if (user?.id) {
+      fetch(`/api/stories/user/${user.id}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.hasActiveStory && data.stories?.length > 0) {
+            setHasActiveStory(true);
+            setUserStories(data.stories);
+          } else {
+            setHasActiveStory(false);
+            setUserStories([]);
+          }
+        })
+        .catch(e => console.error("Error checking stories:", e));
+    }
+  }, [user?.id]);
+
+  const handleAvatarClick = () => {
+    if (hasActiveStory) {
+      setShowAvatarMenu(true);
+    } else {
+      setShowPhotoViewer(true);
+    }
+  };
 
   const handleMute = async () => {
     try {
@@ -76,7 +111,7 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
 
   return (
     <div style={{ marginBottom: "var(--space-6)" }}>
-      {/* Cover Banner: Strict 3:1 Aspect Ratio Box (Guarantees zero stretching or distorting) */}
+      {/* Cover Banner: Strict 3:1 Aspect Ratio Box */}
       <div style={{ 
         width: "100%", 
         height: "200px", 
@@ -105,23 +140,97 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
       <div style={{ padding: "0 16px", position: "relative" }}>
         {/* Top Section: Avatar and Actions */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "16px" }}>
-          {/* Avatar with Strict Circular Box */}
-          <div style={{
-            width: "136px", height: "136px", borderRadius: "50%", border: "4px solid var(--color-bg-base)",
-            backgroundColor: "var(--color-primary)", color: "white", fontSize: "3.5rem",
-            display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700,
-            overflow: "hidden", marginTop: "-68px", background: "var(--color-bg-base)", boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
-            zIndex: 2, flexShrink: 0
-          }}>
-            {user.avatar ? (
-              <img 
-                src={user.avatar} 
-                alt={user.name} 
-                style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} 
-              />
-            ) : (
-              <div style={{ width: "100%", height: "100%", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                 {user.name?.charAt(0).toUpperCase() || "?"}
+          
+          {/* Avatar Container with Active Story Ring & Interactive Lightbox Trigger */}
+          <div style={{ position: "relative", marginTop: "-68px", zIndex: 2 }}>
+            <div 
+              onClick={handleAvatarClick}
+              style={{
+                width: "140px", height: "140px", borderRadius: "50%",
+                padding: hasActiveStory ? "3px" : "0",
+                background: hasActiveStory 
+                  ? "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)"
+                  : "transparent",
+                cursor: "pointer", transition: "transform 0.2s ease"
+              }}
+              className="hover-scale"
+              title={hasActiveStory ? "Click to view Story or Profile Picture" : "Click to view Profile Picture"}
+            >
+              <div style={{
+                width: "100%", height: "100%", borderRadius: "50%", border: "4px solid var(--color-bg-base)",
+                backgroundColor: "var(--color-primary)", color: "white", fontSize: "3.5rem",
+                display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700,
+                overflow: "hidden", background: "var(--color-bg-base)", boxShadow: "0 4px 14px rgba(0,0,0,0.3)"
+              }}>
+                {user.avatar ? (
+                  <img 
+                    src={user.avatar} 
+                    alt={user.name} 
+                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} 
+                  />
+                ) : (
+                  <div style={{ width: "100%", height: "100%", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                     {user.name?.charAt(0).toUpperCase() || "?"}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Glassmorphic Dropdown Menu (If Active Story Exists) */}
+            {showAvatarMenu && (
+              <div 
+                style={{
+                  position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                  zIndex: 1000, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)",
+                  display: "flex", alignItems: "center", justifyContent: "center", padding: "16px"
+                }}
+                onClick={() => setShowAvatarMenu(false)}
+              >
+                <div 
+                  className="glass animate-scale-in"
+                  style={{
+                    width: "100%", maxWidth: "320px", background: "var(--color-bg-surface)",
+                    borderRadius: "24px", padding: "16px", border: "1px solid var(--color-border)",
+                    display: "flex", flexDirection: "column", gap: "8px", boxShadow: "0 20px 50px rgba(0,0,0,0.5)"
+                  }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <h4 style={{ margin: "4px 0 12px", textAlign: "center", fontSize: "1.05rem", fontWeight: 800, color: "var(--color-text-main)" }}>
+                    Profile Options
+                  </h4>
+
+                  <button
+                    onClick={() => {
+                      setShowAvatarMenu(false);
+                      setShowStoryViewer(true);
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "12px", width: "100%",
+                      padding: "14px 16px", borderRadius: "14px", border: "1px solid var(--color-border)",
+                      background: "linear-gradient(45deg, rgba(220, 39, 67, 0.15), rgba(188, 24, 136, 0.15))",
+                      color: "var(--color-text-main)", fontWeight: 700, fontSize: "0.95rem", cursor: "pointer"
+                    }}
+                    className="hover-bg"
+                  >
+                    <Play size={20} style={{ color: "#dc2743" }} /> View Story
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowAvatarMenu(false);
+                      setShowPhotoViewer(true);
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "12px", width: "100%",
+                      padding: "14px 16px", borderRadius: "14px", border: "1px solid var(--color-border)",
+                      background: "var(--color-bg-base)", color: "var(--color-text-main)",
+                      fontWeight: 700, fontSize: "0.95rem", cursor: "pointer"
+                    }}
+                    className="hover-bg"
+                  >
+                    <Eye size={20} style={{ color: "var(--color-primary)" }} /> View Profile Picture
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -211,7 +320,7 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
             @{user.username || user.name?.toLowerCase().replace(/\s+/g, '')}
           </p>
 
-          {/* Account Sub-Category Badge: Light Grey Pill (Renders ONLY chosen sub-category tag) */}
+          {/* Account Sub-Category Badge: Light Grey Pill */}
           {categoryBadge && (
             <div style={{ marginBottom: "12px" }}>
               <span style={{
@@ -256,8 +365,55 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
         </div>
       </div>
 
+      {/* Edit Profile Modal */}
       {showEditModal && (
         <EditProfileModal user={user} onClose={() => setShowEditModal(false)} />
+      )}
+
+      {/* Fullscreen View Profile Picture Lightbox */}
+      {showPhotoViewer && (
+        <div 
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 2000, background: "rgba(0, 0, 0, 0.92)", backdropFilter: "blur(12px)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: "20px"
+          }}
+          onClick={() => setShowPhotoViewer(false)}
+        >
+          <button 
+            onClick={() => setShowPhotoViewer(false)}
+            style={{
+              position: "absolute", top: "20px", right: "20px",
+              background: "rgba(255,255,255,0.15)", border: "none", color: "white",
+              width: "44px", height: "44px", borderRadius: "50%", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}
+          >
+            <X size={24} />
+          </button>
+
+          <div style={{ maxWidth: "500px", maxHeight: "500px", width: "90vw", height: "90vw", borderRadius: "50%", overflow: "hidden", border: "4px solid rgba(255,255,255,0.2)", boxShadow: "0 20px 60px rgba(0,0,0,0.8)" }}>
+            {user.avatar ? (
+              <img src={user.avatar} alt={user.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <div style={{ width: "100%", height: "100%", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "5rem", fontWeight: 800 }}>
+                {user.name?.charAt(0).toUpperCase() || "?"}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Story Viewer (When Story Option Clicked) */}
+      {showStoryViewer && userStories.length > 0 && (
+        <StoryViewer 
+          groupedStories={[{
+            user: { id: user.id, name: user.name || "User", avatar: user.avatar },
+            stories: userStories
+          }]}
+          initialGroupIndex={0}
+          onClose={() => setShowStoryViewer(false)}
+        />
       )}
     </div>
   );
