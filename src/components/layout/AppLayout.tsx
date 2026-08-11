@@ -104,17 +104,51 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
 
   const userHandle = `@${user?.username || (user?.name ? user.name.toLowerCase().replace(/\s+/g, "") : "user")}`;
 
+  const isItemActive = (href: string) => {
+    if (href === "/feed" && (pathname === "/feed" || pathname === "/")) return true;
+    if (href !== "/feed" && pathname?.startsWith(href)) return true;
+    return false;
+  };
+
+  const renderNavIcon = (id: string, isActive: boolean) => {
+    const size = 24;
+    switch (id) {
+      case "home":
+        return <Home size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
+      case "explore":
+        return <Search size={size} strokeWidth={isActive ? 3 : 2} />;
+      case "messages":
+        return <MessageSquare size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
+      case "notifications":
+        return <Bell size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
+      case "bookmarks":
+        return <Bookmark size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
+      case "lists":
+        return <List size={size} strokeWidth={isActive ? 3 : 2} />;
+      case "communities":
+        return <Users size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
+      case "premium":
+        return <CheckCircle2 size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
+      case "analytics":
+        return <BarChart3 size={size} strokeWidth={isActive ? 3 : 2} />;
+      case "profile":
+        return <User size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
+      default:
+        return <Home size={size} />;
+    }
+  };
+
   const navItems = [
-    { href: "/feed", icon: <Home size={24} />, label: "Home", id: "home" },
-    { href: "/search", icon: <Search size={24} />, label: "Explore", id: "explore" },
-    { href: "/messages", icon: <MessageSquare size={24} />, label: "Messages", id: "messages" },
-    { href: "/notifications", icon: <Bell size={24} />, label: "Notifications", id: "notifications" },
-    { href: "/bookmarks", icon: <Bookmark size={24} />, label: "Bookmarks", id: "bookmarks", desktopOnly: true },
-    { href: "/lists", icon: <List size={24} />, label: "Lists", id: "lists", desktopOnly: true },
-    { href: "/communities", icon: <Users size={24} />, label: "Communities", id: "communities", desktopOnly: true },
-    { href: "/premium", icon: <CheckCircle2 size={24} />, label: "Premium", id: "premium", desktopOnly: true },
-    { href: "/analytics", icon: <BarChart3 size={24} />, label: "Analytics", id: "analytics", desktopOnly: true },
-    { href: user?.userId ? `/profile/${user.userId}` : "/profile", icon: <User size={24} />, label: "Profile", id: "profile" },
+    { href: "/feed", label: "Home", id: "home" },
+    { href: "/search", label: "Explore", id: "explore" },
+    { href: "/messages", label: "Messages", id: "messages" },
+    { href: "/notifications", label: "Notifications", id: "notifications" },
+    { href: "/bookmarks", label: "Bookmarks", id: "bookmarks", desktopOnly: true },
+    { href: "/lists", label: "Lists", id: "lists", desktopOnly: true },
+    { href: "/communities", label: "Communities", id: "communities", desktopOnly: true },
+    { href: "/premium", label: "Premium", id: "premium", desktopOnly: true },
+    { href: "/analytics", label: "Analytics", id: "analytics", desktopOnly: true },
+    { href: user?.userId ? `/profile/${user.userId}` : "/profile", label: "Profile", id: "profile" },
   ];
 
   const moreItems = [
@@ -162,40 +196,43 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
           </div>
 
           <nav className={styles.navMenu}>
-            {navItems.map(item => (
-              <Link 
-                key={item.id} 
-                href={item.href} 
-                className={`${styles.navItem} ${item.desktopOnly ? styles.desktopOnly : ""} ${pathname === item.href ? styles.navItemActive : ""}`}
-              >
-                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                  {item.icon}
-                  {item.id === "notifications" && unreadCount > 0 && (
-                    <div style={{
-                      position: "absolute", top: "-5px", right: "-5px",
-                      background: "var(--color-primary)", color: "white",
-                      borderRadius: "50%", width: "16px", height: "16px",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: "0.65rem", fontWeight: 800, border: "2px solid var(--color-bg-base)"
-                    }}>
-                      {unreadCount > 9 ? "9+" : unreadCount}
-                    </div>
-                  )}
-                  {item.id === "messages" && unreadMessagesCount > 0 && (
-                    <div style={{
-                      position: "absolute", top: "-5px", right: "-5px",
-                      background: "var(--color-primary)", color: "white",
-                      borderRadius: "50%", width: "16px", height: "16px",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: "0.65rem", fontWeight: 800, border: "2px solid var(--color-bg-base)"
-                    }}>
-                      {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
-                    </div>
-                  )}
-                </div>
-                <span className={styles.navLabel}>{item.label}</span>
-              </Link>
-            ))}
+            {navItems.map(item => {
+              const active = isItemActive(item.href);
+              return (
+                <Link 
+                  key={item.id} 
+                  href={item.href} 
+                  className={`${styles.navItem} ${item.desktopOnly ? styles.desktopOnly : ""} ${active ? styles.navItemActive : ""}`}
+                >
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    {renderNavIcon(item.id, active)}
+                    {item.id === "notifications" && unreadCount > 0 && (
+                      <div style={{
+                        position: "absolute", top: "-5px", right: "-5px",
+                        background: "var(--color-primary)", color: "white",
+                        borderRadius: "50%", width: "16px", height: "16px",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: "0.65rem", fontWeight: 800, border: "2px solid var(--color-bg-base)"
+                      }}>
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </div>
+                    )}
+                    {item.id === "messages" && unreadMessagesCount > 0 && (
+                      <div style={{
+                        position: "absolute", top: "-5px", right: "-5px",
+                        background: "var(--color-primary)", color: "white",
+                        borderRadius: "50%", width: "16px", height: "16px",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: "0.65rem", fontWeight: 800, border: "2px solid var(--color-bg-base)"
+                      }}>
+                        {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
+                      </div>
+                    )}
+                  </div>
+                  <span className={styles.navLabel}>{item.label}</span>
+                </Link>
+              );
+            })}
 
             <div className={styles.navItem} onClick={() => setShowMore(!showMore)} style={{ cursor: "pointer", position: "relative" }}>
               <MoreHorizontal size={24} />
