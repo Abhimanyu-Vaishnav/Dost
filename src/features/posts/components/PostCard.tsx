@@ -426,7 +426,8 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
     }
   };
 
-  const [repostCount, setRepostCount] = useState(post._count?.reposts ?? 0);
+  const initialRepostCount = post._count?.reposts ?? (Array.isArray(post.reposts) ? post.reposts.length : 0);
+  const [repostCount, setRepostCount] = useState(initialRepostCount);
   const [isReposted, setIsReposted] = useState(Boolean(post.repost || (post.reposts && post.reposts.length > 0)));
 
   const handleRepost = async () => {

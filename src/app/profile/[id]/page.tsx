@@ -75,7 +75,11 @@ export default async function UniversalProfilePage({ params }: { params: Promise
         author: { select: { id: true, name: true, avatar: true, username: true } }
       }
     },
+    _count: {
+      select: { likes: true, comments: true, replies: true, reposts: true }
+    },
     likes: true,
+    reposts: true,
     bookmarkedBy: {
       where: { userId: currentUser.userId as string }
     },

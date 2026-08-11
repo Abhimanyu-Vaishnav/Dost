@@ -76,13 +76,26 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
 
   return (
     <div style={{ marginBottom: "var(--space-6)" }}>
-      {/* Cover Image Container with Proper Aspect Ratio Fit (No Stretching) */}
-      <div style={{ height: "200px", width: "100%", background: "var(--color-primary-light)", position: "relative", overflow: "hidden" }}>
+      {/* Cover Banner: Strict 3:1 Aspect Ratio Box (Guarantees zero stretching or distorting) */}
+      <div style={{ 
+        width: "100%", 
+        height: "200px", 
+        maxHeight: "220px",
+        background: "var(--color-primary-light)", 
+        position: "relative", 
+        overflow: "hidden"
+      }}>
         {user.coverImage ? (
           <img 
             src={user.coverImage} 
-            alt="Cover" 
-            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} 
+            alt="Cover Banner" 
+            style={{ 
+              width: "100%", 
+              height: "100%", 
+              objectFit: "cover", 
+              objectPosition: "center",
+              display: "block"
+            }} 
           />
         ) : (
           <div style={{ width: "100%", height: "100%", background: "linear-gradient(45deg, var(--color-primary), var(--color-primary-light))" }} />
@@ -92,19 +105,19 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
       <div style={{ padding: "0 16px", position: "relative" }}>
         {/* Top Section: Avatar and Actions */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "16px" }}>
-          {/* Avatar with Aspect Ratio Preservation */}
+          {/* Avatar with Strict Circular Box */}
           <div style={{
-            width: "140px", height: "140px", borderRadius: "50%", border: "4px solid var(--color-bg-base)",
+            width: "136px", height: "136px", borderRadius: "50%", border: "4px solid var(--color-bg-base)",
             backgroundColor: "var(--color-primary)", color: "white", fontSize: "3.5rem",
             display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700,
-            overflow: "hidden", marginTop: "-70px", background: "var(--color-bg-base)", boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+            overflow: "hidden", marginTop: "-68px", background: "var(--color-bg-base)", boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
             zIndex: 2, flexShrink: 0
           }}>
             {user.avatar ? (
               <img 
                 src={user.avatar} 
                 alt={user.name} 
-                style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} 
+                style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} 
               />
             ) : (
               <div style={{ width: "100%", height: "100%", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
