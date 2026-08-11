@@ -322,8 +322,8 @@ body {
 }
 
 .messages-sidebar {
-  width: 350px;
-  min-width: 350px;
+  width: 380px;
+  min-width: 380px;
   height: 100%;
   display: flex;
   flex-direction: column;
