@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Link as LinkIcon } from "lucide-react";
+import { X, Link as LinkIcon, Send, Sparkles, Plus, HelpCircle, MessageSquare } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface Story {
   id: string;
@@ -33,6 +34,7 @@ interface StoryViewerProps {
   groupedStories: UserWithStories[];
   initialGroupIndex: number;
   onClose: () => void;
+  onOpenCreateStory?: (prompt?: string) => void;
 }
 
 const FILTERS = [
@@ -44,7 +46,7 @@ const FILTERS = [
   { id: "warm", name: "Warm", value: "sepia(0.3) saturate(1.3) contrast(1.1)" }
 ];
 
-export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: StoryViewerProps) {
+export function StoryViewer({ groupedStories, initialGroupIndex, onClose, onOpenCreateStory }: StoryViewerProps) {
   const [groupIndex, setGroupIndex] = useState(initialGroupIndex);
   const [storyIndex, setStoryIndex] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -53,16 +55,25 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [localOverlays, setLocalOverlays] = useState<any[]>([]);
 
+  // DM Reply Input State
+  const [replyText, setReplyText] = useState("");
+  const [isSendingReply, setIsSendingReply] = useState(false);
+  const [replySuccess, setReplySuccess] = useState(false);
+
+  // Question response state
+  const [questionInput, setQuestionInput] = useState<{ [overlayId: string]: string }>({});
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  
+  const router = useRouter();
+
   const currentGroup = groupedStories[groupIndex];
   const currentStory = currentGroup?.stories[storyIndex];
 
   // Duration in ms for non-video stories
   const STORY_DURATION = 5000;
 
-  // Fetch current user ID on mount (to verify poll voter records)
+  // Fetch current user ID on mount
   useEffect(() => {
     fetch("/api/users/profile")
       .then(r => r.json())
@@ -84,9 +95,35 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
     }
   }, [groupIndex, storyIndex, currentStory]);
 
+  // Pre-buffer next stories (N+1 and N+2) for zero latency
+  useEffect(() => {
+    const prefetchMedia = (url: string | null, type: string) => {
+      if (!url) return;
+      if (type === "IMAGE") {
+        const img = new Image();
+        img.src = url;
+      }
+    };
+
+    // Current group next stories
+    if (currentGroup?.stories[storyIndex + 1]) {
+      prefetchMedia(currentGroup.stories[storyIndex + 1].mediaUrl, currentGroup.stories[storyIndex + 1].mediaType);
+    }
+    if (currentGroup?.stories[storyIndex + 2]) {
+      prefetchMedia(currentGroup.stories[storyIndex + 2].mediaUrl, currentGroup.stories[storyIndex + 2].mediaType);
+    }
+
+    // Next user group first story
+    if (groupedStories[groupIndex + 1]?.stories[0]) {
+      prefetchMedia(groupedStories[groupIndex + 1].stories[0].mediaUrl, groupedStories[groupIndex + 1].stories[0].mediaType);
+    }
+  }, [groupIndex, storyIndex, groupedStories, currentGroup]);
+
   useEffect(() => {
     setProgress(0);
     setIsPaused(false);
+    setReplyText("");
+    setReplySuccess(false);
   }, [groupIndex, storyIndex]);
 
   useEffect(() => {
@@ -111,7 +148,6 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
       if (currentStory?.mediaType === "VIDEO" && videoRef.current) {
         duration = (videoRef.current.duration || 5) * 1000; 
       } else if (currentStory?.musicUrl && audioRef.current) {
-        // If there's music on a photo, cap at max 15 seconds
         duration = Math.min((audioRef.current.duration || 15) * 1000, 15000);
       }
 
@@ -162,7 +198,6 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
       });
       if (res.ok) {
         const data = await res.json();
-        // Update local overlays with updated vote counts
         setLocalOverlays(data.overlays);
       }
     } catch (e) {
@@ -170,13 +205,32 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
     }
   };
 
+  // Send Direct Message reply to story author
+  const handleSendDMReply = async () => {
+    if (!currentStory || !replyText.trim() || isSendingReply) return;
+    setIsSendingReply(true);
+    try {
+      const res = await fetch(`/api/stories/${currentStory.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ replyText })
+      });
+      if (res.ok) {
+        setReplyText("");
+        setReplySuccess(true);
+        setTimeout(() => setReplySuccess(false), 2500);
+      }
+    } catch (e) {
+      console.error("Failed to send reply", e);
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
   if (!currentGroup || !currentStory) return null;
 
-  // Retrieve current active filter style values
   const filterOverlay = localOverlays.find(o => o.type === "FILTER");
   const filterStyleVal = filterOverlay ? FILTERS.find(f => f.id === filterOverlay.content)?.value || "" : "";
-
-  // Render Story Rings styling indicator based on privacy
   const isCloseFriendsStory = currentStory.privacy === "CLOSE_FRIENDS";
 
   return (
@@ -190,7 +244,7 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
         backgroundColor: currentStory.bgColor || "#000", overflow: "hidden", display: "flex", flexDirection: "column"
       }}>
         
-        {/* Progress Bars */}
+        {/* Progress Bars (Styled with Dost Primary Accent Fills) */}
         <div style={{ 
           position: "absolute", top: 0, left: 0, width: "100%", padding: "16px 8px 8px 8px",
           display: "flex", gap: "4px", zIndex: 50,
@@ -199,29 +253,25 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
           {currentGroup.stories.map((s, idx) => (
             <div key={s.id} style={{ flex: 1, height: "3px", backgroundColor: "rgba(255,255,255,0.3)", borderRadius: "2px", overflow: "hidden" }}>
               <div style={{ 
-                height: "100%", backgroundColor: s.privacy === "CLOSE_FRIENDS" ? "#00c853" : "#fff",
+                height: "100%", backgroundColor: s.privacy === "CLOSE_FRIENDS" ? "#00c853" : "var(--color-primary, #1d9bf0)",
                 width: idx < storyIndex ? "100%" : idx === storyIndex ? `${progress}%` : "0%"
               }} />
             </div>
           ))}
         </div>
 
-        {/* Header (User Info) */}
+        {/* Header (User Info with Dost Primary Accent Ring) */}
         <div style={{
           position: "absolute", top: "24px", left: 0, width: "100%", padding: "16px",
           display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 50
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <div style={{ 
-              width: "36px", 
-              height: "36px", 
-              borderRadius: "50%", 
-              overflow: "hidden", 
-              backgroundColor: "#333",
-              padding: "2px",
+              width: "36px", height: "36px", borderRadius: "50%", overflow: "hidden", 
+              backgroundColor: "#333", padding: "2px",
               background: isCloseFriendsStory 
                 ? "#00c853" 
-                : "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)"
+                : "var(--color-primary, #1d9bf0)"
             }}>
               {currentGroup.user.avatar ? (
                 <img src={currentGroup.user.avatar} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%", border: "2px solid #000" }} />
@@ -232,11 +282,11 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
               )}
             </div>
             <div style={{ display: "flex", flexDirection: "column" }}>
-              <span style={{ color: "white", fontWeight: 600, fontSize: "0.9rem", textShadow: "0 1px 3px rgba(0,0,0,0.8)", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ color: "white", fontWeight: 700, fontSize: "0.9rem", textShadow: "0 1px 3px rgba(0,0,0,0.8)", display: "flex", alignItems: "center", gap: "6px" }}>
                 {currentGroup.user.name}
                 {isCloseFriendsStory && (
                   <span style={{ background: "#00c853", color: "white", padding: "1px 6px", borderRadius: "6px", fontSize: "0.65rem", fontWeight: 700 }}>
-                    Close Friend
+                    Close Dost
                   </span>
                 )}
               </span>
@@ -291,15 +341,15 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
           {currentStory.mediaType === "TEXT" && !currentStory.bgColor && (
              <div style={{ 
                width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", 
-               background: "linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%)", padding: "32px", textAlign: "center"
+               background: "linear-gradient(135deg, var(--color-primary) 0%, #00c6ff 100%)", padding: "32px", textAlign: "center"
              }}>
-               {currentStory.content && <p style={{ color: "white", fontSize: "1.5rem", fontWeight: 600 }}>{currentStory.content}</p>}
+               {currentStory.content && <p style={{ color: "white", fontSize: "1.5rem", fontWeight: 700 }}>{currentStory.content}</p>}
              </div>
           )}
 
           {/* Render Active Overlays */}
           {localOverlays.map((overlay) => {
-            const isInteractive = ["POLL", "LINK", "MENTION", "HASHTAG", "LOCATION"].includes(overlay.type);
+            const isInteractive = ["POLL", "LINK", "MENTION", "HASHTAG", "LOCATION", "QUESTION", "ADD_YOURS"].includes(overlay.type);
 
             if (overlay.type === "FILTER") return null;
 
@@ -361,7 +411,7 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
                                 flex: 1, padding: "8px 2px", borderRadius: "10px", border: "none",
                                 background: hasVoted 
                                   ? (isUserChoice ? "var(--color-primary)" : "#eee") 
-                                  : "var(--color-primary-light)",
+                                  : "rgba(29, 155, 240, 0.15)",
                                 color: hasVoted 
                                   ? (isUserChoice ? "white" : "#555") 
                                   : "var(--color-primary)",
@@ -385,7 +435,60 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
                   );
                 })()}
 
-                {/* 2. Link Sticker Widget */}
+                {/* 2. Questions Sticker Widget */}
+                {overlay.type === "QUESTION" && (
+                  <div style={{
+                    padding: "14px", borderRadius: "18px", background: "rgba(255,255,255,0.95)",
+                    color: "#000", width: "200px", display: "flex", flexDirection: "column", gap: "10px",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.2)", textAlign: "center"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", color: "var(--color-primary)", fontWeight: 800, fontSize: "0.85rem" }}>
+                      <HelpCircle size={16} /> {overlay.question || "Ask me a question"}
+                    </div>
+                    <input 
+                      type="text"
+                      placeholder="Type your answer..."
+                      value={questionInput[overlay.id] || ""}
+                      onChange={(e) => setQuestionInput({ ...questionInput, [overlay.id]: e.target.value })}
+                      onKeyDown={async (e) => {
+                        if (e.key === "Enter" && questionInput[overlay.id]?.trim()) {
+                          await fetch(`/api/stories/${currentStory.id}/reply`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ replyText: `Question Answer: ${questionInput[overlay.id]}` })
+                          });
+                          setQuestionInput({ ...questionInput, [overlay.id]: "" });
+                          alert("Answer sent to DM!");
+                        }
+                      }}
+                      style={{
+                        padding: "8px 12px", borderRadius: "99px", border: "1px solid #ddd",
+                        fontSize: "0.8rem", outline: "none", textAlign: "center", background: "#f8f9fa"
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* 3. Add Yours Sticker Chain Widget */}
+                {overlay.type === "ADD_YOURS" && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      if (onOpenCreateStory) onOpenCreateStory(overlay.prompt || "Add Yours");
+                    }}
+                    style={{
+                      padding: "10px 18px", borderRadius: "16px",
+                      background: "linear-gradient(45deg, var(--color-primary), #00c6ff)",
+                      color: "#fff", border: "none", cursor: "pointer",
+                      fontWeight: 800, fontSize: "0.85rem", boxShadow: "0 6px 20px rgba(29, 155, 240, 0.4)",
+                      display: "flex", alignItems: "center", gap: "8px"
+                    }}
+                  >
+                    <Plus size={16} /> {overlay.prompt || "Add Yours"}
+                  </button>
+                )}
+
+                {/* 4. Link Sticker Widget */}
                 {overlay.type === "LINK" && (
                   <a
                     href={overlay.content.startsWith("http") ? overlay.content : `https://${overlay.content}`}
@@ -394,7 +497,7 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
                     onClick={(e) => e.stopPropagation()}
                     style={{
                       padding: "8px 16px", borderRadius: "99px",
-                      background: "rgba(29, 155, 240, 0.95)", color: "#fff",
+                      background: "var(--color-primary, #1d9bf0)", color: "#fff",
                       fontWeight: 700, fontSize: "0.8rem", textDecoration: "none",
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                       display: "flex", alignItems: "center", gap: "4px"
@@ -404,14 +507,32 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
                   </a>
                 )}
 
-                {/* 3. Mention/Hashtag/Location Link Widgets */}
-                {(overlay.type === "MENTION" || overlay.type === "HASHTAG" || overlay.type === "LOCATION") && (() => {
+                {/* 5. Mention Link Sticker Widget */}
+                {overlay.type === "MENTION" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClose();
+                      const handle = overlay.content.replace(/^@/, '');
+                      router.push(`/search?q=${handle}`);
+                    }}
+                    style={{
+                      padding: "6px 14px", borderRadius: "12px", border: "none", cursor: "pointer",
+                      background: "rgba(255,255,255,0.95)", color: "var(--color-primary)",
+                      fontWeight: 800, fontSize: `${overlay.fontSize}px`, boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+                    }}
+                  >
+                    {overlay.content}
+                  </button>
+                )}
+
+                {/* 6. Hashtag / Location Stickers */}
+                {(overlay.type === "HASHTAG" || overlay.type === "LOCATION") && (() => {
                   const colorMap = {
-                    MENTION: { bg: "rgba(255,255,255,0.9)", text: "var(--color-primary)", fw: 800, href: `/search?q=${overlay.content}` },
                     HASHTAG: { bg: "rgba(255, 230, 109, 0.95)", text: "#000", fw: 800, href: `/search?q=${encodeURIComponent(overlay.content)}` },
                     LOCATION: { bg: "rgba(255,255,255,0.9)", text: "#000", fw: 700, href: `/search?q=${encodeURIComponent(overlay.content)}` }
                   };
-                  const styleOpt = colorMap[overlay.type as "MENTION" | "HASHTAG" | "LOCATION"];
+                  const styleOpt = colorMap[overlay.type as "HASHTAG" | "LOCATION"];
                   return (
                     <Link
                       href={styleOpt.href}
@@ -431,14 +552,14 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
                   );
                 })()}
 
-                {/* 4. Text Display Overlay */}
+                {/* 7. Text Display Overlay */}
                 {overlay.type === "TEXT" && (
                   <span style={{ color: overlay.color, fontFamily: overlay.font, fontSize: `${overlay.fontSize}px`, fontWeight: "bold", textShadow: "0 2px 4px rgba(0,0,0,0.8)", whiteSpace: "pre-wrap", textAlign: "center" }}>
                     {overlay.content}
                   </span>
                 )}
 
-                {/* 5. Emoji/Sticker Display Overlay */}
+                {/* 8. Emoji Display Overlay */}
                 {overlay.type === "EMOJI" && (
                   <span style={{ fontSize: `${overlay.fontSize}px` }}>{overlay.content}</span>
                 )}
@@ -455,39 +576,80 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose }: Stor
             onClick={(e) => { e.stopPropagation(); handleNext(); }}
             style={{ position: "absolute", top: 0, right: 0, width: "70%", height: "80%", zIndex: 40 }} 
           />
-
-          {/* Quick Reaction Bar */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)",
-              zIndex: 50, display: "flex", gap: "12px", background: "rgba(0, 0, 0, 0.6)",
-              backdropFilter: "blur(8px)", padding: "8px 16px", borderRadius: "99px",
-              border: "1px solid rgba(255, 255, 255, 0.2)"
-            }}
-          >
-            {["❤️", "🔥", "😂", "👏", "😍"].map((emoji) => (
-              <button
-                key={emoji}
-                onClick={async () => {
-                  if (!currentStory) return;
-                  await fetch(`/api/stories/${currentStory.id}/react`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ emoji }),
-                  }).catch(() => {});
-                }}
-                style={{
-                  fontSize: "1.3rem", background: "none", border: "none", cursor: "pointer",
-                  transition: "transform 0.1s ease"
-                }}
-                className="hover-scale"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
         </div>
+
+        {/* Quick DM Reply Bar (Bottom Bar Integration) */}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            padding: "12px 16px 20px", background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(12px)", borderTop: "1px solid rgba(255, 255, 255, 0.15)",
+            display: "flex", alignItems: "center", gap: "10px", zIndex: 60
+          }}
+        >
+          {replySuccess ? (
+            <div style={{ flex: 1, padding: "10px", borderRadius: "99px", background: "rgba(0, 200, 83, 0.2)", color: "#00c853", fontWeight: 700, fontSize: "0.85rem", textAlign: "center" }}>
+              ✓ Reply sent to {currentGroup.user.name}'s DMs!
+            </div>
+          ) : (
+            <>
+              <div style={{
+                flex: 1, display: "flex", alignItems: "center", gap: "8px",
+                background: "rgba(255,255,255,0.12)", borderRadius: "99px",
+                padding: "8px 16px", border: "1px solid rgba(255,255,255,0.2)"
+              }}>
+                <input
+                  type="text"
+                  placeholder={`Reply to ${currentGroup.user.name}...`}
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendDMReply()}
+                  onFocus={() => setIsPaused(true)}
+                  onBlur={() => setIsPaused(false)}
+                  style={{
+                    flex: 1, background: "none", border: "none", outline: "none",
+                    color: "white", fontSize: "0.88rem", fontWeight: 500
+                  }}
+                />
+              </div>
+
+              <button
+                onClick={handleSendDMReply}
+                disabled={!replyText.trim() || isSendingReply}
+                style={{
+                  width: "40px", height: "40px", borderRadius: "50%",
+                  background: replyText.trim() ? "var(--color-primary, #1d9bf0)" : "rgba(255,255,255,0.2)",
+                  color: "white", border: "none", cursor: replyText.trim() ? "pointer" : "default",
+                  display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s"
+                }}
+              >
+                <Send size={18} />
+              </button>
+
+              {/* Quick Emojis */}
+              {["❤️", "🔥", "😂"].map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={async () => {
+                    if (!currentStory) return;
+                    await fetch(`/api/stories/${currentStory.id}/react`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ emoji }),
+                    }).catch(() => {});
+                  }}
+                  style={{
+                    fontSize: "1.2rem", background: "none", border: "none", cursor: "pointer"
+                  }}
+                  className="hover-scale"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+
       </div>
     </div>
   );
