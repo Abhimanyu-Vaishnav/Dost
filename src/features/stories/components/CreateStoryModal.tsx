@@ -84,12 +84,16 @@ export function CreateStoryModal({ onClose, onSuccess }: CreateStoryModalProps) 
   const canvasRef = useRef<HTMLDivElement>(null);
   const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Fetch following list for specific sharing
+  // Fetch friends list for specific person selection
   useEffect(() => {
-    fetch("/api/users/following")
+    fetch("/api/users/close-friends")
       .then(r => r.json())
-      .then(d => setFollowingList(d.following || []))
-      .catch(e => console.error("Failed to load following", e));
+      .then(d => {
+        if (d.eligibleFriends) {
+          setFollowingList(d.eligibleFriends);
+        }
+      })
+      .catch(e => console.error("Failed to load friends list", e));
   }, []);
 
   // Sync canvas size
@@ -188,6 +192,14 @@ export function CreateStoryModal({ onClose, onSuccess }: CreateStoryModalProps) 
     setShowEmojiPicker(false);
   };
 
+  const handleToggleSpecificUser = (userId: string) => {
+    if (allowedUsers.includes(userId)) {
+      setAllowedUsers(allowedUsers.filter(id => id !== userId));
+    } else {
+      setAllowedUsers([...allowedUsers, userId]);
+    }
+  };
+
   const handleSubmit = async () => {
     if (activeTab === "MEDIA" && !mediaUrl) return;
     setIsSubmitting(true);
@@ -236,6 +248,10 @@ export function CreateStoryModal({ onClose, onSuccess }: CreateStoryModalProps) 
       setIsSubmitting(false);
     }
   };
+
+  const filteredUsers = followingList.filter(u => 
+    u.name?.toLowerCase().includes(userSearchQuery.toLowerCase())
+  );
 
   return (
     <div style={{
@@ -481,7 +497,7 @@ export function CreateStoryModal({ onClose, onSuccess }: CreateStoryModalProps) 
           <div style={{ padding: "24px", flex: 1, overflowY: "auto" }}>
             <h3 style={{ color: "white", fontSize: "1.15rem", marginBottom: "24px", fontWeight: 800 }}>Story Settings</h3>
             
-            {/* 1. Privacy Tier Selector (People I Follow vs Public vs Specific) */}
+            {/* 1. Privacy Tier Selector */}
             <div style={{ marginBottom: "28px", background: "rgba(255,255,255,0.04)", padding: "18px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.1)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "white", marginBottom: "14px", fontWeight: 800, fontSize: "0.95rem" }}>
                 <Lock size={18} style={{ color: "var(--color-primary)" }} /> Audience Privacy
@@ -513,6 +529,19 @@ export function CreateStoryModal({ onClose, onSuccess }: CreateStoryModalProps) 
                   </button>
                 ))}
               </div>
+
+              {privacy === "SPECIFIC" && (
+                <button 
+                  onClick={() => setShowSpecificUsersModal(true)}
+                  style={{
+                    marginTop: "12px", width: "100%", padding: "10px", borderRadius: "12px",
+                    background: "var(--color-primary)", color: "white", border: "none",
+                    fontWeight: 700, fontSize: "0.85rem", cursor: "pointer"
+                  }}
+                >
+                  Edit Specific List ({allowedUsers.length} selected)
+                </button>
+              )}
             </div>
 
             {/* 2. Color Filters */}
@@ -556,6 +585,114 @@ export function CreateStoryModal({ onClose, onSuccess }: CreateStoryModalProps) 
         </div>
 
       </div>
+
+      {/* Specific Persons Selection Modal Popup */}
+      {showSpecificUsersModal && (
+        <div 
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.8)", zIndex: 10005, backdropFilter: "blur(12px)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: "16px"
+          }}
+          onClick={() => setShowSpecificUsersModal(false)}
+        >
+          <div 
+            className="glass animate-scale-in"
+            style={{
+              width: "100%", maxWidth: "440px", maxHeight: "80vh", background: "rgba(24, 24, 24, 0.98)",
+              borderRadius: "24px", border: "1px solid rgba(255,255,255,0.15)",
+              display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 50px rgba(0,0,0,0.6)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ padding: "18px 20px", borderBottom: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "white", margin: 0 }}>
+                Select Specific Persons
+              </h3>
+              <button onClick={() => setShowSpecificUsersModal(false)} style={{ background: "none", border: "none", color: "white", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(255,255,255,0.06)", borderRadius: "99px", padding: "8px 14px" }}>
+                <Search size={16} style={{ color: "rgba(255,255,255,0.5)" }} />
+                <input 
+                  type="text"
+                  placeholder="Search friends..."
+                  value={userSearchQuery}
+                  onChange={e => setUserSearchQuery(e.target.value)}
+                  style={{ background: "none", border: "none", outline: "none", color: "white", fontSize: "0.9rem", flex: 1 }}
+                />
+              </div>
+            </div>
+
+            {/* Users List */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px", display: "flex", flexDirection: "column", gap: "8px" }}>
+              {filteredUsers.length === 0 ? (
+                <p style={{ color: "rgba(255,255,255,0.5)", textAlign: "center", padding: "20px 0", fontSize: "0.9rem" }}>
+                  No friends found
+                </p>
+              ) : (
+                filteredUsers.map(u => {
+                  const isSelected = allowedUsers.includes(u.id);
+                  return (
+                    <div 
+                      key={u.id}
+                      onClick={() => handleToggleSpecificUser(u.id)}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "10px 14px", borderRadius: "14px",
+                        background: isSelected ? "rgba(29, 155, 240, 0.15)" : "rgba(255,255,255,0.03)",
+                        border: isSelected ? "1px solid var(--color-primary)" : "1px solid transparent",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <div style={{ width: "40px", height: "40px", borderRadius: "50%", overflow: "hidden", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700 }}>
+                          {u.avatar ? (
+                            <img src={u.avatar} alt={u.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          ) : (
+                            u.name?.charAt(0).toUpperCase() || "?"
+                          )}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          <span style={{ fontWeight: 700, color: "white", fontSize: "0.9rem" }}>{u.name}</span>
+                        </div>
+                      </div>
+
+                      <div style={{
+                        width: "22px", height: "22px", borderRadius: "50%",
+                        border: isSelected ? "none" : "2px solid rgba(255,255,255,0.3)",
+                        background: isSelected ? "var(--color-primary)" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center", color: "white"
+                      }}>
+                        {isSelected && <Check size={14} strokeWidth={3} />}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "flex-end" }}>
+              <button 
+                onClick={() => setShowSpecificUsersModal(false)}
+                style={{
+                  padding: "10px 24px", borderRadius: "99px", background: "var(--color-primary)",
+                  color: "white", border: "none", fontWeight: 800, fontSize: "0.9rem", cursor: "pointer"
+                }}
+              >
+                Done ({allowedUsers.length} Selected)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
