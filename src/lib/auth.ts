@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 
-const secretKey = "super-secret-dost-key"; // In production, move to process.env.JWT_SECRET
+const secretKey = process.env.JWT_SECRET || "super-secret-dost-key";
 const key = new TextEncoder().encode(secretKey);
 
 export async function signToken(payload: any) {
