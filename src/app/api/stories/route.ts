@@ -41,18 +41,12 @@ export async function GET(request: NextRequest) {
       // 2. Public stories can be seen by anyone
       if (story.privacy === "PUBLIC") return true;
 
-      // 3. Friends privacy: only followers/following can see
-      if (story.privacy === "FRIENDS") return true;
-
-      // 4. Close Friends privacy: check author's closeFriendIds list
-      if (story.privacy === "CLOSE_FRIENDS") {
-        const closeFriendIds: string[] = story.author.closeFriendIds 
-          ? JSON.parse(story.author.closeFriendIds) 
-          : [];
-        return closeFriendIds.includes(user.userId as string);
+      // 3. People I Follow / Friends privacy: check if viewer is followed by author
+      if (story.privacy === "FOLLOWING" || story.privacy === "FRIENDS" || story.privacy === "CLOSE_FRIENDS") {
+        return followingIds.includes(story.authorId);
       }
 
-      // 5. Specific privacy: check story's allowedUsers list
+      // 4. Specific privacy: check story's allowedUsers list
       if (story.privacy === "SPECIFIC") {
         const allowedUsers: string[] = story.allowedUsers 
           ? JSON.parse(story.allowedUsers) 

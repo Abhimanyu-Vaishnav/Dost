@@ -31,14 +31,7 @@ export async function GET(
     // Privacy filtering
     const filteredStories = activeStories.filter((story) => {
       if (story.authorId === currentUserId) return true;
-      if (story.privacy === "PUBLIC" || story.privacy === "FRIENDS") return true;
-
-      if (story.privacy === "CLOSE_FRIENDS" && currentUserId) {
-        const closeFriendIds: string[] = targetUser.closeFriendIds
-          ? JSON.parse(targetUser.closeFriendIds)
-          : [];
-        return closeFriendIds.includes(currentUserId);
-      }
+      if (story.privacy === "PUBLIC" || story.privacy === "FRIENDS" || story.privacy === "FOLLOWING") return true;
 
       if (story.privacy === "SPECIFIC" && currentUserId) {
         const allowedUsers: string[] = story.allowedUsers

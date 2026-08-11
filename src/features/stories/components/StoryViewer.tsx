@@ -231,7 +231,7 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose, onOpen
 
   const filterOverlay = localOverlays.find(o => o.type === "FILTER");
   const filterStyleVal = filterOverlay ? FILTERS.find(f => f.id === filterOverlay.content)?.value || "" : "";
-  const isCloseFriendsStory = currentStory.privacy === "CLOSE_FRIENDS";
+  const isCloseFriendsStory = currentStory.privacy === "CLOSE_FRIENDS" || currentStory.privacy === "FOLLOWING";
 
   return (
     <div style={{
@@ -285,8 +285,8 @@ export function StoryViewer({ groupedStories, initialGroupIndex, onClose, onOpen
               <span style={{ color: "white", fontWeight: 700, fontSize: "0.9rem", textShadow: "0 1px 3px rgba(0,0,0,0.8)", display: "flex", alignItems: "center", gap: "6px" }}>
                 {currentGroup.user.name}
                 {isCloseFriendsStory && (
-                  <span style={{ background: "#00c853", color: "white", padding: "1px 6px", borderRadius: "6px", fontSize: "0.65rem", fontWeight: 700 }}>
-                    Close Dost
+                  <span style={{ background: "rgba(29, 155, 240, 0.9)", color: "white", padding: "2px 8px", borderRadius: "99px", fontSize: "0.7rem", fontWeight: 800, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                    👥 Following Only
                   </span>
                 )}
               </span>
