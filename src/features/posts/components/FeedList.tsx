@@ -14,8 +14,12 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   const [posts, setPosts] = useState(initialPosts);
   const [newPostsQueue, setNewPostsQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Pull to refresh state
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const startY = useRef<number>(0);
   const topFeedRef = useRef<HTMLDivElement>(null);
 
   // Reset feed state when activeTab or initialPosts change
@@ -23,6 +27,26 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     setPosts(initialPosts);
     setNewPostsQueue([]);
   }, [initialPosts, activeTab]);
+
+  // Execute full refresh
+  const executeRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`/api/posts?tab=${activeTab}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.posts) {
+          setPosts(data.posts);
+          setNewPostsQueue([]);
+        }
+      }
+    } catch (e) {
+      console.error("Feed refresh error:", e);
+    } finally {
+      setIsRefreshing(false);
+      setPullDistance(0);
+    }
+  }, [activeTab]);
 
   // Polling function for brand-new posts
   const fetchNewPosts = useCallback(async () => {
@@ -34,14 +58,26 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
         const incoming: any[] = data.posts || [];
 
         if (incoming.length > 0) {
-          setNewPostsQueue((prev) => {
-            const existingIds = new Set([...posts.map((p) => p.id), ...prev.map((p) => p.id)]);
-            const brandNew = incoming.filter((np) => !existingIds.has(np.id));
-            if (brandNew.length > 0) {
-              return [...brandNew, ...prev];
+          const existingIds = new Set(posts.map((p) => p.id));
+          const brandNew = incoming.filter((np) => !existingIds.has(np.id));
+
+          if (brandNew.length > 0) {
+            // If user is at top of feed (< 50px scroll), auto-inject seamlessly
+            if (typeof window !== "undefined" && window.scrollY < 50) {
+              setPosts((prev) => {
+                const prevIds = new Set(prev.map((p) => p.id));
+                const fresh = brandNew.filter((p) => !prevIds.has(p.id));
+                return [...fresh, ...prev];
+              });
+            } else {
+              // Otherwise queue for "Show N Posts" floating pill
+              setNewPostsQueue((prev) => {
+                const queueIds = new Set(prev.map((p) => p.id));
+                const fresh = brandNew.filter((p) => !queueIds.has(p.id));
+                return [...fresh, ...prev];
+              });
             }
-            return prev;
-          });
+          }
         }
       }
     } catch (e) {
@@ -49,13 +85,13 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   }, [posts, activeTab]);
 
-  // Fast live polling every 10 seconds
+  // Fast live polling every 8 seconds
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 10000);
+    const interval = setInterval(fetchNewPosts, 8000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
-  // Function to reveal and prepend queued new posts (Twitter/X style)
+  // Function to reveal and prepend queued new posts
   const handleRevealNewPosts = () => {
     if (newPostsQueue.length === 0) return;
 
@@ -75,32 +111,93 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   };
 
-  // Pull / manual refresh handler
-  const handleManualRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      const res = await fetch(`/api/posts?tab=${activeTab}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.posts) {
-          setPosts(data.posts);
-          setNewPostsQueue([]);
-        }
-      }
-    } catch (e) {
-      console.error("Manual refresh error:", e);
-    } finally {
-      setIsRefreshing(false);
+  // TOUCH / PULL-TO-REFRESH LISTENERS
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (typeof window !== "undefined" && window.scrollY <= 10) {
+      startY.current = e.touches[0].clientY;
+      setIsPulling(true);
     }
   };
 
-  // Get up to 3 author avatars for stacked avatar preview on the pill button
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isPulling || (typeof window !== "undefined" && window.scrollY > 10)) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - startY.current;
+
+    if (diff > 0) {
+      // Resistance curve for natural spring pull feel
+      const distance = Math.min(100, Math.pow(diff, 0.85));
+      setPullDistance(distance);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isPulling) return;
+    setIsPulling(false);
+
+    if (pullDistance > 60) {
+      executeRefresh();
+    } else {
+      setPullDistance(0);
+    }
+  };
+
+  // Stacked avatar preview for floating pill
   const avatarStack = Array.from(
     new Set(newPostsQueue.map((p) => p.author?.avatar).filter(Boolean))
   ).slice(0, 3);
 
   return (
-    <div ref={topFeedRef} style={{ display: "flex", flexDirection: "column", position: "relative", width: "100%" }}>
+    <div
+      ref={topFeedRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{ display: "flex", flexDirection: "column", position: "relative", width: "100%" }}
+    >
+      {/* PULL-TO-REFRESH ANIMATED INDICATOR */}
+      {(pullDistance > 0 || isRefreshing) && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: `${isRefreshing ? 50 : pullDistance}px`,
+            overflow: "hidden",
+            transition: isPulling ? "none" : "height 0.3s ease",
+            background: "rgba(29, 155, 240, 0.04)",
+            borderBottom: "1px solid var(--color-border, #2f3336)"
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              color: "var(--color-primary, #1d9bf0)",
+              fontSize: "0.85rem",
+              fontWeight: 700
+            }}
+          >
+            <RefreshCw
+              size={18}
+              style={{
+                transform: `rotate(${pullDistance * 4}deg)`,
+                transition: isRefreshing ? "none" : "transform 0.1s"
+              }}
+              className={isRefreshing ? "animate-spin" : ""}
+            />
+            <span>
+              {isRefreshing
+                ? "Updating feed..."
+                : pullDistance > 60
+                ? "Release to refresh feed"
+                : "Pull down to refresh"}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Twitter/X Style Floating "Show N Posts" Banner */}
       {newPostsQueue.length > 0 && (
         <div
@@ -159,38 +256,9 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             )}
 
             <ArrowUp size={16} style={{ strokeWidth: 3 }} />
-            <span>Show {newPostsQueue.length} {newPostsQueue.length === 1 ? "post" : "posts"}</span>
-          </button>
-        </div>
-      )}
-
-      {/* Manual Refresh Bar if feed has posts */}
-      {posts.length > 0 && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            padding: "8px 16px",
-            borderBottom: "1px solid var(--color-border, #2f3336)"
-          }}
-        >
-          <button
-            onClick={handleManualRefresh}
-            disabled={isRefreshing}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--color-primary, #1d9bf0)",
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px"
-            }}
-          >
-            <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
-            {isRefreshing ? "Refreshing..." : "Refresh Feed"}
+            <span>
+              Show {newPostsQueue.length} {newPostsQueue.length === 1 ? "post" : "posts"}
+            </span>
           </button>
         </div>
       )}
