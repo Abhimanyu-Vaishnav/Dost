@@ -95,6 +95,7 @@ async function main() {
       update: {
         name: u.name,
         username: u.username,
+        password: defaultPassword,
         bio: u.bio,
         avatar: u.avatar,
         coverImage: u.cover,
