@@ -129,9 +129,11 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
     { icon: <LogOut size={20} />, label: "Logout", onClick: handleLogout, color: "#ff4d4d" },
   ];
 
+  const isMessagesPage = pathname?.startsWith("/messages");
+
   return (
     <div className={styles.layoutContainer}>
-      <aside className={styles.leftSidebar}>
+      <aside className={`${styles.leftSidebar} ${isMessagesPage ? styles.leftSidebarCollapsed : ""}`}>
         <div className={styles.topSection}>
           <div className={styles.logoContainer}>
             <div 

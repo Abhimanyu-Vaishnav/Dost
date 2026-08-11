@@ -283,6 +283,45 @@
   cursor: pointer;
 }
 
+/* Collapsed Icon-Only Sidebar Mode (Twitter/X Style for Messages & Compact views) */
+.leftSidebarCollapsed {
+  width: 80px !important;
+  min-width: 80px !important;
+  align-items: center !important;
+  padding: 12px 6px !important;
+}
+
+.leftSidebarCollapsed :global(.logoText),
+.leftSidebarCollapsed .logoText,
+.leftSidebarCollapsed .navLabel,
+.leftSidebarCollapsed .profileText,
+.leftSidebarCollapsed .moreDotsIcon,
+.leftSidebarCollapsed .postBtnFull {
+  display: none !important;
+}
+
+.leftSidebarCollapsed .postBtnCollapsed {
+  display: flex !important;
+}
+
+.leftSidebarCollapsed .navItem {
+  padding: 10px !important;
+  width: 50px !important;
+  height: 50px !important;
+  justify-content: center !important;
+}
+
+.leftSidebarCollapsed .logoContainer {
+  padding: 4px 0 !important;
+  justify-content: center !important;
+}
+
+.leftSidebarCollapsed .profilePill {
+  padding: 6px !important;
+  justify-content: center !important;
+  width: auto !important;
+}
+
 /* Responsive Overrides */
 @media (max-width: 1280px) {
   .rightSidebar {
