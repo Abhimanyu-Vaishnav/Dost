@@ -52,9 +52,12 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   const fetchNewPosts = useCallback(async () => {
     try {
       const topPostId = posts[0]?.id || "";
-      const visibleIds = posts.slice(0, 15).map((p) => p.id).join(",");
+      const excludeIds = [...posts.map((p) => p.id), ...newPostsQueue.map((p) => p.id)]
+        .slice(0, 50)
+        .join(",");
+
       const res = await fetch(
-        `/api/posts?tab=${activeTab}&since=${topPostId}&exclude=${encodeURIComponent(visibleIds)}&stream=true`
+        `/api/posts?tab=${activeTab}&since=${topPostId}&exclude=${encodeURIComponent(excludeIds)}&stream=true`
       );
 
       if (res.ok) {
@@ -62,27 +65,24 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
         const incoming: any[] = data.posts || [];
 
         if (incoming.length > 0) {
-          const existingIds = new Set(posts.map((p) => p.id));
-          const brandNew = incoming.filter((np) => !existingIds.has(np.id));
-
-          if (brandNew.length > 0) {
-            // Queue ALL incoming posts into newPostsQueue so reading is NEVER interrupted
-            setNewPostsQueue((prev) => {
-              const queueIds = new Set(prev.map((p) => p.id));
-              const fresh = brandNew.filter((p) => !queueIds.has(p.id));
-              return [...fresh, ...prev];
-            });
-          }
+          setNewPostsQueue((prev) => {
+            const existingIds = new Set([...posts.map((p) => p.id), ...prev.map((p) => p.id)]);
+            const brandNew = incoming.filter((np) => !existingIds.has(np.id));
+            if (brandNew.length > 0) {
+              return [...prev, ...brandNew];
+            }
+            return prev;
+          });
         }
       }
     } catch (e) {
       console.error("Live feed polling error:", e);
     }
-  }, [posts, activeTab]);
+  }, [posts, newPostsQueue, activeTab]);
 
-  // Live polling every 5 seconds
+  // Ultra-fast live accumulator polling every 4 seconds
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 5000);
+    const interval = setInterval(fetchNewPosts, 4000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 

@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
             }
           }
         },
-        take: 5
+        take: 12
       });
 
       if (streamPosts.length > 0) {
