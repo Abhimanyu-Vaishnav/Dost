@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { FollowButton } from "./FollowButton";
 import { EditProfileModal } from "./EditProfileModal";
-import { Edit2, MoreHorizontal, EyeOff, Ban, VolumeX, Calendar, MapPin, Link as LinkIcon, MessageSquare } from "lucide-react";
+import { Edit2, MoreHorizontal, EyeOff, Ban, VolumeX, Calendar, MapPin, Link as LinkIcon, MessageSquare, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface ProfileHeaderProps {
@@ -63,6 +64,7 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
   };
 
   const categoryBadge = getCategoryBadgeLabel(user.accountType, user.accountSubType);
+  const isVerified = user.isVerified || user.accountType === "PREMIUM" || user.accountType === "VERIFIED";
 
   return (
     <div style={{ marginBottom: "var(--space-6)" }}>
@@ -168,9 +170,21 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
 
         {/* User Info Section */}
         <div style={{ marginBottom: "20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
+          {/* Display Name Row: Verified Blue Tick Badge sits right next to Name */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "2px" }}>
             <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>{user.name}</h1>
-            {categoryBadge && (
+            {isVerified && (
+              <CheckCircle2 size={18} style={{ color: "var(--color-primary, #1d9bf0)", fill: "var(--color-primary, #1d9bf0)", stroke: "var(--color-bg-base)" }} />
+            )}
+          </div>
+          
+          <p className="text-muted" style={{ fontSize: "0.95rem", margin: "0 0 6px" }}>
+            @{user.username || user.name?.toLowerCase().replace(/\s+/g, '')}
+          </p>
+
+          {/* Account Category Badge: Positioned strictly BELOW username as requested */}
+          {categoryBadge && (
+            <div style={{ marginBottom: "12px" }}>
               <span style={{
                 padding: "4px 12px",
                 borderRadius: "99px",
@@ -185,9 +199,8 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
               }}>
                 {categoryBadge}
               </span>
-            )}
-          </div>
-          <p className="text-muted" style={{ fontSize: "1rem", marginBottom: "16px" }}>@{user.username || user.name?.toLowerCase().replace(/\s+/g, '')}</p>
+            </div>
+          )}
           
           <div style={{ fontSize: "1.05rem", color: "var(--color-text-main)", marginBottom: "16px", whiteSpace: "pre-wrap" }}>
             {user.bio || "No bio yet"}
@@ -201,16 +214,16 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
           </div>
         </div>
 
-        {/* Stats Section */}
+        {/* Stats Section: Clickable Following & Followers */}
         <div style={{ display: "flex", gap: "24px", paddingBottom: "16px", borderBottom: "1px solid var(--color-border)" }}>
-          <div style={{ cursor: "pointer" }} className="hover-underline">
+          <Link href={`/profile/${user.id}/follow?tab=following`} style={{ textDecoration: "none" }} className="hover-underline">
             <span style={{ fontWeight: 800, color: "var(--color-text-main)", fontSize: "1.1rem" }}>{user._count?.following || 0}</span>
             <span className="text-muted" style={{ marginLeft: "4px" }}>Following</span>
-          </div>
-          <div style={{ cursor: "pointer" }} className="hover-underline">
+          </Link>
+          <Link href={`/profile/${user.id}/follow?tab=followers`} style={{ textDecoration: "none" }} className="hover-underline">
             <span style={{ fontWeight: 800, color: "var(--color-text-main)", fontSize: "1.1rem" }}>{user._count?.followers || 0}</span>
             <span className="text-muted" style={{ marginLeft: "4px" }}>Followers</span>
-          </div>
+          </Link>
         </div>
       </div>
 

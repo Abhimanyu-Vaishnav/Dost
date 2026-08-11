@@ -2,13 +2,13 @@ import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { PostCard } from "@/features/posts/components/PostCard";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SearchBar } from "@/features/search/components/SearchBar";
 import { FollowSuggestions } from "@/features/users/components/FollowSuggestions";
 import { ProfileHeader } from "@/features/users/components/ProfileHeader";
 import { TrendingSection } from "@/features/search/components/TrendingSection";
 import { PageHeader } from "@/components/common/PageHeader";
+import { ProfileTabs } from "@/features/users/components/ProfileTabs";
 
 export default async function UniversalProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const cookieStore = await cookies();
@@ -24,7 +24,6 @@ export default async function UniversalProfilePage({ params }: { params: Promise
     redirect("/login");
   }
 
-  // Check if current user still exists in DB (to prevent stale session errors after re-seed)
   const currentDbUser = await prisma.user.findUnique({
     where: { id: currentUser.userId as string }
   });
@@ -67,7 +66,36 @@ export default async function UniversalProfilePage({ params }: { params: Promise
   const isBlockedByMe = dbUser.blockedBy.length > 0;
   const hasBlockedMe = dbUser.blockedUsers.length > 0;
   const isFollowing = dbUser.followers.length > 0;
+  const isOwnProfile = currentUser.userId === profileUserId;
 
+  const postInclude = {
+    author: {
+      select: { id: true, name: true, avatar: true, username: true },
+    },
+    parent: {
+      include: {
+        author: { select: { id: true, name: true, avatar: true, username: true } }
+      }
+    },
+    likes: true,
+    bookmarkedBy: {
+      where: { userId: currentUser.userId as string }
+    },
+    comments: {
+      include: { 
+        user: { select: { id: true, name: true, avatar: true } },
+        likes: true
+      },
+      orderBy: { createdAt: "asc" }
+    },
+    repost: {
+      include: {
+        author: { select: { id: true, name: true, avatar: true, username: true } }
+      }
+    }
+  };
+
+  // Fetch Original Posts
   const posts = (isBlockedByMe || hasBlockedMe) ? [] : await prisma.post.findMany({
     where: { 
       authorId: profileUserId,
@@ -78,33 +106,48 @@ export default async function UniversalProfilePage({ params }: { params: Promise
       ]
     },
     orderBy: { createdAt: "desc" },
+    include: postInclude as any,
+    take: 40
+  });
+
+  // Fetch Replies / Comments by User
+  const replies = (isBlockedByMe || hasBlockedMe) ? [] : await prisma.post.findMany({
+    where: {
+      authorId: profileUserId,
+      parentId: { not: null }
+    },
+    orderBy: { createdAt: "desc" },
+    include: postInclude as any,
+    take: 30
+  });
+
+  // Fetch Media Posts (Image / Video)
+  const mediaPosts = (isBlockedByMe || hasBlockedMe) ? [] : await prisma.post.findMany({
+    where: {
+      authorId: profileUserId,
+      OR: [
+        { imageUrl: { not: null } },
+        { videoUrl: { not: null } }
+      ]
+    },
+    orderBy: { createdAt: "desc" },
+    include: postInclude as any,
+    take: 30
+  });
+
+  // Fetch Liked Posts by User
+  const likedRecords = (isBlockedByMe || hasBlockedMe) ? [] : await prisma.like.findMany({
+    where: { userId: profileUserId },
     include: {
-      author: {
-        select: { id: true, name: true, avatar: true, username: true },
-      },
-      parent: {
-        include: {
-          author: { select: { id: true, name: true, avatar: true, username: true } }
-        }
-      },
-      likes: true,
-      bookmarkedBy: {
-        where: { userId: currentUser.userId as string }
-      },
-      comments: {
-        include: { 
-          user: { select: { id: true, name: true, avatar: true } },
-          likes: true
-        },
-        orderBy: { createdAt: "asc" }
-      },
-      repost: {
-        include: {
-          author: { select: { id: true, name: true, avatar: true } }
-        }
+      post: {
+        include: postInclude as any
       }
     },
+    orderBy: { createdAt: "desc" },
+    take: 30
   });
+
+  const likedPosts = likedRecords.map(r => r.post).filter(Boolean);
 
   const RightSidebar = (
     <>
@@ -113,8 +156,6 @@ export default async function UniversalProfilePage({ params }: { params: Promise
       <FollowSuggestions />
     </>
   );
-
-  const isOwnProfile = currentUser.userId === profileUserId;
 
   return (
     <AppLayout rightSidebar={RightSidebar}>
@@ -125,30 +166,16 @@ export default async function UniversalProfilePage({ params }: { params: Promise
         initialIsFollowing={isFollowing} 
       />
 
-      <h2 className="text-h3" style={{ marginBottom: "var(--space-4)", paddingLeft: "var(--space-2)" }}>
-        {isOwnProfile ? "Your Posts" : "Posts"}
-      </h2>
-      
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        {isBlockedByMe ? (
-          <div className="glass" style={{ padding: "var(--space-8)", borderRadius: "var(--radius-lg)", textAlign: "center", border: "1px solid #ff4d4d" }}>
-            <p style={{ color: "#ff4d4d", fontWeight: 700, fontSize: "1.2rem" }}>You have blocked this user.</p>
-            <p className="text-muted">Unblock them to see their posts.</p>
-          </div>
-        ) : hasBlockedMe ? (
-          <div className="glass" style={{ padding: "var(--space-8)", borderRadius: "var(--radius-lg)", textAlign: "center" }}>
-            <p className="text-muted">This user has restricted access to their profile.</p>
-          </div>
-        ) : posts.length === 0 ? (
-          <div className="glass" style={{ padding: "var(--space-6)", borderRadius: "var(--radius-lg)", textAlign: "center" }}>
-            <p className="text-muted">No posts found.</p>
-          </div>
-        ) : (
-          posts.map((post) => (
-            <PostCard key={post.id} post={post as any} currentUserId={currentUser.userId as string} />
-          ))
-        )}
-      </div>
+      <ProfileTabs
+        posts={posts}
+        replies={replies}
+        mediaPosts={mediaPosts}
+        likedPosts={likedPosts}
+        currentUserId={currentUser.userId as string}
+        isOwnProfile={isOwnProfile}
+        isBlockedByMe={isBlockedByMe}
+        hasBlockedMe={hasBlockedMe}
+      />
     </AppLayout>
   );
 }
