@@ -60,6 +60,20 @@ export function TrendingSection() {
           ))}
         </div>
       )}
+
+      {/* Twitter/X Style Footer Links */}
+      <div style={{ 
+        display: "flex", flexWrap: "wrap", gap: "8px 12px", 
+        fontSize: "0.75rem", color: "var(--color-text-muted)", 
+        marginTop: "8px", padding: "0 4px", lineHeight: 1.4
+      }}>
+        <Link href="/terms" style={{ color: "var(--color-text-muted)", textDecoration: "none" }} className="hover:underline">Terms of Service</Link>
+        <Link href="/privacy" style={{ color: "var(--color-text-muted)", textDecoration: "none" }} className="hover:underline">Privacy Policy</Link>
+        <Link href="/about" style={{ color: "var(--color-text-muted)", textDecoration: "none" }} className="hover:underline">About DOST</Link>
+        <Link href="/help" style={{ color: "var(--color-text-muted)", textDecoration: "none" }} className="hover:underline">Help Center</Link>
+        <Link href="/sitemap.xml" target="_blank" style={{ color: "var(--color-text-muted)", textDecoration: "none" }} className="hover:underline">Sitemap</Link>
+        <span>&copy; 2026 DOST, Inc.</span>
+      </div>
     </div>
   );
 }
