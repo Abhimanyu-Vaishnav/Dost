@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
     const tab = searchParams.get("tab") || "for-you";
     const hashtag = searchParams.get("hashtag");
     const since = searchParams.get("since");
+    const excludeRaw = searchParams.get("exclude") || "";
+    const excludeIds = excludeRaw ? excludeRaw.split(",").filter(Boolean) : [];
 
     let where: any = {
       hiddenBy: { none: { userId: user.userId as string } },
@@ -81,17 +83,20 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      take: 50
+      take: 50,
     });
 
-    // If since query returned 0 new posts, and stream mode is enabled, fetch active posts from other creators
-    if (since && posts.length === 0 && searchParams.get("stream") === "true") {
-      const fallbackWhere = { ...where };
-      delete fallbackWhere.createdAt;
-      fallbackWhere.id = { not: since };
+    // If stream mode is enabled, fetch un-displayed posts excluding currently visible IDs
+    if (searchParams.get("stream") === "true" && (posts.length === 0 || excludeIds.length > 0)) {
+      const streamWhere = { ...where };
+      delete streamWhere.createdAt;
 
-      posts = await (prisma.post as any).findMany({
-        where: fallbackWhere,
+      if (excludeIds.length > 0) {
+        streamWhere.id = { notIn: excludeIds };
+      }
+
+      const streamPosts = await (prisma.post as any).findMany({
+        where: streamWhere,
         orderBy: { views: "desc" },
         include: {
           author: {
@@ -128,8 +133,14 @@ export async function GET(request: NextRequest) {
             }
           }
         },
-        take: 4
+        take: 5
       });
+
+      if (streamPosts.length > 0) {
+        const existingIds = new Set(posts.map((p: any) => p.id));
+        const newStreamOnly = streamPosts.filter((sp: any) => !existingIds.has(sp.id));
+        posts = [...newStreamOnly, ...posts];
+      }
     }
 
     // Smart Feed (For You) Algorithmic Ranking: Score = (likes * 3 + replies * 5 + views) / hours_old
@@ -140,7 +151,7 @@ export async function GET(request: NextRequest) {
         const ageHoursB = Math.max(0.5, (now - new Date(b.createdAt).getTime()) / (1000 * 60 * 60));
 
         const scoreA = ((a._count.likes * 3) + ((a._count.replies || a._count.comments) * 5) + (a.views || 0)) / Math.pow(ageHoursA, 1.2);
-        const scoreB = ((b._count.likes * 3) + ((b._count.replies || b._count.comments) * 5) + (b.views || 0)) / Math.pow(ageHoursB, 1.2);
+        const scoreB = ((b._count.likes * 3) + ((b._count.replies || b._count.comments) * 5) + (a.views || 0)) / Math.pow(ageHoursB, 1.2);
 
         return scoreB - scoreA;
       });
@@ -279,7 +290,6 @@ export async function POST(request: NextRequest) {
       });
     } catch (createErr) {
       console.error("Primary create error, falling back to minimal payload:", createErr);
-      // Fallback without extended optional fields
       delete createData.location;
       delete createData.gifUrl;
       delete createData.isCodeBlock;
@@ -301,43 +311,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Send notification if it's a reply to someone else's post
-    if (parentId) {
-      const parentPost = await prisma.post.findUnique({
-        where: { id: parentId },
-        select: { authorId: true }
-      });
-      if (parentPost && parentPost.authorId !== user.userId) {
-        await prisma.notification.create({
-          data: {
-            type: "REPLY",
-            userId: parentPost.authorId,
-            actorId: user.userId as string,
-            postId: post.id
-          }
-        });
-      }
-    }
-
-    // Send notification if quote posting someone else's post
-    if (quotePostId) {
-      const quoted = await prisma.post.findUnique({
-        where: { id: quotePostId },
-        select: { authorId: true }
-      });
-      if (quoted && quoted.authorId !== user.userId) {
-        await prisma.notification.create({
-          data: {
-            type: "REPOST",
-            userId: quoted.authorId,
-            actorId: user.userId as string,
-            postId: post.id
-          }
-        });
-      }
-    }
-
-    // Process hashtags asynchronously
     if (content) {
       await processPostHashtags(content);
     }
