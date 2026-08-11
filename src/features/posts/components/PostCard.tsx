@@ -426,11 +426,21 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
     }
   };
 
+  const [repostCount, setRepostCount] = useState(post._count?.reposts ?? 0);
+  const [isReposted, setIsReposted] = useState(Boolean(post.repost || (post.reposts && post.reposts.length > 0)));
+
   const handleRepost = async () => {
     try {
       const res = await fetch(`/api/posts/${post.id}/repost`, { method: "POST" });
       if (res.ok) {
-        alert("Reposted!");
+        const data = await res.json();
+        if (data.action === "removed") {
+          setIsReposted(false);
+          setRepostCount(prev => Math.max(0, prev - 1));
+        } else if (data.action === "created") {
+          setIsReposted(true);
+          setRepostCount(prev => prev + 1);
+        }
         setShowRepostMenu(false);
         router.refresh();
       }
@@ -449,9 +459,9 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
         body: JSON.stringify({ content: quoteText })
       });
       if (res.ok) {
-        alert("Quote posted!");
         setShowQuoteInput(false);
         setQuoteText("");
+        setRepostCount(prev => prev + 1);
         setShowRepostMenu(false);
         router.refresh();
       }
@@ -865,11 +875,12 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
         {/* Repost */}
         <div style={{ position: "relative" }}>
           <button 
-            className={`${styles.actionBtn} ${styles.repostBtn} ${post.repost ? styles.activeRepost : ""}`} 
+            className={`${styles.actionBtn} ${styles.repostBtn} ${isReposted ? styles.activeRepost : ""}`} 
             onClick={() => setShowRepostMenu(!showRepostMenu)}
             title="Repost"
           >
-            <Repeat size={18} color={post.repost ? "#00ba7c" : "currentColor"} />
+            <Repeat size={18} color={isReposted ? "#00ba7c" : "currentColor"} />
+            {repostCount > 0 && <span style={{ fontSize: "0.8rem", fontWeight: 600, color: isReposted ? "#00ba7c" : "inherit" }}>{repostCount}</span>}
           </button>
           
           {showRepostMenu && (
@@ -881,17 +892,17 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
             }}>
               <button 
                 onClick={() => { handleRepost(); }}
-                style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "var(--color-text-main)", cursor: "pointer", padding: "8px 12px", borderRadius: "8px", textAlign: "left", fontSize: "0.85rem", fontWeight: 600 }}
+                style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: isReposted ? "#00ba7c" : "var(--color-text-main)", cursor: "pointer", padding: "8px 12px", borderRadius: "8px", textAlign: "left", fontSize: "0.85rem", fontWeight: 600 }}
                 className="hover-bg"
               >
-                <Repeat size={16} style={{ color: "#00ba7c" }} /> Repost
+                <Repeat size={16} style={{ color: "#00ba7c" }} /> {isReposted ? "Undo Repost" : "Repost"}
               </button>
               <button 
                 onClick={() => { setShowQuoteInput(true); setShowRepostMenu(false); }}
                 style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "var(--color-text-main)", cursor: "pointer", padding: "8px 12px", borderRadius: "8px", textAlign: "left", fontSize: "0.85rem", fontWeight: 600 }}
                 className="hover-bg"
               >
-                <Edit2 size={16} style={{ color: "var(--color-primary)" }} /> Quote
+                <Edit2 size={16} style={{ color: "var(--color-primary)" }} /> Quote Post
               </button>
             </div>
           )}

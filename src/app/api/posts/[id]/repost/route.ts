@@ -22,35 +22,106 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    let content = "";
+    let body: any = {};
     try {
-      const body = await req.json();
-      if (body.content) content = body.content;
+      body = await req.json();
     } catch (e) {
-      // Ignore JSON parse error if body is empty
+      body = {};
     }
 
-    const repost = await prisma.post.create({
+    const hasQuoteContent = Boolean(
+      (body.content && body.content.trim().length > 0) || 
+      body.imageUrl || 
+      body.videoUrl || 
+      body.gifUrl
+    );
+
+    // 1. SIMPLE REPOST (No commentary content) - Single Toggle Repost Rule
+    if (!hasQuoteContent) {
+      const existingRepost = await prisma.post.findFirst({
+        where: {
+          authorId: userId,
+          repostId: postId,
+          content: "",
+          imageUrl: null,
+          videoUrl: null
+        }
+      });
+
+      // If user has already reposted this post, TOGGLE OFF (Undo Repost)
+      if (existingRepost) {
+        await prisma.post.delete({
+          where: { id: existingRepost.id }
+        });
+
+        return NextResponse.json({
+          message: "Undo Repost",
+          reposted: false,
+          action: "removed"
+        }, { status: 200 });
+      }
+
+      // Create new Simple Repost (Max 1 per user)
+      const repost = await prisma.post.create({
+        data: {
+          content: "",
+          authorId: userId,
+          repostId: postId,
+        },
+      });
+
+      // Send Notification to Original Author
+      if (originalPost.authorId !== userId) {
+        await prisma.notification.create({
+          data: {
+            type: "REPOST",
+            userId: originalPost.authorId,
+            actorId: userId,
+            postId: repost.id
+          }
+        }).catch(() => {});
+      }
+
+      return NextResponse.json({
+        message: "Post reposted",
+        reposted: true,
+        action: "created",
+        repost
+      }, { status: 201 });
+    }
+
+    // 2. QUOTE POST (With commentary content) - Unlimited Quote Posts Rule
+    const quotePost = await prisma.post.create({
       data: {
-        content: content,
+        content: body.content.trim(),
+        imageUrl: body.imageUrl || null,
+        videoUrl: body.videoUrl || null,
+        gifUrl: body.gifUrl || null,
         authorId: userId,
+        quotePostId: postId,
         repostId: postId,
       },
     });
 
-    // Create notification
+    // Send Notification to Original Author for Quote
     if (originalPost.authorId !== userId) {
       await prisma.notification.create({
         data: {
-          type: content ? "QUOTE" : "REPOST",
+          type: "QUOTE",
           userId: originalPost.authorId,
           actorId: userId,
-          postId: repost.id // Link to the NEW post (the quote/repost itself)
+          postId: quotePost.id
         }
-      });
+      }).catch(() => {});
     }
 
-    return NextResponse.json({ message: "Post reposted", repost }, { status: 201 });
+    return NextResponse.json({
+      message: "Quote post created",
+      reposted: true,
+      action: "quote_created",
+      repost: quotePost
+    }, { status: 201 });
+
   } catch (error) {
     console.error("Repost error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
