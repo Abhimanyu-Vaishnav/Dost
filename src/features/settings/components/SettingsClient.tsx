@@ -162,6 +162,37 @@ export function SettingsClient({
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [loginAlerts, setLoginAlerts] = useState(true);
   const [sessions, setSessions] = useState<Array<{ id: string; device: string; location: string; isCurrent: boolean; icon: "desktop" | "mobile" }>>([]);
+  const [sessionToRevoke, setSessionToRevoke] = useState<{ id: string; device: string; action: "revoke" | "block" } | null>(null);
+  const [securityPassword, setSecurityPassword] = useState("");
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+
+  const handleConfirmRevokeSession = async () => {
+    if (!sessionToRevoke || !securityPassword) return;
+    setIsVerifyingPassword(true);
+    try {
+      const res = await fetch("/api/users/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: sessionToRevoke.id,
+          action: sessionToRevoke.action,
+          password: securityPassword
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Password verification failed");
+
+      setSessions(prev => prev.filter(s => s.id !== sessionToRevoke.id));
+      showToast(data.message || "Session updated successfully!");
+      setSessionToRevoke(null);
+      setSecurityPassword("");
+    } catch (err: any) {
+      showToast(err.message || "Password verification failed", "error");
+    } finally {
+      setIsVerifyingPassword(false);
+    }
+  };
 
   // Content & Storage State
   const [autoplayVideos, setAutoplayVideos] = useState(true);
@@ -1385,17 +1416,83 @@ export function SettingsClient({
                         Current Session
                       </span>
                     ) : (
-                      <button
-                        className={styles.btnDanger}
-                        style={{ padding: "6px 12px", fontSize: "0.8rem" }}
-                        onClick={() => handleRevokeSession(s.id)}
-                      >
-                        Revoke
-                      </button>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button
+                          className={styles.btnDanger}
+                          style={{ padding: "6px 12px", fontSize: "0.8rem" }}
+                          onClick={() => setSessionToRevoke({ id: s.id, device: s.device, action: "revoke" })}
+                        >
+                          Revoke
+                        </button>
+                        <button
+                          className={styles.btnDanger}
+                          style={{ padding: "6px 12px", fontSize: "0.8rem", background: "#ef4444" }}
+                          onClick={() => setSessionToRevoke({ id: s.id, device: s.device, action: "block" })}
+                        >
+                          Block
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
               </div>
+
+              {/* Password Authorization Modal for Session Revoke/Block */}
+              {sessionToRevoke && (
+                <div style={{
+                  position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                  backgroundColor: "rgba(0,0,0,0.8)", backdropFilter: "blur(12px)",
+                  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2100, padding: "16px"
+                }}>
+                  <div className="animate-scale-in" style={{
+                    background: "var(--color-bg-surface)", border: "1px solid var(--color-border)",
+                    borderRadius: "24px", padding: "24px", width: "100%", maxWidth: "440px",
+                    display: "flex", flexDirection: "column", gap: "16px", boxShadow: "0 20px 50px rgba(0,0,0,0.6)"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>
+                        🔒 Password Verification Required
+                      </h3>
+                      <button onClick={() => { setSessionToRevoke(null); setSecurityPassword(""); }} style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer" }}>
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <p style={{ fontSize: "0.9rem", color: "var(--color-text-muted)", margin: 0 }}>
+                      Enter your account password to confirm {sessionToRevoke.action === "block" ? "blocking" : "logging out"} <strong>{sessionToRevoke.device}</strong>.
+                    </p>
+
+                    <input
+                      type="password"
+                      value={securityPassword}
+                      onChange={e => setSecurityPassword(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") handleConfirmRevokeSession(); }}
+                      placeholder="Enter security password"
+                      autoFocus
+                      style={{
+                        width: "100%", padding: "14px 16px", borderRadius: "14px", border: "1px solid var(--color-border)",
+                        background: "var(--color-bg-base)", color: "var(--color-text-main)", fontSize: "0.95rem", outline: "none"
+                      }}
+                    />
+
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
+                      <button
+                        onClick={() => { setSessionToRevoke(null); setSecurityPassword(""); }}
+                        style={{ padding: "10px 18px", borderRadius: "99px", background: "transparent", border: "1px solid var(--color-border)", color: "var(--color-text-main)", fontWeight: 700, cursor: "pointer" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleConfirmRevokeSession}
+                        disabled={!securityPassword || isVerifyingPassword}
+                        style={{ padding: "10px 20px", borderRadius: "99px", background: "#ef4444", color: "#ffffff", border: "none", fontWeight: 800, cursor: "pointer", opacity: (!securityPassword || isVerifyingPassword) ? 0.6 : 1 }}
+                      >
+                        {isVerifyingPassword ? "Verifying..." : `Confirm ${sessionToRevoke.action === "block" ? "Block" : "Revoke"}`}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 

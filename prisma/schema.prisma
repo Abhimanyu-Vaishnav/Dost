@@ -49,6 +49,8 @@ model User {
   communities    CommunityMember[]
   communityPosts CommunityPost[]
 
+  sessions       UserSession[]
+
   mutedUsers   Mute[] @relation("mutedBy")
   mutedBy      Mute[] @relation("mutedUser")
   
@@ -375,4 +377,20 @@ model StoryHighlight {
   updatedAt  DateTime @updatedAt
 
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSession {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device      String
+  browser     String
+  ipAddress   String?
+  userAgent   String?
+  isCurrent   Boolean  @default(false)
+  isBlocked   Boolean  @default(false)
+  lastActive  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
 }
