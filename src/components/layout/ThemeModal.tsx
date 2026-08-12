@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useRef } from "react";
 import { useTheme, FontSize, Theme, FontFamily } from "@/context/ThemeContext";
-import { X, Check, Type, Palette, Sparkles } from "lucide-react";
+import { X, Check, Type, Palette, Sparkles, Pipette } from "lucide-react";
 
 export function ThemeModal({ onClose }: { onClose: () => void }) {
+  const colorInputRef = useRef<HTMLInputElement>(null);
   const { 
     theme, setTheme, 
     accentColor, setAccentColor, 
@@ -27,13 +28,19 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
     { hex: "#7856ff", name: "Purple" },
     { hex: "#ff7a00", name: "Orange" },
     { hex: "#00ba7c", name: "Green" },
+    { hex: "#00c6ff", name: "Cyan" },
+    { hex: "#ef4444", name: "Red" },
   ];
 
-  const fontFamilies: { id: FontFamily; name: string }[] = [
-    { id: "default", name: "Default System" },
-    { id: "inter", name: "Inter" },
-    { id: "roboto", name: "Roboto" },
-    { id: "monospace", name: "Monospace Code" },
+  const fontFamilies: { id: FontFamily; name: string; sample: string; fontFamily: string }[] = [
+    { id: "default", name: "Default System", sample: "Geist Sans", fontFamily: "var(--font-geist-sans), sans-serif" },
+    { id: "inter", name: "Inter", sample: "Clean Modern", fontFamily: '"Inter", sans-serif' },
+    { id: "roboto", name: "Roboto", sample: "Standard Sans", fontFamily: '"Roboto", sans-serif' },
+    { id: "outfit", name: "Outfit", sample: "Sleek Geometric", fontFamily: '"Outfit", sans-serif' },
+    { id: "serif", name: "Serif Elegant", sample: "Classic Serif", fontFamily: '"Georgia", serif' },
+    { id: "monospace", name: "Monospace Code", sample: "Developer Mono", fontFamily: '"Fira Code", monospace' },
+    { id: "cursive", name: "Cursive Script", sample: "Handwriting", fontFamily: '"Caveat", cursive' },
+    { id: "system", name: "System Native", sample: "Native UI", fontFamily: "system-ui, sans-serif" },
   ];
 
   const themes: { id: Theme; label: string; previewBg: string; textCol: string }[] = [
@@ -41,6 +48,8 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
     { id: "dim", label: "Dim Dark", previewBg: "#15202b", textCol: "#f7f9f9" },
     { id: "light", label: "Default Light", previewBg: "#ffffff", textCol: "#0f1419" },
   ];
+
+  const isCustomColor = !accentColors.some(c => c.hex.toLowerCase() === accentColor.toLowerCase());
 
   return (
     <div 
@@ -55,7 +64,7 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
         className="animate-scale-in"
         style={{
           background: "var(--color-bg-surface)", border: "1px solid var(--color-border)",
-          borderRadius: "24px", padding: "20px", width: "100%", maxWidth: "480px",
+          borderRadius: "24px", padding: "20px", width: "100%", maxWidth: "500px",
           maxHeight: "90vh", overflowY: "auto",
           display: "flex", flexDirection: "column", gap: "20px", boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
           boxSizing: "border-box"
@@ -108,44 +117,102 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* Accent Color Swatches */}
+        {/* Accent Color Swatches & Custom Color Palette Picker */}
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
-            <Palette size={18} style={{ color: "var(--color-primary)" }} />
-            <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--color-text-main)", margin: 0 }}>Accent Color</h3>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Palette size={18} style={{ color: "var(--color-primary)" }} />
+              <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--color-text-main)", margin: 0 }}>Accent Color</h3>
+            </div>
+            <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)", fontWeight: 600 }}>{accentColor}</span>
           </div>
+          
           <div style={{
             background: "var(--color-bg-base)", border: "1px solid var(--color-border)",
-            borderRadius: "16px", padding: "14px", display: "flex", alignItems: "center", justifyContent: "space-around", flexWrap: "wrap", gap: "10px"
+            borderRadius: "16px", padding: "14px", display: "flex", flexDirection: "column", gap: "12px"
           }}>
-            {accentColors.map((color) => {
-              const isSelected = accentColor.toLowerCase() === color.hex.toLowerCase();
-              return (
-                <button
-                  key={color.hex}
-                  onClick={() => setAccentColor(color.hex)}
-                  title={color.name}
-                  style={{
-                    width: "40px", height: "40px", borderRadius: "50%",
-                    backgroundColor: color.hex, border: "none", cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    color: "#ffffff", boxShadow: isSelected ? `0 0 16px ${color.hex}` : "none",
-                    transform: isSelected ? "scale(1.15)" : "scale(1)",
-                    transition: "all 0.15s ease"
+            {/* Preset Color Swatches */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around", flexWrap: "wrap", gap: "8px" }}>
+              {accentColors.map((color) => {
+                const isSelected = accentColor.toLowerCase() === color.hex.toLowerCase();
+                return (
+                  <button
+                    key={color.hex}
+                    onClick={() => setAccentColor(color.hex)}
+                    title={color.name}
+                    style={{
+                      width: "36px", height: "36px", borderRadius: "50%",
+                      backgroundColor: color.hex, border: "none", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "#ffffff", boxShadow: isSelected ? `0 0 14px ${color.hex}` : "none",
+                      transform: isSelected ? "scale(1.15)" : "scale(1)",
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    {isSelected && <Check size={18} strokeWidth={3} />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Color Palette Picker Section */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 12px", borderRadius: "12px", background: "rgba(255, 255, 255, 0.03)",
+              border: isCustomColor ? "2px solid var(--color-primary)" : "1px solid var(--color-border)",
+              marginTop: "4px"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{
+                  width: "28px", height: "28px", borderRadius: "50%",
+                  background: isCustomColor ? accentColor : "linear-gradient(135deg, #ff0000, #00ff00, #0000ff)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.3)"
+                }}>
+                  <Pipette size={14} color="#ffffff" />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-main)" }}>Custom Palette</span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--color-text-muted)" }}>Pick any color from wheel</span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <input 
+                  type="text" 
+                  value={accentColor} 
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val.startsWith("#") && val.length <= 7) {
+                      setAccentColor(val);
+                    }
                   }}
-                >
-                  {isSelected && <Check size={20} strokeWidth={3} />}
-                </button>
-              );
-            })}
+                  style={{
+                    width: "70px", padding: "4px 8px", borderRadius: "8px",
+                    border: "1px solid var(--color-border)", background: "var(--color-bg-surface)",
+                    color: "var(--color-text-main)", fontSize: "0.8rem", fontWeight: 700, textAlign: "center"
+                  }}
+                />
+                <input 
+                  ref={colorInputRef}
+                  type="color" 
+                  value={accentColor}
+                  onChange={(e) => setAccentColor(e.target.value)}
+                  style={{
+                    width: "32px", height: "32px", borderRadius: "8px", border: "none",
+                    background: "none", cursor: "pointer", padding: 0
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Font Family Selection */}
+        {/* Font Family Selection (8 Diverse Font Options) */}
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
             <Sparkles size={18} style={{ color: "var(--color-primary)" }} />
-            <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--color-text-main)", margin: 0 }}>Font Style</h3>
+            <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--color-text-main)", margin: 0 }}>Font Family</h3>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
             {fontFamilies.map((font) => {
@@ -159,12 +226,17 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
                     background: isSelected ? "rgba(29, 155, 240, 0.12)" : "var(--color-bg-base)",
                     border: isSelected ? "2px solid var(--color-primary)" : "1px solid var(--color-border)",
                     color: "var(--color-text-main)", fontWeight: 700, fontSize: "0.85rem",
-                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
+                    cursor: "pointer", display: "flex", flexDirection: "column", gap: "2px", alignItems: "flex-start",
                     transition: "all 0.15s ease"
                   }}
                 >
-                  <span>{font.name}</span>
-                  {isSelected && <Check size={16} style={{ color: "var(--color-primary)" }} />}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                    <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>{font.name}</span>
+                    {isSelected && <Check size={16} style={{ color: "var(--color-primary)" }} />}
+                  </div>
+                  <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", fontFamily: font.fontFamily, fontStyle: font.id === "cursive" ? "italic" : "normal" }}>
+                    {font.sample}
+                  </span>
                 </button>
               );
             })}

@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 
 export type Theme = "dark" | "dim" | "light" | "midnight" | "system";
 export type FontSize = "xs" | "sm" | "md" | "lg" | "xl";
-export type FontFamily = "default" | "inter" | "roboto" | "monospace";
+export type FontFamily = "default" | "inter" | "roboto" | "outfit" | "serif" | "monospace" | "cursive" | "system";
 
 interface ThemeContextType {
   theme: Theme;
@@ -58,7 +58,11 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     let fontVal = 'var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
     if (font === "inter") fontVal = '"Inter", -apple-system, BlinkMacSystemFont, sans-serif';
     if (font === "roboto") fontVal = '"Roboto", -apple-system, BlinkMacSystemFont, sans-serif';
+    if (font === "outfit") fontVal = '"Outfit", "Trebuchet MS", sans-serif';
+    if (font === "serif") fontVal = '"Georgia", "Playfair Display", "Times New Roman", serif';
     if (font === "monospace") fontVal = '"Fira Code", "Courier New", monospace';
+    if (font === "cursive") fontVal = '"Caveat", "Brush Script MT", cursive';
+    if (font === "system") fontVal = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     document.documentElement.style.setProperty("--font-active-family", fontVal);
     document.body.style.fontFamily = fontVal;
   };
