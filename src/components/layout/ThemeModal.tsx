@@ -1,18 +1,39 @@
 "use client";
 
 import React from "react";
-import { useTheme, FontSize, Theme } from "@/context/ThemeContext";
-import { X, Check, Type } from "lucide-react";
+import { useTheme, FontSize, Theme, FontFamily } from "@/context/ThemeContext";
+import { X, Check, Type, Palette, Sparkles } from "lucide-react";
 
 export function ThemeModal({ onClose }: { onClose: () => void }) {
-  const { theme, setTheme, fontSize, setFontSize } = useTheme();
+  const { 
+    theme, setTheme, 
+    accentColor, setAccentColor, 
+    fontSize, setFontSize,
+    fontFamily, setFontFamily 
+  } = useTheme();
 
-  const fontSizes: { id: FontSize; label: string; px: string }[] = [
-    { id: "xs", label: "XS", px: "12px" },
-    { id: "sm", label: "Small", px: "13px" },
-    { id: "md", label: "Default", px: "14px" },
-    { id: "lg", label: "Large", px: "15px" },
-    { id: "xl", label: "XL", px: "16px" },
+  const fontSizes: { id: FontSize; label: string }[] = [
+    { id: "xs", label: "XS" },
+    { id: "sm", label: "Small" },
+    { id: "md", label: "Default" },
+    { id: "lg", label: "Large" },
+    { id: "xl", label: "XL" },
+  ];
+
+  const accentColors = [
+    { hex: "#1d9bf0", name: "Blue" },
+    { hex: "#ffd400", name: "Yellow" },
+    { hex: "#f91880", name: "Pink" },
+    { hex: "#7856ff", name: "Purple" },
+    { hex: "#ff7a00", name: "Orange" },
+    { hex: "#00ba7c", name: "Green" },
+  ];
+
+  const fontFamilies: { id: FontFamily; name: string }[] = [
+    { id: "default", name: "Default System" },
+    { id: "inter", name: "Inter" },
+    { id: "roboto", name: "Roboto" },
+    { id: "monospace", name: "Monospace Code" },
   ];
 
   const themes: { id: Theme; label: string; previewBg: string; textCol: string }[] = [
@@ -25,8 +46,8 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
     <div 
       style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.75)", zIndex: 1000,
-        display: "flex", alignItems: "center", justifyContent: "center", padding: "16px"
+        backgroundColor: "rgba(0, 0, 0, 0.75)", zIndex: 2000,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: "12px"
       }}
       onClick={onClose}
     >
@@ -34,79 +55,146 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
         className="animate-scale-in"
         style={{
           background: "var(--color-bg-surface)", border: "1px solid var(--color-border)",
-          borderRadius: "24px", padding: "24px", width: "100%", maxWidth: "480px",
-          display: "flex", flexDirection: "column", gap: "24px", boxShadow: "0 20px 50px rgba(0,0,0,0.5)"
+          borderRadius: "24px", padding: "20px", width: "100%", maxWidth: "480px",
+          maxHeight: "90vh", overflowY: "auto",
+          display: "flex", flexDirection: "column", gap: "20px", boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+          boxSizing: "border-box"
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--color-text-main)" }}>Customize Display</h2>
-          <button onClick={onClose} style={{ color: "var(--color-text-muted)", cursor: "pointer", padding: "4px" }}>
+          <h2 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>Customize Display</h2>
+          <button onClick={onClose} style={{ color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer", padding: "4px" }}>
             <X size={20} />
           </button>
         </div>
 
         {/* Font Size Adjuster */}
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
             <Type size={18} style={{ color: "var(--color-primary)" }} />
-            <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--color-text-main)" }}>Font Size</h3>
+            <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--color-text-main)", margin: 0 }}>Font Size</h3>
           </div>
           
           <div style={{
             background: "var(--color-bg-base)", border: "1px solid var(--color-border)",
-            borderRadius: "16px", padding: "16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px"
+            borderRadius: "16px", padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px",
+            boxSizing: "border-box"
           }}>
-            <span style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", fontWeight: 600 }}>Aa</span>
-            <div style={{ display: "flex", gap: "8px", flex: 1, justifyContent: "center" }}>
+            <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)", fontWeight: 700, flexShrink: 0 }}>Aa</span>
+            <div style={{ display: "flex", gap: "4px", flex: 1, justifyContent: "space-around", flexWrap: "wrap", minWidth: 0 }}>
               {fontSizes.map((f) => (
                 <button
                   key={f.id}
                   onClick={() => setFontSize(f.id)}
                   style={{
-                    padding: "6px 14px",
+                    padding: "6px 10px",
                     borderRadius: "99px",
-                    fontSize: "0.85rem",
+                    fontSize: "0.78rem",
                     fontWeight: 700,
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                     background: fontSize === f.id ? "var(--color-primary)" : "transparent",
                     color: fontSize === f.id ? "white" : "var(--color-text-muted)",
-                    border: fontSize === f.id ? "none" : "1px solid var(--color-border)"
+                    border: fontSize === f.id ? "none" : "1px solid var(--color-border)",
+                    flexShrink: 0
                   }}
                 >
                   {f.label}
                 </button>
               ))}
             </div>
-            <span style={{ fontSize: "1.2rem", color: "var(--color-text-main)", fontWeight: 700 }}>Aa</span>
+            <span style={{ fontSize: "1.1rem", color: "var(--color-text-main)", fontWeight: 800, flexShrink: 0 }}>Aa</span>
+          </div>
+        </div>
+
+        {/* Accent Color Swatches */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+            <Palette size={18} style={{ color: "var(--color-primary)" }} />
+            <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--color-text-main)", margin: 0 }}>Accent Color</h3>
+          </div>
+          <div style={{
+            background: "var(--color-bg-base)", border: "1px solid var(--color-border)",
+            borderRadius: "16px", padding: "14px", display: "flex", alignItems: "center", justifyContent: "space-around", flexWrap: "wrap", gap: "10px"
+          }}>
+            {accentColors.map((color) => {
+              const isSelected = accentColor.toLowerCase() === color.hex.toLowerCase();
+              return (
+                <button
+                  key={color.hex}
+                  onClick={() => setAccentColor(color.hex)}
+                  title={color.name}
+                  style={{
+                    width: "40px", height: "40px", borderRadius: "50%",
+                    backgroundColor: color.hex, border: "none", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "#ffffff", boxShadow: isSelected ? `0 0 16px ${color.hex}` : "none",
+                    transform: isSelected ? "scale(1.15)" : "scale(1)",
+                    transition: "all 0.15s ease"
+                  }}
+                >
+                  {isSelected && <Check size={20} strokeWidth={3} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Font Family Selection */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+            <Sparkles size={18} style={{ color: "var(--color-primary)" }} />
+            <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--color-text-main)", margin: 0 }}>Font Style</h3>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
+            {fontFamilies.map((font) => {
+              const isSelected = fontFamily === font.id;
+              return (
+                <button
+                  key={font.id}
+                  onClick={() => setFontFamily(font.id)}
+                  style={{
+                    padding: "10px 12px", borderRadius: "12px",
+                    background: isSelected ? "rgba(29, 155, 240, 0.12)" : "var(--color-bg-base)",
+                    border: isSelected ? "2px solid var(--color-primary)" : "1px solid var(--color-border)",
+                    color: "var(--color-text-main)", fontWeight: 700, fontSize: "0.85rem",
+                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
+                    transition: "all 0.15s ease"
+                  }}
+                >
+                  <span>{font.name}</span>
+                  {isSelected && <Check size={16} style={{ color: "var(--color-primary)" }} />}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Color Theme Selector */}
         <div>
-          <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--color-text-main)", marginBottom: "12px" }}>Background Theme</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--color-text-main)", marginBottom: "10px", margin: "0 0 10px 0" }}>Background Theme</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {themes.map((t) => (
               <div
                 key={t.id}
                 onClick={() => setTheme(t.id)}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "14px 18px", borderRadius: "16px",
+                  padding: "12px 16px", borderRadius: "14px",
                   background: t.previewBg, border: theme === t.id ? "2px solid var(--color-primary)" : "1px solid var(--color-border)",
-                  cursor: "pointer", transition: "transform 0.15s ease"
+                  cursor: "pointer", transition: "all 0.15s ease"
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <div style={{
-                    width: "20px", height: "20px", borderRadius: "50%",
-                    border: theme === t.id ? "6px solid var(--color-primary)" : "2px solid #71767b",
+                    width: "18px", height: "18px", borderRadius: "50%",
+                    border: theme === t.id ? "5px solid var(--color-primary)" : "2px solid #71767b",
                     background: "transparent"
                   }} />
-                  <span style={{ color: t.textCol, fontWeight: 700, fontSize: "0.95rem" }}>{t.label}</span>
+                  <span style={{ color: t.textCol, fontWeight: 700, fontSize: "0.9rem" }}>{t.label}</span>
                 </div>
-                {theme === t.id && <Check size={20} style={{ color: "var(--color-primary)" }} />}
+                {theme === t.id && <Check size={18} style={{ color: "var(--color-primary)" }} />}
               </div>
             ))}
           </div>
@@ -116,7 +204,8 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
           onClick={onClose}
           style={{
             background: "var(--color-primary)", color: "white", padding: "12px",
-            borderRadius: "99px", fontWeight: 700, fontSize: "0.95rem", marginTop: "4px", cursor: "pointer"
+            borderRadius: "99px", fontWeight: 700, fontSize: "0.95rem", marginTop: "4px", cursor: "pointer", border: "none",
+            boxShadow: "0 4px 14px rgba(29, 155, 240, 0.3)"
           }}
         >
           Done
@@ -125,4 +214,5 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+
 
