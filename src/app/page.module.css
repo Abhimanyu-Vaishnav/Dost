@@ -1039,17 +1039,61 @@
 
 @media (max-width: 650px) {
   .header {
-    padding: 16px 20px;
+    padding: 14px 16px;
+  }
+  .headerRight {
+    gap: 8px;
+  }
+  .headerLink {
+    display: none;
   }
   .heroSplitSection {
     padding: 0 16px;
     margin: 16px auto;
+    gap: 24px;
+    grid-template-columns: 1fr;
   }
   .brandingTitle {
-    font-size: 2.2rem;
+    font-size: clamp(1.8rem, 6.5vw, 2.4rem);
+    letter-spacing: -0.5px;
+  }
+  .brandingSubtitle {
+    font-size: 0.95rem;
+    margin-bottom: 20px;
+  }
+  .badgeRow {
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .badgeCard {
+    padding: 8px 12px;
+    flex: 1;
+    min-width: 120px;
+  }
+  .interactivePreview {
+    border-radius: 14px;
+  }
+  .previewBody {
+    padding: 14px;
+  }
+  .previewActions {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .themeModesGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .themeModeOptionBtn {
+    padding: 6px;
+    font-size: 0.72rem;
+  }
+  .authCard {
+    max-width: 100%;
+    border-radius: 16px;
   }
   .authFormWrapper {
-    padding: 20px 18px;
+    padding: 20px 16px;
   }
   .bentoSection {
     padding: 0 16px;
@@ -1065,12 +1109,25 @@
     padding: 0 16px;
   }
   .ctaCard {
-    padding: 28px 18px;
+    padding: 28px 16px;
+    border-radius: 18px;
+  }
+  .ctaTitle {
+    font-size: clamp(1.4rem, 5vw, 1.8rem);
   }
   .footer {
     flex-direction: column;
-    gap: 16px;
-    padding: 24px 16px;
+    gap: 14px;
+    padding: 20px 16px;
     text-align: center;
+  }
+}
+
+@media (max-width: 400px) {
+  .themeModesGrid {
+    grid-template-columns: 1fr;
+  }
+  .badgeRow {
+    flex-direction: column;
   }
 }

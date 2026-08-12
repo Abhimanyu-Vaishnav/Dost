@@ -516,6 +516,8 @@ select.input option:checked {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--color-border, rgba(255, 255, 255, 0.06));
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .userAvatar {
@@ -529,6 +531,7 @@ select.input option:checked {
   justify-content: center;
   font-weight: 700;
   font-size: 1.05rem;
+  flex-shrink: 0;
 }
 
 .deviceItem {
@@ -539,6 +542,8 @@ select.input option:checked {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .badgePreview {
@@ -550,4 +555,14 @@ select.input option:checked {
   color: #ffffff;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+@media (max-width: 500px) {
+  .colorPickerGroup {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .deviceItem, .userItem {
+    padding: 12px;
+  }
 }

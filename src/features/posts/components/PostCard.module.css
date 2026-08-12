@@ -244,14 +244,29 @@
 @media (max-width: 500px) {
   .card {
     padding: 10px 12px;
+    width: 100%;
+    box-sizing: border-box;
   }
   .avatar {
     width: 36px;
     height: 36px;
   }
   .actionBtn {
-    padding: 4px 6px;
-    font-size: 0.75rem;
+    padding: 4px 5px;
+    font-size: 0.72rem;
+    gap: 3px;
+  }
+  .actions {
+    gap: 4px;
+  }
+  .mediaContainer {
+    border-radius: 12px;
+  }
+  .codeBlock {
+    font-size: 0.8rem;
+    padding: 8px 10px;
+    max-width: 100%;
+    overflow-x: auto;
   }
 }
 

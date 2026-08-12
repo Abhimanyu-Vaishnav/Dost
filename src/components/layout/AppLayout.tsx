@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { 
   Home, User, Search, LogOut, Bell, Mail, Bookmark, MoreHorizontal, EyeOff, Plus, MessageSquare, Shield, 
-  Settings as SettingsIcon, List, Users, CheckCircle2, TrendingUp, BarChart3, HelpCircle, Command, Palette, Edit3, Camera, Sparkles, Feather
+  Settings as SettingsIcon, List, Users, CheckCircle2, TrendingUp, BarChart3, HelpCircle, Command, Palette, Edit3, Camera, Sparkles, Feather, X
 } from "lucide-react";
 import styles from "./AppLayout.module.css";
 import { CreatePostModal } from "@/features/posts/components/CreatePostModal";
@@ -15,7 +15,15 @@ import { ThemeModal } from "@/components/layout/ThemeModal";
 export function AppLayout({ children, rightSidebar, fullWidth = false }: { children: React.ReactNode, rightSidebar?: React.ReactNode, fullWidth?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<{ userId: string; name: string; username?: string | null; avatar?: string | null; isVerified?: boolean } | null>(null);
+  const [user, setUser] = useState<{ 
+    userId: string; 
+    name: string; 
+    username?: string | null; 
+    avatar?: string | null; 
+    isVerified?: boolean;
+    followersCount?: number;
+    followingCount?: number;
+  } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [latestUnreadMsgId, setLatestUnreadMsgId] = useState<string | null>(null);
@@ -23,6 +31,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showSideDrawer, setShowSideDrawer] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -38,7 +47,9 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             name: data.user.name, 
             username: data.user.username,
             avatar: data.user.avatar,
-            isVerified: data.user.isVerified || data.user.accountType === "PREMIUM" || data.user.accountType === "VERIFIED" || false
+            isVerified: data.user.isVerified || data.user.accountType === "PREMIUM" || data.user.accountType === "VERIFIED" || false,
+            followersCount: data.user._count?.followers || 0,
+            followingCount: data.user._count?.following || 0,
           });
         }
 
@@ -111,7 +122,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   };
 
   const renderNavIcon = (id: string, isActive: boolean) => {
-    const size = 24;
+    const size = 26.5;
     switch (id) {
       case "home":
         return <Home size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
@@ -138,23 +149,34 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
     }
   };
 
-  const navItems = [
+  // Nav items list for Desktop
+  const desktopNavItems = [
     { href: "/feed", label: "Home", id: "home" },
     { href: "/search", label: "Explore", id: "explore" },
-    { href: "/messages", label: "Messages", id: "messages" },
+    { href: "/communities", label: "Communities", id: "communities" },
     { href: "/notifications", label: "Notifications", id: "notifications" },
-    { href: "/bookmarks", label: "Bookmarks", id: "bookmarks", desktopOnly: true },
-    { href: "/lists", label: "Lists", id: "lists", desktopOnly: true },
-    { href: "/communities", label: "Communities", id: "communities", desktopOnly: true },
-    { href: "/premium", label: "Premium", id: "premium", desktopOnly: true },
-    { href: "/analytics", label: "Analytics", id: "analytics", desktopOnly: true },
+    { href: "/messages", label: "Messages", id: "messages" },
+    { href: "/bookmarks", label: "Bookmarks", id: "bookmarks" },
+    { href: "/lists", label: "Lists", id: "lists" },
+    { href: "/premium", label: "Premium", id: "premium" },
+    { href: "/analytics", label: "Analytics", id: "analytics" },
     { href: user?.userId ? `/profile/${user.userId}` : "/profile", label: "Profile", id: "profile" },
   ];
 
+  // Exactly 6 Mobile Bottom Bar Navigation Items (Spanning Start to End)
+  const mobileBottomItems = [
+    { href: "/feed", label: "Home", id: "home" },
+    { href: "/search", label: "Explore", id: "explore" },
+    { href: "/communities", label: "Communities", id: "communities" },
+    { href: "/notifications", label: "Notifications", id: "notifications" },
+    { href: "/messages", label: "Messages", id: "messages" },
+    { href: "/bookmarks", label: "Bookmarks", id: "bookmarks" },
+  ];
+
   const moreItems = [
-    { href: "/bookmarks", icon: <Bookmark size={20} />, label: "Bookmarks", mobileOnly: true },
-    { href: "/hidden", icon: <EyeOff size={20} />, label: "Hidden Content", mobileOnly: true },
-    { href: "/analytics", icon: <BarChart3 size={20} />, label: "Analytics", mobileOnly: true },
+    { href: "/bookmarks", icon: <Bookmark size={20} />, label: "Bookmarks" },
+    { href: "/hidden", icon: <EyeOff size={20} />, label: "Hidden Content" },
+    { href: "/analytics", icon: <BarChart3 size={20} />, label: "Analytics" },
     { href: "/ads", icon: <TrendingUp size={20} />, label: "Ads Manager" },
     { href: "/settings", icon: <SettingsIcon size={20} />, label: "Settings" },
     { icon: <Palette size={20} />, label: "Display & Font", onClick: () => setShowThemeModal(true) },
@@ -167,6 +189,138 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
 
   return (
     <div className={styles.layoutContainer}>
+      {/* Mobile Top Navigation Header */}
+      <header className={styles.mobileHeader}>
+        <div 
+          style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}
+          onClick={() => setShowSideDrawer(true)}
+        >
+          {user?.avatar ? (
+            <img src={user.avatar} alt={user.name} style={{ width: "34px", height: "34px", borderRadius: "50%", objectFit: "cover", border: "1px solid var(--color-border)" }} />
+          ) : (
+            <div style={{ width: "34px", height: "34px", borderRadius: "50%", background: "var(--color-primary-light)", color: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "1rem", border: "1px solid var(--color-border)" }}>
+              {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+            </div>
+          )}
+        </div>
+
+        <div 
+          style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+          onClick={() => {
+            if (pathname === "/feed") {
+              router.refresh();
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            } else {
+              router.push("/feed");
+            }
+          }}
+        >
+          <div style={{
+            width: "28px", height: "28px", borderRadius: "8px",
+            background: "linear-gradient(135deg, var(--color-primary), #00c6ff)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "white", fontWeight: 900, fontSize: "1rem"
+          }}>
+            D
+          </div>
+          <span style={{ fontSize: "1.2rem", fontWeight: 900, color: "var(--color-primary)", letterSpacing: "-0.5px" }}>
+            DOST
+          </span>
+        </div>
+
+        <button 
+          onClick={() => setShowThemeModal(true)} 
+          style={{ background: "none", border: "none", color: "var(--color-text-main)", cursor: "pointer", padding: "4px" }}
+        >
+          <Palette size={22} />
+        </button>
+      </header>
+
+      {/* Mobile Left Side Drawer Panel (Matching Image 3 Sample Layout) */}
+      {showSideDrawer && (
+        <>
+          <div 
+            className={styles.drawerBackdrop} 
+            onClick={() => setShowSideDrawer(false)}
+          />
+          <aside className={styles.sideDrawer}>
+            <div className={styles.drawerHeader}>
+              <div className={styles.drawerAvatarRow}>
+                {user?.avatar ? (
+                  <img src={user.avatar} alt={user.name} className={styles.drawerAvatar} />
+                ) : (
+                  <div className={styles.drawerAvatar} style={{ background: "var(--color-primary-light)", color: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "1.3rem" }}>
+                    {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+                  </div>
+                )}
+                <button 
+                  onClick={() => setShowSideDrawer(false)}
+                  style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "4px" }}
+                >
+                  <X size={22} />
+                </button>
+              </div>
+
+              <div className={styles.drawerUserInfo}>
+                <div className={styles.drawerNameRow}>
+                  <span className={styles.drawerName}>{user?.name || "User"}</span>
+                  {user?.isVerified && (
+                    <CheckCircle2 size={16} style={{ color: "var(--color-primary)", fill: "var(--color-primary)", stroke: "var(--color-bg-base)" }} />
+                  )}
+                </div>
+                <span className={styles.drawerHandle}>{userHandle}</span>
+              </div>
+
+              <div className={styles.drawerStatsRow}>
+                <div className={styles.drawerStatItem}>
+                  <span className={styles.drawerStatNum}>{user?.followingCount ?? 0}</span>
+                  <span className={styles.drawerStatLabel}>Following</span>
+                </div>
+                <div className={styles.drawerStatItem}>
+                  <span className={styles.drawerStatNum}>{user?.followersCount ?? 0}</span>
+                  <span className={styles.drawerStatLabel}>Followers</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile Drawer Options List (Our App Data) */}
+            <div className={styles.drawerMenuList}>
+              <Link href={user?.userId ? `/profile/${user.userId}` : "/profile"} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <User size={22} /> <span>Profile</span>
+              </Link>
+              <Link href="/premium" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <CheckCircle2 size={22} /> <span>Premium</span>
+              </Link>
+              <Link href="/bookmarks" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <Bookmark size={22} /> <span>Bookmarks</span>
+              </Link>
+              <Link href="/lists" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <List size={22} /> <span>Lists</span>
+              </Link>
+              <Link href="/communities" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <Users size={22} /> <span>Communities</span>
+              </Link>
+              <Link href="/analytics" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <BarChart3 size={22} /> <span>Analytics</span>
+              </Link>
+              <button className={styles.drawerMenuItem} onClick={() => { setShowThemeModal(true); setShowSideDrawer(false); }}>
+                <Palette size={22} /> <span>Display & Font</span>
+              </button>
+              <Link href="/settings" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <SettingsIcon size={22} /> <span>Settings and privacy</span>
+              </Link>
+              <Link href="/help" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <HelpCircle size={22} /> <span>Help Center</span>
+              </Link>
+              <button className={styles.drawerMenuItem} style={{ color: "#ff4d4d", marginTop: "8px" }} onClick={() => { handleLogout(); setShowSideDrawer(false); }}>
+                <LogOut size={22} /> <span>Log out</span>
+              </button>
+            </div>
+          </aside>
+        </>
+      )}
+
+      {/* Main Sidebar for Desktop & 5-Icon Bottom Bar for Mobile */}
       <aside className={`${styles.leftSidebar} ${isMessagesPage ? styles.leftSidebarCollapsed : ""}`}>
         <div className={styles.topSection}>
           <div className={styles.logoContainer}>
@@ -195,14 +349,17 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             </div>
           </div>
 
+          {/* Nav menu rendered desktop or mobile 5-item bar */}
           <nav className={styles.navMenu}>
-            {navItems.map(item => {
+            {/* Desktop items render full list; on mobile screen width, mobileBottomItems render 5 icons */}
+            {desktopNavItems.map(item => {
               const active = isItemActive(item.href);
+              const isMobileBottomItem = mobileBottomItems.some(m => m.id === item.id);
               return (
                 <Link 
                   key={item.id} 
                   href={item.href} 
-                  className={`${styles.navItem} ${item.desktopOnly ? styles.desktopOnly : ""} ${active ? styles.navItemActive : ""}`}
+                  className={`${styles.navItem} ${!isMobileBottomItem ? styles.desktopOnly : ""} ${active ? styles.navItemActive : ""}`}
                 >
                   <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                     {renderNavIcon(item.id, active)}
@@ -234,7 +391,8 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
               );
             })}
 
-            <div className={styles.navItem} onClick={() => setShowMore(!showMore)} style={{ cursor: "pointer", position: "relative" }}>
+            {/* Desktop More Menu Button */}
+            <div className={`${styles.navItem} ${styles.desktopOnly}`} onClick={() => setShowMore(!showMore)} style={{ cursor: "pointer", position: "relative" }}>
               <MoreHorizontal size={24} />
               <span className={styles.navLabel}>More</span>
               
@@ -245,18 +403,17 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
                     onClick={(e) => { e.stopPropagation(); setShowMore(false); }}
                   />
                   <div className={`${styles.moreMenu} animate-scale-in`}>
-                    {moreItems.map((item, idx) => {
-                      const itemClass = item.mobileOnly ? styles.mobileOnly : "";
-                      return item.href ? (
-                        <Link key={idx} href={item.href} className={`${styles.moreMenuItem} ${itemClass}`} onClick={() => setShowMore(false)}>
+                    {moreItems.map((item, idx) => (
+                      item.href ? (
+                        <Link key={idx} href={item.href} className={styles.moreMenuItem} onClick={() => setShowMore(false)}>
                           {item.icon} <span>{item.label}</span>
                         </Link>
                       ) : (
-                        <button key={idx} className={`${styles.moreMenuItem} ${itemClass}`} style={{ color: item.color }} onClick={() => { item.onClick && item.onClick(); setShowMore(false); }}>
+                        <button key={idx} className={styles.moreMenuItem} style={{ color: item.color }} onClick={() => { item.onClick && item.onClick(); setShowMore(false); }}>
                           {item.icon} <span>{item.label}</span>
                         </button>
-                      );
-                    })}
+                      )
+                    ))}
                   </div>
                 </>
               )}

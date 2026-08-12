@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title and storyIds array are required" }, { status: 400 });
     }
 
+
     const highlight = await prisma.storyHighlight.create({
       data: {
         userId: user.userId as string,

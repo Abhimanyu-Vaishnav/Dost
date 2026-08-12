@@ -9,7 +9,12 @@ export async function GET(req: NextRequest) {
 
     const dbUser = await prisma.user.findUnique({
       where: { id: user.userId as string },
-      select: { id: true, name: true, username: true, email: true, avatar: true, coverImage: true, bio: true, gender: true, dob: true, accountType: true, accountSubType: true }
+      select: { 
+        id: true, name: true, username: true, email: true, avatar: true, coverImage: true, bio: true, gender: true, dob: true, accountType: true, accountSubType: true,
+        _count: {
+          select: { followers: true, following: true }
+        }
+      }
     });
 
     return NextResponse.json({ user: dbUser }, { status: 200 });

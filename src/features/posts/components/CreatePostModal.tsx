@@ -82,17 +82,17 @@ export function CreatePostModal({ onClose, userName, userAvatar, initialDraft, a
       style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         backgroundColor: "rgba(0, 0, 0, 0.75)", display: "flex", alignItems: "flex-start", justifyContent: "center",
-        zIndex: 1200, backdropFilter: "blur(8px)", padding: "16px"
+        zIndex: 1200, backdropFilter: "blur(8px)", padding: "0"
       }} 
       onClick={handleCloseAttempt}
     >
       <div 
         className="glass animate-slide-up" 
         style={{
-          width: "100%", maxWidth: "600px", maxHeight: "85vh",
-          borderRadius: "20px", display: "flex", flexDirection: "column",
-          border: "1px solid var(--color-border)", background: "var(--color-bg-base)",
-          marginTop: "40px", boxShadow: "0 25px 60px rgba(0, 0, 0, 0.5)",
+          width: "100%", maxWidth: "600px", height: "100%", maxHeight: "100vh",
+          borderRadius: "0", display: "flex", flexDirection: "column",
+          border: "none", background: "var(--color-bg-base)",
+          margin: 0, boxShadow: "0 25px 60px rgba(0, 0, 0, 0.5)",
           overflow: "hidden", position: "relative"
         }} 
         onClick={e => e.stopPropagation()}
