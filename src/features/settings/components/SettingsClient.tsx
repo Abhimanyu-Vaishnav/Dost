@@ -51,6 +51,53 @@ const ACCENT_COLORS = [
   { hex: "#6366f1", label: "Indigo" }
 ];
 
+function detectCurrentClientDevice() {
+  if (typeof window === "undefined") return { device: "Web Browser", icon: "desktop" as const };
+  const ua = navigator.userAgent;
+  let deviceName = "Desktop PC";
+  let icon: "desktop" | "mobile" = "desktop";
+  let browserName = "Web Browser";
+
+  if (/iPhone/i.test(ua)) {
+    deviceName = "iPhone";
+    icon = "mobile";
+  } else if (/iPad/i.test(ua)) {
+    deviceName = "iPad";
+    icon = "mobile";
+  } else if (/Android/i.test(ua)) {
+    deviceName = "Android Phone";
+    icon = "mobile";
+  } else if (/Macintosh|Mac OS X/i.test(ua)) {
+    deviceName = "MacBook / Mac";
+    icon = "desktop";
+  } else if (/Windows/i.test(ua)) {
+    deviceName = "Windows PC";
+    icon = "desktop";
+  } else if (/Linux/i.test(ua)) {
+    deviceName = "Linux PC";
+    icon = "desktop";
+  }
+
+  if (/Chrome/i.test(ua) && !/Edg/i.test(ua)) {
+    browserName = "Chrome Browser";
+  } else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) {
+    browserName = "Safari Browser";
+  } else if (/Edg/i.test(ua)) {
+    browserName = "Edge Browser";
+  } else if (/Firefox/i.test(ua)) {
+    browserName = "Firefox Browser";
+  } else if (/OPR|Opera/i.test(ua)) {
+    browserName = "Opera Browser";
+  }
+
+  return {
+    device: `${deviceName} — ${browserName}`,
+    icon,
+    rawDevice: deviceName,
+    browser: browserName
+  };
+}
+
 export function SettingsClient({
   initialProfile,
   initialMutedUsers = [],
@@ -114,11 +161,7 @@ export function SettingsClient({
   // Security State
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [loginAlerts, setLoginAlerts] = useState(true);
-  const [sessions, setSessions] = useState([
-    { id: "1", device: "Windows PC — Chrome Browser", location: "Active Now • Current Device", isCurrent: true, icon: "desktop" },
-    { id: "2", device: "iPhone 15 Pro — DOST Mobile App", location: "Last active 2 hours ago", isCurrent: false, icon: "mobile" },
-    { id: "3", device: "MacBook Air — Safari Browser", location: "Last active 3 days ago", isCurrent: false, icon: "desktop" }
-  ]);
+  const [sessions, setSessions] = useState<Array<{ id: string; device: string; location: string; isCurrent: boolean; icon: "desktop" | "mobile" }>>([]);
 
   // Content & Storage State
   const [autoplayVideos, setAutoplayVideos] = useState(true);
@@ -189,6 +232,25 @@ export function SettingsClient({
 
       const savedTarget = localStorage.getItem("dost_target_category_posts");
       if (savedTarget !== null) setTargetCategoryPosts(savedTarget === "true");
+
+      // Dynamic Real Device & Session Detection
+      const currentClient = detectCurrentClientDevice();
+      const currentSessionItem = {
+        id: "current",
+        device: currentClient.device,
+        location: "Active Now • Current Device",
+        isCurrent: true,
+        icon: currentClient.icon
+      };
+
+      const savedOtherSessionsJson = localStorage.getItem("dost_other_sessions");
+      let otherSessions: any[] = [];
+      if (savedOtherSessionsJson) {
+        try {
+          otherSessions = JSON.parse(savedOtherSessionsJson);
+        } catch (e) {}
+      }
+      setSessions([currentSessionItem, ...otherSessions]);
     } catch (e) {
       console.error("Error reading settings from localStorage", e);
     }
@@ -358,7 +420,12 @@ export function SettingsClient({
 
   // Revoke Session
   const handleRevokeSession = (sessionId: string) => {
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    setSessions((prev) => {
+      const updated = prev.filter((s) => s.id !== sessionId);
+      const otherOnly = updated.filter((s) => !s.isCurrent);
+      localStorage.setItem("dost_other_sessions", JSON.stringify(otherOnly));
+      return updated;
+    });
     showToast("Session successfully revoked and logged out");
   };
 
