@@ -72,7 +72,7 @@ export async function GET(request: any) {
         where: { userId: userPayload.userId as string, isBlocked: false },
         orderBy: { lastActive: "desc" }
       });
-    } catch (e) {}
+    } catch (e) { }
 
     const formattedDbSessions = dbSessions.map(s => {
       const parsed = parseUserAgent(s.userAgent || "");
@@ -134,13 +134,13 @@ export async function POST(request: any) {
           where: { id: sessionId, userId: user.id },
           data: { isBlocked: true }
         });
-      } catch (e) {}
+      } catch (e) { }
     } else {
       try {
         await prisma.userSession.deleteMany({
           where: { id: sessionId, userId: user.id }
         });
-      } catch (e) {}
+      } catch (e) { }
     }
 
     return NextResponse.json({

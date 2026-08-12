@@ -25,6 +25,7 @@ export function CreatePostModal({ onClose, userName, userAvatar, initialDraft, a
   const [showDraftsList, setShowDraftsList] = useState(autoOpenDrafts);
   const [savedDrafts, setSavedDrafts] = useState<SavedDraft[]>([]);
   const [activeDraftText, setActiveDraftText] = useState<string | undefined>(initialDraft);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -46,12 +47,14 @@ export function CreatePostModal({ onClose, userName, userAvatar, initialDraft, a
   const handleSaveDraft = () => {
     const validItems = currentThreads.filter(i => i.content.trim() || i.imageUrl || i.videoUrl);
     if (validItems.length > 0) {
+      // Remove previously selected draft ID if re-saving
+      const filtered = selectedDraftId ? savedDrafts.filter(d => d.id !== selectedDraftId) : savedDrafts;
       const newDraft: SavedDraft = {
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
         threadItems: validItems,
       };
-      const updated = [newDraft, ...savedDrafts];
+      const updated = [newDraft, ...filtered];
       setSavedDrafts(updated);
       localStorage.setItem("dost_saved_drafts", JSON.stringify(updated));
     }
@@ -69,11 +72,15 @@ export function CreatePostModal({ onClose, userName, userAvatar, initialDraft, a
     const updated = savedDrafts.filter(d => d.id !== id);
     setSavedDrafts(updated);
     localStorage.setItem("dost_saved_drafts", JSON.stringify(updated));
+    if (selectedDraftId === id) {
+      setSelectedDraftId(null);
+    }
   };
 
   const handleSelectDraft = (draft: SavedDraft) => {
     const mainText = draft.threadItems.map(i => i.content).join("\n---\n");
     setActiveDraftText(mainText);
+    setSelectedDraftId(draft.id);
     setShowDraftsList(false);
   };
 
@@ -140,6 +147,19 @@ export function CreatePostModal({ onClose, userName, userAvatar, initialDraft, a
               setCurrentThreads(threads);
             }}
             onPostSuccess={() => {
+              // Delete the draft from localStorage after successful posting
+              if (selectedDraftId) {
+                const updated = savedDrafts.filter(d => d.id !== selectedDraftId);
+                setSavedDrafts(updated);
+                localStorage.setItem("dost_saved_drafts", JSON.stringify(updated));
+              } else if (activeDraftText) {
+                const updated = savedDrafts.filter(d => {
+                  const dText = d.threadItems.map(i => i.content).join("\n---\n");
+                  return dText !== activeDraftText;
+                });
+                setSavedDrafts(updated);
+                localStorage.setItem("dost_saved_drafts", JSON.stringify(updated));
+              }
               onClose();
             }} 
           />

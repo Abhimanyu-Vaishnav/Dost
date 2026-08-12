@@ -69,31 +69,35 @@ export async function POST(request: Request) {
     else if (/Edg/i.test(ua)) browserName = "Edge Browser";
     else if (/Firefox/i.test(ua)) browserName = "Firefox Browser";
 
-    const formattedDevice = `${deviceName} — ${browserName}`;
-    const loginTime = new Date().toLocaleString();
+    // Detect client IP address and location
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    const realIp = request.headers.get("x-real-ip");
+    const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : (realIp || "127.0.0.1 (Localhost)");
 
-    // 1. Create In-App Notification
-    try {
-      await prisma.notification.create({
-        data: {
-          type: "SYSTEM",
-          userId: user.id,
-          actorId: user.id,
-        }
-      });
-    } catch (e) {
-      console.log("In-app notification creation skipped", e);
+    let location = "Localhost / Internal Network";
+    if (ipAddress !== "127.0.0.1" && ipAddress !== "::1" && !ipAddress.startsWith("192.168.") && !ipAddress.startsWith("10.")) {
+      const geoCountry = request.headers.get("x-vercel-ip-country") || request.headers.get("cf-ipcountry");
+      const geoCity = request.headers.get("x-vercel-ip-city");
+      if (geoCity && geoCountry) {
+        location = `${geoCity}, ${geoCountry}`;
+      } else if (geoCountry) {
+        location = geoCountry;
+      } else {
+        location = "India (Detected via ISP)";
+      }
+    } else {
+      location = "India (Local Host)";
     }
 
-    // 2. Log & Trigger Email Security Alert to Registered Email
-    console.log(`\n======================================================`);
-    console.log(`[SECURITY EMAIL ALERT SENT]`);
-    console.log(`To: ${user.email}`);
-    console.log(`Subject: 🔐 Security Alert: New Login to DOST Account`);
-    console.log(`Body: Hello ${user.name || "User"},\nWe detected a new login to your DOST account.\nDevice: ${formattedDevice}\nTime: ${loginTime}\nIf this was you, no action is needed. If you did not authorize this, please change your password and revoke active sessions immediately.`);
-    console.log(`======================================================\n`);
+    const formattedDevice = `${deviceName} — ${browserName}`;
+    const loginTimeISO = new Date().toISOString();
+    const loginTimeDisplay = new Date().toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short"
+    });
 
-    // 3. Save UserSession Record in Database
+    // 1. Save UserSession Record in Database
+    let createdSessionId: string | null = null;
     try {
       // Mark old current sessions as false for this user
       await prisma.userSession.updateMany({
@@ -101,19 +105,54 @@ export async function POST(request: Request) {
         data: { isCurrent: false }
       });
 
-      await prisma.userSession.create({
+      const newSession = await prisma.userSession.create({
         data: {
           userId: user.id,
           device: formattedDevice,
           browser: browserName,
+          ipAddress: ipAddress,
           userAgent: ua,
           isCurrent: true,
           lastActive: new Date()
         }
       });
+      createdSessionId = newSession.id;
     } catch (e) {
       console.log("Database user session creation skipped", e);
     }
+
+    const notificationMetadata = JSON.stringify({
+      device: formattedDevice,
+      deviceName,
+      browser: browserName,
+      ipAddress,
+      location,
+      loginTime: loginTimeDisplay,
+      timestamp: loginTimeISO,
+      sessionId: createdSessionId
+    });
+
+    // 2. Create In-App Notification
+    try {
+      await prisma.notification.create({
+        data: {
+          type: "SYSTEM",
+          userId: user.id,
+          actorId: user.id,
+          metadata: notificationMetadata
+        }
+      });
+    } catch (e) {
+      console.log("In-app notification creation skipped", e);
+    }
+
+    // 3. Log & Trigger Email Security Alert to Registered Email
+    console.log(`\n======================================================`);
+    console.log(`[SECURITY EMAIL ALERT SENT]`);
+    console.log(`To: ${user.email}`);
+    console.log(`Subject: 🔐 Security Alert: New Login to DOST Account`);
+    console.log(`Body: Hello ${user.name || "User"},\nWe detected a new login to your DOST account.\nDevice: ${formattedDevice}\nLocation: ${location}\nIP: ${ipAddress}\nTime: ${loginTimeDisplay}\nIf this was you, no action is needed. If you did not authorize this, please change your password and revoke active sessions immediately.`);
+    console.log(`======================================================\n`);
 
     return NextResponse.json(
       { 

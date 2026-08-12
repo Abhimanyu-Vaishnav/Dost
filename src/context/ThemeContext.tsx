@@ -78,6 +78,20 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     document.documentElement.setAttribute("data-theme", effectiveTheme);
   };
 
+  const syncThemeToDb = (config: {
+    theme: Theme;
+    accentColor: string;
+    fontSize: FontSize;
+    fontFamily: FontFamily;
+    reducedMotion: boolean;
+  }) => {
+    fetch("/api/users/theme", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config)
+    }).catch((e) => console.log("Failed to sync theme to DB", e));
+  };
+
   useEffect(() => {
     const savedTheme = (localStorage.getItem("dost_theme") as Theme) || "dark";
     const savedAccent = localStorage.getItem("dost_accent_color") || "#1d9bf0";
@@ -96,24 +110,77 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     applyFontFamily(savedFontFamily);
     document.documentElement.setAttribute("data-font-size", savedFontSize);
     document.documentElement.setAttribute("data-reduced-motion", savedReducedMotion ? "true" : "false");
+
+    // Fetch theme settings from server database if logged in
+    fetch("/api/users/theme")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.themeSettings) {
+          const dbTheme = data.themeSettings.theme || savedTheme;
+          const dbAccent = data.themeSettings.accentColor || savedAccent;
+          const dbFontSize = data.themeSettings.fontSize || savedFontSize;
+          const dbFontFamily = data.themeSettings.fontFamily || savedFontFamily;
+          const dbReducedMotion = typeof data.themeSettings.reducedMotion === "boolean" ? data.themeSettings.reducedMotion : savedReducedMotion;
+
+          setThemeState(dbTheme);
+          setAccentColorState(dbAccent);
+          setFontSizeState(dbFontSize);
+          setFontFamilyState(dbFontFamily);
+          setReducedMotionState(dbReducedMotion);
+
+          applyTheme(dbTheme);
+          applyAccentColor(dbAccent);
+          applyFontFamily(dbFontFamily);
+          document.documentElement.setAttribute("data-font-size", dbFontSize);
+          document.documentElement.setAttribute("data-reduced-motion", dbReducedMotion ? "true" : "false");
+
+          localStorage.setItem("dost_theme", dbTheme);
+          localStorage.setItem("dost_accent_color", dbAccent);
+          localStorage.setItem("dost_font_size", dbFontSize);
+          localStorage.setItem("dost_font_family", dbFontFamily);
+          localStorage.setItem("dost_reduced_motion", dbReducedMotion ? "true" : "false");
+        }
+      })
+      .catch((err) => console.log("Server theme load skipped", err));
   }, []);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
     localStorage.setItem("dost_theme", newTheme);
     applyTheme(newTheme);
+    syncThemeToDb({
+      theme: newTheme,
+      accentColor,
+      fontSize,
+      fontFamily,
+      reducedMotion
+    });
   };
 
   const setAccentColor = (newColor: string) => {
     setAccentColorState(newColor);
     localStorage.setItem("dost_accent_color", newColor);
     applyAccentColor(newColor);
+    syncThemeToDb({
+      theme,
+      accentColor: newColor,
+      fontSize,
+      fontFamily,
+      reducedMotion
+    });
   };
 
   const setFontSize = (newSize: FontSize) => {
     setFontSizeState(newSize);
     localStorage.setItem("dost_font_size", newSize);
     document.documentElement.setAttribute("data-font-size", newSize);
+    syncThemeToDb({
+      theme,
+      accentColor,
+      fontSize: newSize,
+      fontFamily,
+      reducedMotion
+    });
   };
 
   const setFontFromDob = (dobInput: Date | string | null | undefined) => {
@@ -142,12 +209,26 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     setFontFamilyState(newFont);
     localStorage.setItem("dost_font_family", newFont);
     applyFontFamily(newFont);
+    syncThemeToDb({
+      theme,
+      accentColor,
+      fontSize,
+      fontFamily: newFont,
+      reducedMotion
+    });
   };
 
   const setReducedMotion = (reduced: boolean) => {
     setReducedMotionState(reduced);
     localStorage.setItem("dost_reduced_motion", reduced ? "true" : "false");
     document.documentElement.setAttribute("data-reduced-motion", reduced ? "true" : "false");
+    syncThemeToDb({
+      theme,
+      accentColor,
+      fontSize,
+      fontFamily,
+      reducedMotion: reduced
+    });
   };
 
   return (

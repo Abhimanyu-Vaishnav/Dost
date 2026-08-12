@@ -58,6 +58,7 @@ model User {
   blockedBy    Block[] @relation("blockedUser")
 
   closeFriendIds String?
+  themeSettings  String?
 
   lastSeen  DateTime  @default(now())
   createdAt DateTime  @default(now())
@@ -66,10 +67,11 @@ model User {
 
 model Notification {
   id          String   @id @default(cuid())
-  type        String   // 'LIKE', 'COMMENT', 'FOLLOW', 'REPOST'
+  type        String   // 'LIKE', 'COMMENT', 'FOLLOW', 'REPOST', 'SYSTEM'
   userId      String   // Receiver
   actorId     String   // Person who performed the action
   postId      String?  // Related post if any
+  metadata    String?  // JSON string storing extra details e.g. login device, IP, location
   isRead      Boolean  @default(false)
   
   user        User     @relation("notificationReceiver", fields: [userId], references: [id], onDelete: Cascade)
