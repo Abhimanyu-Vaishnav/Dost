@@ -81,6 +81,12 @@ export default function Home() {
       }
       if (!res.ok) throw new Error(data.error || "Authentication failed");
 
+      if (authMode === "login" && typeof window !== "undefined") {
+        sessionStorage.setItem("dost_login_toast", JSON.stringify({ 
+          message: `New login detected from ${data.loginDevice || "Device"}` 
+        }));
+      }
+
       router.push("/feed");
       router.refresh();
     } catch (err: any) {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { 
-  Home, User, Search, LogOut, Bell, Mail, Bookmark, MoreHorizontal, EyeOff, Plus, MessageSquare, Shield, 
+  Home, User, Search, LogOut, Bell, Mail, Bookmark, MoreHorizontal, EyeOff, Plus, MessageSquare, Shield, ShieldAlert,
   Settings as SettingsIcon, List, Users, CheckCircle2, TrendingUp, BarChart3, HelpCircle, Command, Palette, Edit3, Camera, Sparkles, Feather, X
 } from "lucide-react";
 import styles from "./AppLayout.module.css";
@@ -30,6 +30,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [latestUnreadMsgId, setLatestUnreadMsgId] = useState<string | null>(null);
   const [activeToast, setActiveToast] = useState<{ senderName: string; content: string; conversationId: string; id: string } | null>(null);
+  const [securityToast, setSecurityToast] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
@@ -37,6 +38,22 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const loginToastStr = sessionStorage.getItem("dost_login_toast");
+      if (loginToastStr) {
+        sessionStorage.removeItem("dost_login_toast");
+        try {
+          const parsed = JSON.parse(loginToastStr);
+          setSecurityToast(parsed.message || "Security Alert: Login successful");
+          setTimeout(() => {
+            setSecurityToast(null);
+          }, 5000);
+        } catch (e) {}
+      }
+    }
+  }, []);
 
   useEffect(() => {
     async function fetchData() {
@@ -595,6 +612,40 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
           }}>
             {activeToast.content}
           </p>
+        </div>
+      )}
+
+      {/* Floating Toast Notification for Login Security Alert */}
+      {securityToast && (
+        <div 
+          className="glass animate-slide-up"
+          style={{
+            position: "fixed",
+            bottom: activeToast ? "100px" : "24px",
+            right: "24px",
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-primary)",
+            borderRadius: "20px",
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.2)",
+            zIndex: 9999,
+            maxWidth: "calc(100vw - 48px)"
+          }}
+        >
+          <ShieldAlert size={24} color="var(--color-primary)" />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "2px" }}>
+            <span style={{ fontWeight: 800, color: "var(--color-primary)", fontSize: "0.85rem", letterSpacing: "0.5px" }}>SECURITY ALERT</span>
+            <span style={{ fontWeight: 600, color: "var(--color-text-main)", fontSize: "0.95rem" }}>{securityToast}</span>
+          </div>
+          <button 
+            onClick={() => setSecurityToast(null)}
+            style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", fontSize: "0.9rem", padding: 0 }}
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>

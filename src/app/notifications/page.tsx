@@ -8,7 +8,7 @@ import { SearchBar } from "@/features/search/components/SearchBar";
 import { FollowSuggestions } from "@/features/users/components/FollowSuggestions";
 import { TrendingSection } from "@/features/search/components/TrendingSection";
 import Link from "next/link";
-import { Heart, MessageCircle, UserPlus, Repeat2, PenTool } from "lucide-react";
+import { Heart, MessageCircle, UserPlus, Repeat2, PenTool, ShieldAlert } from "lucide-react";
 
 import { NotificationClient } from "@/features/notifications/components/NotificationClient";
 
@@ -51,12 +51,13 @@ export default async function NotificationsPage() {
       case "REPOST": return <Repeat2 size={20} color="#00ba7c" />;
       case "QUOTE": return <PenTool size={20} color="var(--color-primary)" />;
       case "COMMENT_LIKE": return <Heart size={18} fill="#f91880" color="#f91880" />;
+      case "SYSTEM": return <ShieldAlert size={20} color="var(--color-primary)" />;
       default: return null;
     }
   };
 
   const getMessage = (notification: any) => {
-    const actorName = notification.actor.name || "Someone";
+    const actorName = notification.actor?.name || "Security";
     switch (notification.type) {
       case "LIKE": return <span><b>{actorName}</b> liked your post</span>;
       case "COMMENT": return <span><b>{actorName}</b> commented on your post</span>;
@@ -64,6 +65,7 @@ export default async function NotificationsPage() {
       case "REPOST": return <span><b>{actorName}</b> reposted your post</span>;
       case "QUOTE": return <span><b>{actorName}</b> quoted your post</span>;
       case "COMMENT_LIKE": return <span><b>{actorName}</b> liked your comment</span>;
+      case "SYSTEM": return <span><b>Security Alert:</b> New login detected on your account</span>;
       default: return "";
     }
   };

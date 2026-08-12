@@ -44,6 +44,12 @@ export function AuthForm({ mode }: AuthFormProps) {
         throw new Error(data.error || "Authentication failed");
       }
 
+      if (mode === "login" && typeof window !== "undefined") {
+        sessionStorage.setItem("dost_login_toast", JSON.stringify({ 
+          message: `New login detected from ${data.loginDevice || "Device"}` 
+        }));
+      }
+
       router.push("/feed"); // Redirect to feed upon success
       router.refresh();
     } catch (err: any) {
