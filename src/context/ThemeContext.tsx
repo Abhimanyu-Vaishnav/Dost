@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 
 export type Theme = "dark" | "dim" | "light" | "midnight" | "system";
-export type FontSize = "xs" | "sm" | "md" | "lg" | "xl";
+export type FontSize = "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
 export type FontFamily = "default" | "inter" | "roboto" | "outfit" | "serif" | "monospace" | "cursive" | "system";
 
 interface ThemeContextType {
@@ -13,6 +13,7 @@ interface ThemeContextType {
   setAccentColor: (color: string) => void;
   fontSize: FontSize;
   setFontSize: (size: FontSize) => void;
+  setFontFromDob: (dobInput: Date | string | null | undefined) => void;
   fontFamily: FontFamily;
   setFontFamily: (font: FontFamily) => void;
   reducedMotion: boolean;
@@ -26,6 +27,7 @@ const ThemeContext = createContext<ThemeContextType>({
   setAccentColor: () => {},
   fontSize: "md",
   setFontSize: () => {},
+  setFontFromDob: () => {},
   fontFamily: "default",
   setFontFamily: () => {},
   reducedMotion: false,
@@ -114,6 +116,28 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     document.documentElement.setAttribute("data-font-size", newSize);
   };
 
+  const setFontFromDob = (dobInput: Date | string | null | undefined) => {
+    if (!dobInput) return;
+    const birthDate = new Date(dobInput);
+    if (isNaN(birthDate.getTime())) return;
+    
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+
+    let recommendedSize: FontSize = "md";
+    if (age >= 55) {
+      recommendedSize = "xxl"; // Senior citizen mode: XXL (18px)
+    } else if (age >= 45) {
+      recommendedSize = "lg"; // Large (15px)
+    }
+
+    setFontSize(recommendedSize);
+  };
+
   const setFontFamily = (newFont: FontFamily) => {
     setFontFamilyState(newFont);
     localStorage.setItem("dost_font_family", newFont);
@@ -135,6 +159,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
         setAccentColor,
         fontSize,
         setFontSize,
+        setFontFromDob,
         fontFamily,
         setFontFamily,
         reducedMotion,

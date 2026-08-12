@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { X, Camera, Loader2, Move, Sparkles, Check, ZoomIn } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
 import { useRouter } from "next/navigation";
 
 interface EditProfileModalProps {
@@ -73,6 +74,7 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
   const [activeAdjustTarget, setActiveAdjustTarget] = useState<"avatar" | "cover" | null>(null);
 
   const router = useRouter();
+  const { setFontFromDob } = useTheme();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -176,6 +178,9 @@ export function EditProfileModal({ user, onClose }: EditProfileModalProps) {
 
       const data = await res.json();
       if (res.ok) {
+        if (dob) {
+          setFontFromDob(dob);
+        }
         onClose();
         router.refresh();
       } else {

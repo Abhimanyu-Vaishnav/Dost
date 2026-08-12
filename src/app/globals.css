@@ -79,6 +79,9 @@ html[data-font-size="lg"] {
 html[data-font-size="xl"] {
   font-size: 16px;
 }
+html[data-font-size="xxl"] {
+  font-size: 18px;
+}
 
 * {
   box-sizing: border-box;

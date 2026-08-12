@@ -11,10 +11,12 @@ import styles from "./AppLayout.module.css";
 import { CreatePostModal } from "@/features/posts/components/CreatePostModal";
 import { CreateStoryModal } from "@/features/stories/components/CreateStoryModal";
 import { ThemeModal } from "@/components/layout/ThemeModal";
+import { useTheme } from "@/context/ThemeContext";
 
 export function AppLayout({ children, rightSidebar, fullWidth = false }: { children: React.ReactNode, rightSidebar?: React.ReactNode, fullWidth?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { setFontFromDob } = useTheme();
   const [user, setUser] = useState<{ 
     userId: string; 
     name: string; 
@@ -51,6 +53,10 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             followersCount: data.user._count?.followers || 0,
             followingCount: data.user._count?.following || 0,
           });
+
+          if (data.user.dob && !localStorage.getItem("dost_font_size")) {
+            setFontFromDob(data.user.dob);
+          }
         }
 
         const notifyRes = await fetch("/api/notifications/unread-count");

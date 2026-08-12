@@ -19,6 +19,7 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
     { id: "md", label: "Default" },
     { id: "lg", label: "Large" },
     { id: "xl", label: "XL" },
+    { id: "xxl", label: "XXL (Senior)" },
   ];
 
   const accentColors = [
