@@ -45,6 +45,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    let takeCount = searchParams.get("stream") === "true" ? 10 : 20;
+
     let posts = await (prisma.post as any).findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -83,7 +85,7 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      take: 50,
+      take: takeCount,
     });
 
     // If stream mode is enabled, fetch un-displayed posts excluding currently visible IDs

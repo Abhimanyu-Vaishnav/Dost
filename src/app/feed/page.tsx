@@ -97,7 +97,7 @@ export default async function FeedPage(props: { searchParams: Promise<{ tab?: st
         }
       }
     },
-    take: 50,
+    take: 20,
   });
 
   const RightSidebar = (

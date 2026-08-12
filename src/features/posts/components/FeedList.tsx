@@ -69,7 +69,8 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             const existingIds = new Set([...posts.map((p) => p.id), ...prev.map((p) => p.id)]);
             const brandNew = incoming.filter((np) => !existingIds.has(np.id));
             if (brandNew.length > 0) {
-              return [...prev, ...brandNew];
+              // Limit streaming updates to max 5 new posts at a time for smoother flow
+              return [...prev, ...brandNew.slice(0, 5)];
             }
             return prev;
           });
@@ -80,9 +81,9 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   }, [posts, newPostsQueue, activeTab]);
 
-  // Ultra-fast live accumulator polling every 3 seconds
+  // Standard live feed polling (every 15 seconds instead of 3 seconds)
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 3000);
+    const interval = setInterval(fetchNewPosts, 15000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
