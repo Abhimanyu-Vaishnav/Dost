@@ -227,7 +227,7 @@
   white-space: nowrap;
 }
 
-.mobileOnly {
+.mobileHeader, .mobileOnly {
   display: none !important;
 }
 
@@ -461,44 +461,85 @@
   }
 }
 
-@media (max-width: 1024px) {
+/* Tablet & iPad View (651px to 1024px) */
+@media (max-width: 1024px) and (min-width: 651px) {
   .rightSidebar {
-    display: none;
+    display: none !important;
+  }
+  .mobileHeader {
+    display: none !important;
   }
   .leftSidebar {
-    width: 80px;
-    min-width: 80px;
-    align-items: center;
-    padding: 12px 6px;
+    width: 80px !important;
+    min-width: 80px !important;
+    max-width: 80px !important;
+    height: 100vh !important;
+    position: relative !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    padding: 12px 6px !important;
+    border-right: 1px solid var(--color-border) !important;
+    border-top: none !important;
+    background-color: var(--color-bg-base) !important;
+  }
+  .topSection {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+  .navMenu {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    width: 100% !important;
+    align-items: center !important;
   }
   .navLabel, .postBtnFull, .profileText, .moreDotsIcon, .logoText {
     display: none !important;
   }
   .postBtnCollapsed {
     display: flex !important;
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 50% !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 12px auto 0 auto !important;
   }
   .navItem {
-    padding: 10px;
-    width: 48px;
-    height: 48px;
-    justify-content: center;
+    padding: 10px !important;
+    width: 48px !important;
+    height: 48px !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
   }
   .logoContainer {
-    padding: 4px 0;
-    justify-content: center;
+    padding: 4px 0 !important;
+    justify-content: center !important;
+    width: 100% !important;
+    display: flex !important;
   }
   .profilePill {
-    padding: 6px;
-    justify-content: center;
-    width: auto;
+    padding: 6px !important;
+    justify-content: center !important;
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 50% !important;
+    margin-top: auto !important;
   }
   .mainContent {
-    width: calc(100vw - 80px);
-    min-width: 0;
+    flex: 1 !important;
+    max-width: 640px !important;
+    width: calc(100vw - 80px) !important;
+    min-width: 0 !important;
+    height: 100vh !important;
+    border-right: 1px solid var(--color-border) !important;
   }
 }
 
-@media (max-width: 768px) {
+/* Mobile View (<= 650px) */
+@media (max-width: 650px) {
   .layoutContainer {
     display: flex;
     flex-direction: column;
@@ -514,7 +555,7 @@
   }
 
   .mobileHeader {
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: space-between;
     padding: 10px 16px;
