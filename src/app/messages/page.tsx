@@ -36,6 +36,15 @@ interface Conversation {
 
 const EMOJI_REACTIONS_PRESETS = ["❤️", "🔥", "😂", "👏", "💯", "😮", "👍"];
 
+const FULL_EMOJI_GRID = [
+  "❤️", "🔥", "😂", "👏", "💯", "😮", "👍", "🙏", "✨", "🎉", "🚀", "👀",
+  "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "🥲", "☺️", "😊", "😇", "🙂",
+  "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😋", "😛", "😜", "🤪", "😎",
+  "🥳", "😏", "😒", "😞", "😔", "😟", "🥺", "😢", "😭", "😤", "😠", "🤯",
+  "💖", "💗", "💓", "💞", "💕", "❣️", "🔴", "🧡", "💛", "💚", "💙", "💜",
+  "✋", "🖐️", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉"
+];
+
 const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: "conv-1",
@@ -98,9 +107,11 @@ export default function MessagesPage() {
   // Chat Input & Popover States
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [emojiFilter, setEmojiFilter] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [activeCall, setActiveCall] = useState<{ type: "voice" | "video"; contact: any } | null>(null);
   const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
+  const [fullEmojiPickerMsgId, setFullEmojiPickerMsgId] = useState<string | null>(null);
   
   // Media & Voice Attachment States
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
@@ -115,12 +126,41 @@ export default function MessagesPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Load persistent messages & reactions from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("dost_chat_messages_map");
+      if (saved) {
+        try {
+          setMessagesMap(JSON.parse(saved));
+        } catch (e) {}
+      }
+    }
+  }, []);
+
   // Auto-select first conversation on Desktop (>650px)
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth > 650 && !activeConvId) {
-      setActiveConvId("conv-1");
+      handleSelectConversation("conv-1");
     }
   }, []);
+
+  // Clear unread count when opening chat
+  const handleSelectConversation = (convId: string) => {
+    setActiveConvId(convId);
+    setConversations(prev => prev.map(c => {
+      if (c.id === convId) {
+        return { ...c, unreadCount: 0 };
+      }
+      return c;
+    }));
+  };
+
+  useEffect(() => {
+    if (activeConvId) {
+      setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, unreadCount: 0 } : c));
+    }
+  }, [activeConvId]);
 
   const activeConv = conversations.find(c => c.id === activeConvId) || conversations[0];
   const activeMessages = activeConvId ? (messagesMap[activeConvId] || []) : [];
@@ -207,10 +247,14 @@ export default function MessagesPage() {
       isMe: true
     };
 
-    setMessagesMap(prev => ({
-      ...prev,
-      [currentId]: [...(prev[currentId] || []), voiceMsg]
-    }));
+    setMessagesMap(prev => {
+      const updated = {
+        ...prev,
+        [currentId]: [...(prev[currentId] || []), voiceMsg]
+      };
+      if (typeof window !== "undefined") localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
+      return updated;
+    });
 
     setConversations(prev => prev.map(c => {
       if (c.id === currentId) {
@@ -235,10 +279,14 @@ export default function MessagesPage() {
       isMe: true
     };
 
-    setMessagesMap(prev => ({
-      ...prev,
-      [currentId]: [...(prev[currentId] || []), newMsg]
-    }));
+    setMessagesMap(prev => {
+      const updated = {
+        ...prev,
+        [currentId]: [...(prev[currentId] || []), newMsg]
+      };
+      if (typeof window !== "undefined") localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
+      return updated;
+    });
 
     setConversations(prev => prev.map(c => {
       if (c.id === currentId) {
@@ -263,31 +311,39 @@ export default function MessagesPage() {
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           isMe: false
         };
-        setMessagesMap(prev => ({
-          ...prev,
-          [currentId]: [...(prev[currentId] || []), replyMsg]
-        }));
+        setMessagesMap(prev => {
+          const updated = {
+            ...prev,
+            [currentId]: [...(prev[currentId] || []), replyMsg]
+          };
+          if (typeof window !== "undefined") localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
+          return updated;
+        });
       }, 1400);
     }, 800);
   };
 
   const handleAddReaction = (msgId: string, emoji: string) => {
     if (!activeConvId) return;
-    setMessagesMap(prev => ({
-      ...prev,
-      [activeConvId]: (prev[activeConvId] || []).map(m => {
-        if (m.id === msgId) {
-          const currentReactions = m.reactions || [];
-          return {
-            ...m,
-            reactions: currentReactions.includes(emoji)
-              ? currentReactions.filter(r => r !== emoji)
-              : [...currentReactions, emoji]
-          };
-        }
-        return m;
-      })
-    }));
+    setMessagesMap(prev => {
+      const updated = {
+        ...prev,
+        [activeConvId]: (prev[activeConvId] || []).map(m => {
+          if (m.id === msgId) {
+            const currentReactions = m.reactions || [];
+            return {
+              ...m,
+              reactions: currentReactions.includes(emoji)
+                ? currentReactions.filter(r => r !== emoji)
+                : [...currentReactions, emoji]
+            };
+          }
+          return m;
+        })
+      };
+      if (typeof window !== "undefined") localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const filteredConversations = conversations.filter(c => 
@@ -306,7 +362,7 @@ export default function MessagesPage() {
         style={{ display: "none" }} 
       />
 
-      <div className={styles.container} onClick={() => setActiveReactionMsgId(null)}>
+      <div className={styles.container} onClick={() => { setActiveReactionMsgId(null); setFullEmojiPickerMsgId(null); }}>
         {/* Left Sidebar Conversation List */}
         <div className={`${styles.sidebar} ${activeConvId ? styles.sidebarHiddenMobile : ""}`}>
           {/* Header */}
@@ -357,7 +413,7 @@ export default function MessagesPage() {
               return (
                 <div
                   key={conv.id}
-                  onClick={() => setActiveConvId(conv.id)}
+                  onClick={() => handleSelectConversation(conv.id)}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -512,10 +568,10 @@ export default function MessagesPage() {
                           background: "var(--color-bg-surface)",
                           border: "1px solid var(--color-primary, #1d9bf0)",
                           borderRadius: "9999px",
-                          padding: "8px 16px",
+                          padding: "6px 14px",
                           display: "flex",
                           alignItems: "center",
-                          gap: "12px",
+                          gap: "10px",
                           boxShadow: "0 12px 36px rgba(0, 0, 0, 0.6)",
                           zIndex: 20
                         }}
@@ -542,6 +598,99 @@ export default function MessagesPage() {
                             {emoji}
                           </button>
                         ))}
+
+                        {/* More Emoji Grid Trigger Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFullEmojiPickerMsgId(msg.id);
+                            setActiveReactionMsgId(null);
+                          }}
+                          style={{
+                            width: "34px",
+                            height: "34px",
+                            borderRadius: "50%",
+                            background: "rgba(29, 155, 240, 0.2)",
+                            color: "var(--color-primary, #1d9bf0)",
+                            border: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer"
+                          }}
+                          className="hover:scale-110"
+                          title="More Emojis"
+                        >
+                          <Plus size={20} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Full Categorized Emoji Picker Box Drawer */}
+                    {fullEmojiPickerMsgId === msg.id && (
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          position: "absolute",
+                          top: "-260px",
+                          right: msg.isMe ? "0" : "auto",
+                          left: msg.isMe ? "auto" : "0",
+                          width: "300px",
+                          height: "240px",
+                          background: "var(--color-bg-surface)",
+                          border: "1px solid var(--color-primary, #1d9bf0)",
+                          borderRadius: "20px",
+                          padding: "14px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "10px",
+                          boxShadow: "0 16px 40px rgba(0, 0, 0, 0.7)",
+                          zIndex: 30
+                        }}
+                        className="animate-scale-in"
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--color-text-main)" }}>React with Emoji</span>
+                          <button 
+                            onClick={() => setFullEmojiPickerMsgId(null)}
+                            style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer" }}
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
+
+                        {/* Emoji Grid */}
+                        <div style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(6, 1fr)",
+                          gap: "8px",
+                          overflowY: "auto",
+                          flex: 1,
+                          paddingRight: "4px"
+                        }}>
+                          {FULL_EMOJI_GRID.map((emoji, idx) => (
+                            <button
+                              key={idx}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddReaction(msg.id, emoji);
+                                setFullEmojiPickerMsgId(null);
+                              }}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                fontSize: "1.4rem",
+                                cursor: "pointer",
+                                padding: "4px",
+                                borderRadius: "8px",
+                                transition: "transform 0.15s ease"
+                              }}
+                              className="hover:scale-125 hover:bg-white/10 active:scale-95"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
 
