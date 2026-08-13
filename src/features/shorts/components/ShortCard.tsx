@@ -145,6 +145,26 @@ export function ShortCard({ short, isActive }: ShortCardProps) {
     setTimeout(() => setDoubleTapHeart(null), 800);
   };
 
+  const [repostsCount, setRepostsCount] = useState((short as any).repostsCount || 14);
+
+  const handleRepost = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+
+    if (reposted) {
+      setReposted(false);
+      setRepostsCount((prev: number) => prev - 1);
+    } else {
+      setReposted(true);
+      setRepostsCount((prev: number) => prev + 1);
+      const newBurst = createParticleBurst('repost', x, y, 14);
+      setParticles(prev => [...prev, ...newBurst]);
+      setTimeout(() => setParticles(prev => prev.filter(p => !newBurst.some(nb => nb.id === p.id))), 1000);
+    }
+  };
+
   const handleBookmark = (e: React.MouseEvent) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -356,7 +376,24 @@ export function ShortCard({ short, isActive }: ShortCardProps) {
           </span>
         </button>
 
-        {/* Bookmark Button */}
+        {/* Repost Button */}
+        <button 
+          onClick={handleRepost}
+          style={{ background: "none", border: "none", color: "white", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}
+          className="hover:scale-110 active:scale-90 transition-transform"
+        >
+          <div style={{
+            width: "52px", height: "52px", borderRadius: "50%",
+            background: reposted ? "rgba(0, 186, 124, 0.25)" : "rgba(0, 0, 0, 0.6)",
+            backdropFilter: "blur(10px)", border: reposted ? "1.5px solid #00ba7c" : "1px solid rgba(255,255,255,0.15)",
+            display: "flex", alignItems: "center", justifyContent: "center"
+          }}>
+            <Repeat size={26} color={reposted ? "#00ba7c" : "white"} />
+          </div>
+          <span style={{ fontSize: "0.85rem", fontWeight: 800, textShadow: "0 2px 4px rgba(0,0,0,0.8)", color: reposted ? "#00ba7c" : "white" }}>
+            {repostsCount}
+          </span>
+        </button>
         <button 
           onClick={handleBookmark}
           style={{ background: "none", border: "none", color: "white", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}
