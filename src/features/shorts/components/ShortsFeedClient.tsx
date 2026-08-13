@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { ShortCard, ShortItem } from "./ShortCard";
+import styles from "./ShortsFeedClient.module.css";
 
 export function ShortsFeedClient({ shorts }: { shorts: ShortItem[] }) {
   const [displayedShorts, setDisplayedShorts] = useState<ShortItem[]>(shorts.slice(0, 15));
@@ -32,45 +33,11 @@ export function ShortsFeedClient({ shorts }: { shorts: ShortItem[] }) {
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      style={{
-        width: "100%",
-        height: "100dvh",
-        backgroundColor: "#05050a",
-        overflowY: "scroll",
-        scrollSnapType: "y mandatory",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        scrollbarWidth: "none"
-      }}
+      className={styles.shortsContainer}
     >
       {displayedShorts.map((short, idx) => (
-        <div 
-          key={`${short.id}-${idx}`} 
-          style={{
-            width: "100%",
-            height: "100dvh",
-            scrollSnapAlign: "start",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "12px 0",
-            boxSizing: "border-box"
-          }}
-        >
-          {/* Centered Desktop Video Container with Mobile Aspect Ratio */}
-          <div style={{
-            width: "100%",
-            maxWidth: "430px",
-            height: "calc(100dvh - 28px)",
-            maxHeight: "860px",
-            borderRadius: "24px",
-            overflow: "hidden",
-            position: "relative",
-            boxShadow: "0 25px 60px rgba(0, 0, 0, 0.8)",
-            border: "1px solid var(--color-border)",
-            backgroundColor: "#000"
-          }}>
+        <div key={`${short.id}-${idx}`} className={styles.shortSlide}>
+          <div className={styles.videoCard}>
             <ShortCard short={short} isActive={idx === activeIndex} />
           </div>
         </div>
