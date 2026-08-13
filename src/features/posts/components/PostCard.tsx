@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
   Heart, MessageCircle, Share2, MoreHorizontal, Edit2, Trash2, Check, X, Repeat, EyeOff, Send, 
   ExternalLink, Bookmark as BookmarkIcon, VolumeX, Ban, BarChart3, Pin, Zap, Star, ListPlus, 
-  Settings2, Code, ShieldAlert, Flag, Eye, PenTool, UserPlus, MapPin, Play 
+  Settings2, Code, ShieldAlert, Flag, Eye, PenTool, UserPlus, MapPin, Play, Pause
 } from "lucide-react";
 import styles from "./PostCard.module.css";
 
@@ -36,6 +36,7 @@ interface Post {
   isCodeBlock?: boolean;
   linkUrl?: string | null;
   location?: string | null;
+  audioUrl?: string | null;
   pollData?: string | null;
   scheduledAt?: string | null;
   createdAt: string;
@@ -88,6 +89,22 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
   const [showMenu, setShowMenu] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
   const [isDeleted, setIsDeleted] = useState(false);
+  
+  // Audio Voice Note State
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const toggleAudioPlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioRef.current.play();
+      setIsPlayingAudio(true);
+    }
+  };
   
   // Interactive Poll state
   const [pollState, setPollState] = useState<any>(() => {
@@ -828,6 +845,63 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
                   }}>
                     <Play size={18} fill="white" />
                     <span>Watch in DOST Shorts</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {post.audioUrl && (
+              <div 
+                onClick={toggleAudioPlay}
+                style={{
+                  marginTop: "12px",
+                  padding: "14px 18px",
+                  borderRadius: "20px",
+                  background: "linear-gradient(135deg, rgba(29, 155, 240, 0.12), rgba(168, 85, 247, 0.12))",
+                  border: "1px solid rgba(29, 155, 240, 0.25)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  cursor: "pointer"
+                }}
+                className="hover:scale-[1.01] transition-transform"
+              >
+                <audio 
+                  ref={audioRef} 
+                  src={post.audioUrl} 
+                  onEnded={() => setIsPlayingAudio(false)} 
+                />
+                <div style={{
+                  width: "44px", height: "44px", borderRadius: "50%",
+                  background: "var(--color-primary, #1d9bf0)", color: "white",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: "0 6px 16px rgba(29, 155, 240, 0.4)",
+                  flexShrink: 0
+                }}>
+                  {isPlayingAudio ? <Pause size={20} fill="white" /> : <Play size={20} fill="white" style={{ marginLeft: "2px" }} />}
+                </div>
+
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--color-text-main)" }}>
+                      🎙️ Voice Note by {post.author.name || "User"}
+                    </span>
+                    <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", fontWeight: 700 }}>0:30</span>
+                  </div>
+
+                  {/* Animated Waveform Visualizer */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "3px", height: "22px" }}>
+                    {Array.from({ length: 26 }).map((_, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          flex: 1,
+                          backgroundColor: isPlayingAudio ? "var(--color-primary, #1d9bf0)" : "var(--color-border, #38444d)",
+                          borderRadius: "4px",
+                          height: isPlayingAudio ? `${((idx * 7) % 18) + 6}px` : `${((idx * 3) % 10) + 4}px`,
+                          transition: "height 0.2s ease"
+                        }}
+                      />
+                    ))}
                   </div>
                 </div>
               </div>

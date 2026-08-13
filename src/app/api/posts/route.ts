@@ -229,6 +229,7 @@ export async function POST(request: NextRequest) {
       gifUrl,
       linkUrl,
       location,
+      audioUrl,
       pollData,
       scheduledAt,
       parentId,
@@ -261,6 +262,7 @@ export async function POST(request: NextRequest) {
     if (gifUrl) createData.gifUrl = gifUrl;
     if (linkUrl) createData.linkUrl = linkUrl;
     if (location) createData.location = location;
+    if (audioUrl) createData.audioUrl = audioUrl;
     if (isCodeBlock) createData.isCodeBlock = true;
     if (pollData) createData.pollData = typeof pollData === "string" ? pollData : JSON.stringify(pollData);
     if (scheduledAt) createData.scheduledAt = new Date(scheduledAt);

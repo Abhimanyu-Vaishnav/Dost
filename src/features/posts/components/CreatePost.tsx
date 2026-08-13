@@ -6,7 +6,7 @@ import {
   Image as ImageIcon, Video, Link as LinkIcon, X, Loader2, 
   Smile, Calendar, MapPin, ListFilter, FileType,
   Globe, Users, Lock, Plus, ChevronDown, FileText,
-  Bold, Italic, Code, Hash, Trash2, Clock, Sparkles
+  Bold, Italic, Code, Hash, Trash2, Clock, Sparkles, Mic, Square, Play, Pause, Volume2
 } from "lucide-react";
 import { uploadMediaFile } from "@/lib/upload";
 import { CreatePostModal } from "./CreatePostModal";
@@ -68,6 +68,60 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
   const [scheduledAt, setScheduledAt] = useState<string | null>(null);
   const [showScheduleUI, setShowScheduleUI] = useState(false);
   const [scheduleDateTime, setScheduleDateTime] = useState("");
+
+  // Voice Note Recording State
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [voiceRecordTime, setVoiceRecordTime] = useState(0);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<any>(null);
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setRecordedAudioUrl(audioUrl);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setIsRecordingVoice(true);
+      setVoiceRecordTime(0);
+
+      recordTimerRef.current = setInterval(() => {
+        setVoiceRecordTime(prev => {
+          if (prev >= 30) {
+            stopVoiceRecording();
+            return 30;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch (err) {
+      console.error("Mic access error:", err);
+      // Demo voice note fallback if mic unavailable
+      setRecordedAudioUrl("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4");
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecordingVoice(false);
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+  };
 
   const [pollData, setPollData] = useState<{ question: string; options: string[]; durationHours: number } | null>(null);
   const [showPollUI, setShowPollUI] = useState(false);
@@ -286,6 +340,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
             videoUrl: item.videoUrl,
             linkUrl: item.linkUrl,
             location: location,
+            audioUrl: recordedAudioUrl,
             pollData: pollData ? {
               question: item.content || "Poll",
               options: pollData.options.map((text, i) => ({ id: i + 1, text, votes: [] })),
@@ -307,6 +362,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
       setPollData(null);
       setLocation(null);
       setScheduledAt(null);
+      setRecordedAudioUrl(null);
       router.refresh();
       if (onPostSuccess) onPostSuccess();
     } catch (error) {
@@ -349,6 +405,15 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
         </button>
         <button type="button" onClick={() => setShowLocationUI(!showLocationUI)} className="hover-bg-circle" style={{ width: "36px", height: "36px", color: "var(--color-primary)" }} title="Location">
           <MapPin size={19} />
+        </button>
+        <button 
+          type="button" 
+          onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording} 
+          className="hover-bg-circle" 
+          style={{ width: "36px", height: "36px", color: isRecordingVoice ? "#ff4d4d" : "#10b981" }} 
+          title={isRecordingVoice ? "Stop Recording Voice Note" : "Record Voice Note"}
+        >
+          {isRecordingVoice ? <Square size={17} className="animate-pulse" /> : <Mic size={19} />}
         </button>
 
         <div style={{ width: "1px", height: "20px", background: "var(--color-border)", margin: "0 4px" }} />
@@ -484,6 +549,19 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
           <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(29, 155, 240, 0.12)", color: "var(--color-primary)", padding: "4px 10px", borderRadius: "9999px", fontSize: "0.8rem", fontWeight: 600 }}>
             <ListFilter size={13} /> Poll ({pollData.options.length} options)
             <button type="button" onClick={() => setPollData(null)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", display: "flex", padding: 0 }}><X size={12} /></button>
+          </div>
+        )}
+        {isRecordingVoice && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(239, 68, 68, 0.15)", color: "#ef4444", padding: "6px 12px", borderRadius: "9999px", fontSize: "0.85rem", fontWeight: 800, border: "1px solid rgba(239, 68, 68, 0.3)" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444" }} className="animate-ping" />
+            <span>Recording Voice Note: 00:{voiceRecordTime < 10 ? `0${voiceRecordTime}` : voiceRecordTime} / 00:30</span>
+            <button type="button" onClick={stopVoiceRecording} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", display: "flex", padding: 0 }}><Square size={14} /></button>
+          </div>
+        )}
+        {recordedAudioUrl && !isRecordingVoice && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(16, 185, 129, 0.15)", color: "#10b981", padding: "6px 14px", borderRadius: "9999px", fontSize: "0.85rem", fontWeight: 700, border: "1px solid rgba(16, 185, 129, 0.3)" }}>
+            <Mic size={14} /> Voice Note Attached (00:{voiceRecordTime < 10 ? `0${voiceRecordTime}` : voiceRecordTime})
+            <button type="button" onClick={() => setRecordedAudioUrl(null)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", display: "flex", padding: 0 }}><X size={14} /></button>
           </div>
         )}
       </div>

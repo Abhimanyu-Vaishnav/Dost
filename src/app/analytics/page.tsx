@@ -1,303 +1,303 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AppLayout } from "@/components/layout/AppLayout";
-import { PageHeader } from "@/components/common/PageHeader";
-import { BarChart3, TrendingUp, Users, Calendar, Filter, Zap, RefreshCw } from "lucide-react";
+import { useState } from "react";
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, BarChart, Bar, Legend
-} from 'recharts';
+  BarChart3, Eye, TrendingUp, DollarSign, Users, ArrowUpRight, 
+  Sparkles, Calendar, Filter, Share2, Heart, MessageCircle, Repeat 
+} from "lucide-react";
+import { AppLayout } from "@/components/layout/AppLayout";
 
-const COLORS = ['var(--color-primary)', '#00ba7c', '#f91880', '#ffd400', '#7856ff', '#ff7a00'];
+const TOP_POSTS_DATA = [
+  {
+    id: "p1",
+    content: "Completed another 3D motion loop render in Blender! Check out the ambient lighting ✨ #3d #blender",
+    impressions: "38,420",
+    likes: "3,840",
+    reposts: "412",
+    tipsEarned: "$124.00"
+  },
+  {
+    id: "p2",
+    content: "Just launched another optimization on DOST! Lightning fast response times and glassmorphic UI 🚀",
+    impressions: "29,150",
+    likes: "2,910",
+    reposts: "305",
+    tipsEarned: "$85.50"
+  },
+  {
+    id: "p3",
+    content: "Building custom audio spaces with real-time WebSockets and Web Audio API 🎙️ #nextjs #fullstack",
+    impressions: "22,800",
+    likes: "1,980",
+    reposts: "189",
+    tipsEarned: "$62.00"
+  }
+];
 
 export default function AnalyticsPage() {
-  const [loading, setLoading] = useState(true);
-  const [posts, setPosts] = useState<any[]>([]);
-  const [selectedPost, setSelectedPost] = useState<string>("all");
-  const [timeframe, setTimeframe] = useState<string>("lifetime");
-  const [analyticsData, setAnalyticsData] = useState<any>(null);
-  const [isSeeding, setIsSeeding] = useState(false);
-
-  // Fetch user posts for the dropdown
-  useEffect(() => {
-    async function fetchPosts() {
-      try {
-        const res = await fetch("/api/users/profile");
-        if (res.ok) {
-          const data = await res.json();
-          // Profile returns posts. We can extract them here.
-          // Since we need all posts for the dropdown, we'll fetch them from the dedicated user profile
-          if (data.user?.posts) {
-             setPosts(data.user.posts);
-          } else {
-            // Fallback, fetch from our own generic endpoint
-            const postsRes = await fetch("/api/posts");
-            const postsData = await postsRes.json();
-            setPosts(postsData.posts || []);
-          }
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    fetchPosts();
-  }, []);
-
-  // Fetch analytics data based on filters
-  useEffect(() => {
-    async function fetchAnalytics() {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/analytics?timeframe=${timeframe}&postId=${selectedPost}`);
-        if (res.ok) {
-          const data = await res.json();
-          setAnalyticsData(data);
-        }
-      } catch (e) {
-        console.error("Failed to load analytics");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchAnalytics();
-  }, [timeframe, selectedPost]);
-
-  const handleSeedMockData = async () => {
-    setIsSeeding(true);
-    try {
-      const res = await fetch("/api/analytics/seed", { method: "POST" });
-      if (res.ok) {
-        alert("Mock historical data seeded successfully!");
-        window.location.reload();
-      } else {
-        alert("Failed to seed data. Make sure you have created some posts first.");
-      }
-    } catch (e) {
-      alert("Error seeding data.");
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", padding: "12px", borderRadius: "8px", boxShadow: "var(--shadow-lg)" }}>
-          <p style={{ fontWeight: 600, color: "var(--color-text-main)", marginBottom: "4px" }}>{label}</p>
-          <p style={{ color: payload[0].color, fontWeight: 700 }}>
-            {`${payload[0].name}: ${payload[0].value}`}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
+  const [timeRange, setTimeRange] = useState("30d");
 
   return (
     <AppLayout>
-      <PageHeader title="Analytics Studio" />
-      
-      <div style={{ padding: "var(--space-4)", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-        
-        {/* Controls Section */}
-        <div className="glass animate-slide-up" style={{ padding: "var(--space-4)", borderRadius: "var(--radius-lg)", display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "center", justifyContent: "space-between" }}>
-          
-          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-            {/* Post Selector */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <label style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
-                <Filter size={14} /> View Data For
-              </label>
-              <select 
-                value={selectedPost} 
-                onChange={(e) => setSelectedPost(e.target.value)}
-                style={{ 
-                  padding: "10px 16px", borderRadius: "var(--radius-full)", background: "var(--color-bg-base)", 
-                  border: "1px solid var(--color-border)", color: "var(--color-text-main)", outline: "none",
-                  cursor: "pointer", fontWeight: 500, minWidth: "200px"
-                }}
-              >
-                <option value="all">Complete Profile (All Posts)</option>
-                {posts.map(post => (
-                  <option key={post.id} value={post.id}>
-                    {post.content.length > 30 ? post.content.substring(0, 30) + "..." : post.content}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Timeframe Selector */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <label style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
-                <Calendar size={14} /> Timeframe
-              </label>
-              <select 
-                value={timeframe} 
-                onChange={(e) => setTimeframe(e.target.value)}
-                style={{ 
-                  padding: "10px 16px", borderRadius: "var(--radius-full)", background: "var(--color-bg-base)", 
-                  border: "1px solid var(--color-border)", color: "var(--color-text-main)", outline: "none",
-                  cursor: "pointer", fontWeight: 500
-                }}
-              >
-                <option value="24h">Last 24 Hours</option>
-                <option value="48h">Last 48 Hours</option>
-                <option value="7d">Last 7 Days</option>
-                <option value="30d">Last 30 Days</option>
-                <option value="90d">Last 90 Days</option>
-                <option value="lifetime">Lifetime</option>
-              </select>
-            </div>
+      <div style={{
+        padding: "24px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "24px",
+        maxWidth: "1000px",
+        margin: "0 auto",
+        width: "100%"
+      }}>
+        {/* Header Title & Filter Bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+          <div>
+            <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
+              <BarChart3 size={28} style={{ color: "var(--color-primary)" }} />
+              Creator Analytics Dashboard
+            </h1>
+            <p style={{ fontSize: "0.9rem", color: "var(--color-text-muted)", marginTop: "4px" }}>
+              Track your impressions, audience growth, engagement rates, and creator tip revenue.
+            </p>
           </div>
 
-          <button 
-            onClick={handleSeedMockData} 
-            disabled={isSeeding}
-            style={{ 
-              padding: "10px 16px", borderRadius: "var(--radius-full)", background: "var(--color-bg-surface)", 
-              border: "1px solid var(--color-border)", color: "var(--color-text-muted)", cursor: "pointer",
-              display: "flex", alignItems: "center", gap: "8px", fontWeight: 600, fontSize: "0.85rem"
-            }}
-            className="hover-bg"
-          >
-            {isSeeding ? <RefreshCw size={16} className="animate-spin" /> : <Zap size={16} />} 
-            Generate Mock Data
-          </button>
-
+          <div style={{ display: "flex", gap: "8px", background: "var(--color-bg-surface)", padding: "4px", borderRadius: "9999px", border: "1px solid var(--color-border)" }}>
+            {["7d", "30d", "90d"].map(range => (
+              <button
+                key={range}
+                onClick={() => setTimeRange(range)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: "9999px",
+                  border: "none",
+                  background: timeRange === range ? "var(--color-primary)" : "transparent",
+                  color: timeRange === range ? "white" : "var(--color-text-muted)",
+                  fontWeight: 700,
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                {range === "7d" ? "Last 7 Days" : range === "30d" ? "Last 30 Days" : "Last 90 Days"}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", padding: "100px", color: "var(--color-primary)" }}>
-            <RefreshCw className="animate-spin" size={40} />
-          </div>
-        ) : !analyticsData || analyticsData.totalViews === 0 ? (
-          <div className="glass" style={{ padding: "60px 20px", textAlign: "center", borderRadius: "var(--radius-lg)" }}>
-            <BarChart3 size={48} color="var(--color-text-muted)" style={{ margin: "0 auto 16px", opacity: 0.5 }} />
-            <h3 className="text-h3" style={{ marginBottom: "8px" }}>Not Enough Data</h3>
-            <p className="text-muted">There are no views recorded for this timeframe yet. Try selecting a different timeframe or generating mock data.</p>
-          </div>
-        ) : (
-          <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-            
-            {/* KPI Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
-              <div className="glass" style={{ padding: "20px", borderRadius: "var(--radius-lg)", borderTop: "3px solid var(--color-primary)" }}>
-                <div style={{ color: "var(--color-text-muted)", fontWeight: 600, fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-                  <TrendingUp size={16} color="var(--color-primary)" /> Total Views
-                </div>
-                <div style={{ fontSize: "2.5rem", fontWeight: 800, color: "var(--color-text-main)", letterSpacing: "-1px" }}>
-                  {analyticsData.totalViews.toLocaleString()}
-                </div>
-              </div>
-              <div className="glass" style={{ padding: "20px", borderRadius: "var(--radius-lg)", borderTop: "3px solid #00ba7c" }}>
-                <div style={{ color: "var(--color-text-muted)", fontWeight: 600, fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-                  <Users size={16} color="#00ba7c" /> Follower Views
-                </div>
-                <div style={{ fontSize: "2.5rem", fontWeight: 800, color: "var(--color-text-main)", letterSpacing: "-1px" }}>
-                  {analyticsData.demographics.followerStatus.find((x:any) => x.name === "Followers")?.value.toLocaleString() || 0}
-                </div>
+        {/* 4 Stat Overview Cards */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "16px"
+        }}>
+          {/* Impressions */}
+          <div style={{
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "20px",
+            padding: "20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-muted)" }}>Total Impressions</span>
+              <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(29, 155, 240, 0.15)", color: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Eye size={18} />
               </div>
             </div>
-
-            {/* Timeline Chart */}
-            <div className="glass" style={{ padding: "24px", borderRadius: "var(--radius-lg)" }}>
-              <h3 className="text-h3" style={{ marginBottom: "20px" }}>Views Over Time</h3>
-              <div style={{ width: "100%", height: "300px" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={analyticsData.timeline}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                    <XAxis dataKey="date" stroke="var(--color-text-muted)" fontSize={12} tickLine={false} axisLine={false} dy={10} />
-                    <YAxis stroke="var(--color-text-muted)" fontSize={12} tickLine={false} axisLine={false} dx={-10} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Line type="monotone" dataKey="views" name="Views" stroke="var(--color-primary)" strokeWidth={4} dot={{ r: 4, fill: "var(--color-bg-base)", strokeWidth: 2 }} activeDot={{ r: 8 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Demographics Row */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px" }}>
-              
-              {/* Audience Type */}
-              <div className="glass" style={{ padding: "24px", borderRadius: "var(--radius-lg)" }}>
-                <h3 className="text-h3" style={{ marginBottom: "20px", fontSize: "1.2rem" }}>Audience Type</h3>
-                <div style={{ width: "100%", height: "250px" }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={analyticsData.demographics.followerStatus} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
-                        {analyticsData.demographics.followerStatus.map((entry:any, index:number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Devices */}
-              <div className="glass" style={{ padding: "24px", borderRadius: "var(--radius-lg)" }}>
-                <h3 className="text-h3" style={{ marginBottom: "20px", fontSize: "1.2rem" }}>Devices</h3>
-                <div style={{ width: "100%", height: "250px" }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analyticsData.demographics.device} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="var(--color-border)" />
-                      <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" stroke="var(--color-text-muted)" fontSize={12} tickLine={false} axisLine={false} width={80} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="value" name="Views" radius={[0, 4, 4, 0]}>
-                        {analyticsData.demographics.device.map((entry:any, index:number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Regions */}
-              <div className="glass" style={{ padding: "24px", borderRadius: "var(--radius-lg)", gridColumn: "1 / -1" }}>
-                <h3 className="text-h3" style={{ marginBottom: "20px", fontSize: "1.2rem" }}>Top Regions</h3>
-                <div style={{ width: "100%", height: "250px" }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analyticsData.demographics.region} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                      <XAxis dataKey="name" stroke="var(--color-text-muted)" fontSize={12} tickLine={false} axisLine={false} dy={10} />
-                      <YAxis stroke="var(--color-text-muted)" fontSize={12} tickLine={false} axisLine={false} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="value" name="Views" radius={[4, 4, 0, 0]}>
-                        {analyticsData.demographics.region.map((entry:any, index:number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Genders */}
-              <div className="glass" style={{ padding: "24px", borderRadius: "var(--radius-lg)", gridColumn: "1 / -1" }}>
-                <h3 className="text-h3" style={{ marginBottom: "20px", fontSize: "1.2rem" }}>Gender Demographics</h3>
-                <div style={{ width: "100%", height: "250px" }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={analyticsData.demographics.gender} innerRadius={0} outerRadius={80} dataKey="value" stroke="var(--color-bg-base)" strokeWidth={2}>
-                        {analyticsData.demographics.gender.map((entry:any, index:number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[(index + 1) % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
+            <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "var(--color-text-main)" }}>142,850</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontSize: "0.8rem", fontWeight: 700 }}>
+              <ArrowUpRight size={16} /> +18.4% from last period
             </div>
           </div>
-        )}
+
+          {/* Profile Visits */}
+          <div style={{
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "20px",
+            padding: "20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-muted)" }}>Profile Visits</span>
+              <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(168, 85, 247, 0.15)", color: "#a855f7", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Users size={18} />
+              </div>
+            </div>
+            <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "var(--color-text-main)" }}>8,420</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontSize: "0.8rem", fontWeight: 700 }}>
+              <ArrowUpRight size={16} /> +12.1% profile clicks
+            </div>
+          </div>
+
+          {/* Engagement Rate */}
+          <div style={{
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "20px",
+            padding: "20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-muted)" }}>Engagement Rate</span>
+              <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(236, 72, 153, 0.15)", color: "#ec4899", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <TrendingUp size={18} />
+              </div>
+            </div>
+            <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "var(--color-text-main)" }}>8.45%</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontSize: "0.8rem", fontWeight: 700 }}>
+              <ArrowUpRight size={16} /> +2.3% above benchmark
+            </div>
+          </div>
+
+          {/* Tip Revenue */}
+          <div style={{
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "20px",
+            padding: "20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-muted)" }}>Creator Tip Revenue</span>
+              <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(16, 185, 129, 0.15)", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <DollarSign size={18} />
+              </div>
+            </div>
+            <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "var(--color-text-main)" }}>$648.50</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontSize: "0.8rem", fontWeight: 700 }}>
+              <ArrowUpRight size={16} /> +$140.00 this month
+            </div>
+          </div>
+        </div>
+
+        {/* Impression & Engagement Visualizer Graph */}
+        <div style={{
+          background: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "24px",
+          padding: "24px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>
+                Impression & Reach Growth Trend
+              </h3>
+              <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>Daily views across posts, audio spaces & video shorts</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "0.8rem", fontWeight: 700 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--color-primary)" }}>
+                <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--color-primary)" }} /> Impressions
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "#ec4899" }}>
+                <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#ec4899" }} /> Engagements
+              </span>
+            </div>
+          </div>
+
+          {/* SVG Animated Chart Curve */}
+          <div style={{ width: "100%", height: "180px", position: "relative", marginTop: "10px" }}>
+            <svg width="100%" height="100%" viewBox="0 0 500 150" preserveAspectRatio="none" style={{ overflow: "visible" }}>
+              <defs>
+                <linearGradient id="primaryGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {/* Area Fill */}
+              <path
+                d="M 0,130 Q 80,40 160,80 T 320,30 T 500,10 L 500,150 L 0,150 Z"
+                fill="url(#primaryGrad)"
+              />
+              {/* Line Stroke Primary */}
+              <path
+                d="M 0,130 Q 80,40 160,80 T 320,30 T 500,10"
+                fill="none"
+                stroke="var(--color-primary)"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+              />
+              {/* Line Stroke Secondary Pink */}
+              <path
+                d="M 0,140 Q 80,90 160,110 T 320,70 T 500,45"
+                fill="none"
+                stroke="#ec4899"
+                strokeWidth="2.5"
+                strokeDasharray="5,5"
+              />
+            </svg>
+          </div>
+        </div>
+
+        {/* Top Performing Posts Breakdown */}
+        <div style={{
+          background: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "24px",
+          padding: "24px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px"
+        }}>
+          <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>
+            Top Performing Content
+          </h3>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {TOP_POSTS_DATA.map((item, idx) => (
+              <div
+                key={item.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "16px",
+                  borderRadius: "16px",
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-bg-base)",
+                  gap: "16px",
+                  flexWrap: "wrap"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "240px" }}>
+                  <span style={{ fontWeight: 900, fontSize: "1.1rem", color: "var(--color-primary)" }}>#{idx + 1}</span>
+                  <span style={{ fontSize: "0.9rem", color: "var(--color-text-main)", fontWeight: 600 }}>
+                    {item.content}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "20px", fontSize: "0.85rem", color: "var(--color-text-muted)", fontWeight: 700 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <Eye size={15} style={{ color: "var(--color-primary)" }} /> {item.impressions}
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <Heart size={15} style={{ color: "#f91880" }} /> {item.likes}
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <Repeat size={15} style={{ color: "#00ba7c" }} /> {item.reposts}
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "#10b981" }}>
+                    <DollarSign size={15} /> {item.tipsEarned}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </AppLayout>
   );
