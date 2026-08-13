@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import styles from "./messages.module.css";
+import { CallModal } from "./CallModal";
 
 interface ChatMessage {
   id: string;
@@ -87,12 +88,12 @@ const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {
 
 export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  // Default activeConvId to null so on mobile only the conversation list is shown initially
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>(INITIAL_MESSAGES);
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [activeCall, setActiveCall] = useState<{ type: "voice" | "video"; contact: any } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-select first conversation on Desktop (>650px)
@@ -339,10 +340,20 @@ export default function MessagesPage() {
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
+                  <button 
+                    onClick={() => setActiveCall({ type: "voice", contact: activeConv })}
+                    style={{ background: "rgba(29, 155, 240, 0.1)", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
+                    className="hover:scale-105 active:scale-95"
+                    title="Start Voice Call"
+                  >
                     <Phone size={19} />
                   </button>
-                  <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
+                  <button 
+                    onClick={() => setActiveCall({ type: "video", contact: activeConv })}
+                    style={{ background: "rgba(168, 85, 247, 0.1)", border: "none", color: "#a855f7", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
+                    className="hover:scale-105 active:scale-95"
+                    title="Start Video Call"
+                  >
                     <Video size={19} />
                   </button>
                   <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
@@ -440,14 +451,7 @@ export default function MessagesPage() {
               {/* Bottom Chat Input Form */}
               <form
                 onSubmit={handleSendMessage}
-                style={{
-                  padding: "12px 16px",
-                  borderTop: "1px solid var(--color-border)",
-                  background: "var(--color-bg-surface)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px"
-                }}
+                className={styles.inputForm}
               >
                 <button type="button" style={{ background: "none", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "6px" }} className="hover-bg-circle">
                   <ImageIcon size={20} />
@@ -505,6 +509,15 @@ export default function MessagesPage() {
           )}
         </div>
       </div>
+
+      {/* Voice or Video Call Modal Overlay */}
+      {activeCall && (
+        <CallModal
+          type={activeCall.type}
+          contact={activeCall.contact}
+          onEndCall={() => setActiveCall(null)}
+        />
+      )}
     </AppLayout>
   );
 }
