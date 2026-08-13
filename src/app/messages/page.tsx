@@ -34,6 +34,8 @@ interface Conversation {
   lastTime: string;
 }
 
+const EMOJI_REACTIONS_PRESETS = ["❤️", "🔥", "😂", "👏", "💯", "😮", "👍"];
+
 const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: "conv-1",
@@ -93,11 +95,12 @@ export default function MessagesPage() {
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>(INITIAL_MESSAGES);
   
-  // Chat Input States
+  // Chat Input & Popover States
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [activeCall, setActiveCall] = useState<{ type: "voice" | "video"; contact: any } | null>(null);
+  const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
   
   // Media & Voice Attachment States
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
@@ -139,7 +142,6 @@ export default function MessagesPage() {
       setAttachedImage(url);
     } catch (err) {
       console.error("Image upload error:", err);
-      // Fallback object URL
       setAttachedImage(URL.createObjectURL(file));
     } finally {
       setIsUploadingImage(false);
@@ -180,7 +182,6 @@ export default function MessagesPage() {
       }, 1000);
     } catch (err) {
       console.error("Mic error:", err);
-      // Fallback demo voice note
       sendVoiceMessage("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4");
     }
   };
@@ -305,7 +306,7 @@ export default function MessagesPage() {
         style={{ display: "none" }} 
       />
 
-      <div className={styles.container}>
+      <div className={styles.container} onClick={() => setActiveReactionMsgId(null)}>
         {/* Left Sidebar Conversation List */}
         <div className={`${styles.sidebar} ${activeConvId ? styles.sidebarHiddenMobile : ""}`}>
           {/* Header */}
@@ -495,21 +496,81 @@ export default function MessagesPage() {
                       display: "flex",
                       flexDirection: "column",
                       alignItems: msg.isMe ? "flex-end" : "flex-start",
-                      gap: "4px"
+                      gap: "4px",
+                      position: "relative"
                     }}
                   >
-                    <div style={{
-                      maxWidth: "82%",
-                      padding: "12px 16px",
-                      borderRadius: msg.isMe ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
-                      backgroundColor: msg.isMe ? "var(--color-primary, #1d9bf0)" : "var(--color-bg-surface)",
-                      color: msg.isMe ? "#ffffff" : "var(--color-text-main)",
-                      border: msg.isMe ? "none" : "1px solid var(--color-border)",
-                      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                      fontSize: "0.95rem",
-                      lineHeight: "1.45",
-                      position: "relative"
-                    }}>
+                    {/* Floating Reaction Popover Pill when message is clicked */}
+                    {activeReactionMsgId === msg.id && (
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          position: "absolute",
+                          top: "-42px",
+                          right: msg.isMe ? "0" : "auto",
+                          left: msg.isMe ? "auto" : "0",
+                          background: "var(--color-bg-surface)",
+                          border: "1px solid var(--color-primary, #1d9bf0)",
+                          borderRadius: "9999px",
+                          padding: "4px 10px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
+                          zIndex: 20
+                        }}
+                        className="animate-scale-in"
+                      >
+                        {EMOJI_REACTIONS_PRESETS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddReaction(msg.id, emoji);
+                              setActiveReactionMsgId(null);
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              fontSize: "1.2rem",
+                              cursor: "pointer",
+                              transition: "transform 0.15s ease",
+                              padding: "2px"
+                            }}
+                            className="hover:scale-125 active:scale-90"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Chat Bubble Component */}
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id);
+                      }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleAddReaction(msg.id, "❤️");
+                      }}
+                      style={{
+                        maxWidth: "82%",
+                        padding: "12px 16px",
+                        borderRadius: msg.isMe ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
+                        backgroundColor: msg.isMe ? "var(--color-primary, #1d9bf0)" : "var(--color-bg-surface)",
+                        color: msg.isMe ? "#ffffff" : "var(--color-text-main)",
+                        border: msg.isMe ? "none" : "1px solid var(--color-border)",
+                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                        fontSize: "0.95rem",
+                        lineHeight: "1.45",
+                        position: "relative",
+                        cursor: "pointer",
+                        userSelect: "none"
+                      }}
+                      className="hover:opacity-95 transition-opacity"
+                    >
                       {/* Attached Image inside Bubble */}
                       {msg.imageUrl && (
                         <div style={{ marginBottom: "8px", borderRadius: "12px", overflow: "hidden" }}>
@@ -539,19 +600,25 @@ export default function MessagesPage() {
                       )}
                     </div>
 
-                    {/* Message Timestamp & Reactions Picker */}
+                    {/* Message Timestamp & Quick Reactions */}
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.72rem", color: "var(--color-text-muted)" }}>
                       <span>{msg.timestamp}</span>
                       {msg.isMe && <CheckCheck size={14} style={{ color: "var(--color-primary)" }} />}
                       <button 
-                        onClick={() => handleAddReaction(msg.id, "❤️")} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddReaction(msg.id, "❤️");
+                        }} 
                         style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem", opacity: 0.7 }}
                         title="React ❤️"
                       >
                         ❤️
                       </button>
                       <button 
-                        onClick={() => handleAddReaction(msg.id, "🔥")} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddReaction(msg.id, "🔥");
+                        }} 
                         style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem", opacity: 0.7 }}
                         title="React 🔥"
                       >
