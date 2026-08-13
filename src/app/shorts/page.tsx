@@ -50,13 +50,16 @@ const AUDIOS = [
   "Tech Ambient Soundscapes 💡"
 ];
 
-export default async function ShortsPage() {
+export default async function ShortsPage({ searchParams }: { searchParams: Promise<{ postId?: string }> }) {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
 
   if (!token) redirect("/login");
   const user = await verifyToken(token);
   if (!user) redirect("/login");
+
+  const resolvedParams = await searchParams;
+  const initialPostId = resolvedParams.postId || null;
 
   // Fetch real database video posts first
   const dbVideoPosts = await prisma.post.findMany({
@@ -116,7 +119,7 @@ export default async function ShortsPage() {
 
   return (
     <AppLayout fullWidth>
-      <ShortsFeedClient shorts={allShorts} />
+      <ShortsFeedClient shorts={allShorts} initialPostId={initialPostId} />
     </AppLayout>
   );
 }

@@ -14,6 +14,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   const [posts, setPosts] = useState(initialPosts);
   const [newPostsQueue, setNewPostsQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Pull to refresh state
@@ -21,12 +22,60 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   const [isPulling, setIsPulling] = useState(false);
   const startY = useRef<number>(0);
   const topFeedRef = useRef<HTMLDivElement>(null);
+  const observerTargetRef = useRef<HTMLDivElement>(null);
 
   // Reset feed state when activeTab or initialPosts change
   useEffect(() => {
     setPosts(initialPosts);
     setNewPostsQueue([]);
+    setHasMore(true);
   }, [initialPosts, activeTab]);
+
+  // Load next page of posts for infinite scroll
+  const loadMorePosts = useCallback(async () => {
+    if (loading || !hasMore) return;
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/posts?tab=${activeTab}&skip=${posts.length}&take=15`);
+      if (res.ok) {
+        const data = await res.json();
+        const incoming = data.posts || [];
+
+        if (incoming.length > 0) {
+          setPosts(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const fresh = incoming.filter((p: any) => !existingIds.has(p.id));
+            return [...prev, ...fresh];
+          });
+        } else {
+          setHasMore(false);
+        }
+      }
+    } catch (e) {
+      console.error("Infinite scroll load error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, posts.length, loading, hasMore]);
+
+  // IntersectionObserver Sentinel Listener for Infinite Scroll
+  useEffect(() => {
+    const target = observerTargetRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loading && hasMore) {
+          loadMorePosts();
+        }
+      },
+      { threshold: 0.1, rootMargin: "400px" }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loadMorePosts, loading, hasMore]);
 
   // Execute manual refresh / pull refresh
   const executeRefresh = useCallback(async () => {
@@ -38,6 +87,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
         if (data.posts) {
           setPosts(data.posts);
           setNewPostsQueue([]);
+          setHasMore(true);
         }
       }
     } catch (e) {
@@ -69,7 +119,6 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             const existingIds = new Set([...posts.map((p) => p.id), ...prev.map((p) => p.id)]);
             const brandNew = incoming.filter((np) => !existingIds.has(np.id));
             if (brandNew.length > 0) {
-              // Limit streaming updates to max 5 new posts at a time for smoother flow
               return [...prev, ...brandNew.slice(0, 5)];
             }
             return prev;
@@ -81,13 +130,11 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   }, [posts, newPostsQueue, activeTab]);
 
-  // Standard live feed polling (every 15 seconds instead of 3 seconds)
   useEffect(() => {
     const interval = setInterval(fetchNewPosts, 15000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
-  // Function to reveal and prepend queued new posts when user explicitly clicks "Show N posts"
   const handleRevealNewPosts = () => {
     if (newPostsQueue.length === 0) return;
 
@@ -99,7 +146,6 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
 
     setNewPostsQueue([]);
 
-    // Smooth scroll to top of feed
     if (topFeedRef.current) {
       topFeedRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
@@ -145,7 +191,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       onTouchEnd={handleTouchEnd}
       style={{ display: "flex", flexDirection: "column", position: "relative", width: "100%" }}
     >
-      {/* PULL-TO-REFRESH ANIMATED INDICATOR */}
+      {/* PULL-TO-REFRESH INDICATOR */}
       {(pullDistance > 0 || isRefreshing) && (
         <div
           style={{
@@ -188,7 +234,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
         </div>
       )}
 
-      {/* TWITTER/X EXACT FULL-WIDTH BAR: "Show 105 posts" (MATCHING SCREENSHOT) */}
+      {/* SHOW N POSTS BAR */}
       {newPostsQueue.length > 0 && (
         <button
           onClick={handleRevealNewPosts}
@@ -210,8 +256,6 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             alignItems: "center",
             justifyContent: "center"
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(29, 155, 240, 0.1)")}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "rgba(29, 155, 240, 0.04)")}
         >
           <span>Show {newPostsQueue.length} {newPostsQueue.length === 1 ? "post" : "posts"}</span>
         </button>
@@ -244,11 +288,15 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
         ))
       )}
 
-      {loading && (
-        <div style={{ display: "flex", justifyContent: "center", padding: "24px" }}>
-          <Loader2 className="animate-spin" style={{ color: "var(--color-primary, #1d9bf0)" }} size={24} />
-        </div>
-      )}
+      {/* Infinite Scroll Sentinel Target & Loader */}
+      <div ref={observerTargetRef} style={{ padding: "20px 0", display: "flex", justifyContent: "center" }}>
+        {loading && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--color-primary)" }}>
+            <Loader2 className="animate-spin" size={22} />
+            <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>Loading more posts...</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

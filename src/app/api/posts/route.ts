@@ -45,10 +45,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    let takeCount = searchParams.get("stream") === "true" ? 10 : 20;
+    const skipCount = parseInt(searchParams.get("skip") || "0", 10);
+    let takeCount = parseInt(searchParams.get("take") || (searchParams.get("stream") === "true" ? "10" : "20"), 10);
 
     let posts = await (prisma.post as any).findMany({
       where,
+      skip: skipCount,
       orderBy: { createdAt: "desc" },
       include: {
         author: {

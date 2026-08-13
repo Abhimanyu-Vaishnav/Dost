@@ -6,7 +6,7 @@ import Link from "next/link";
 import { 
   Heart, MessageCircle, Share2, MoreHorizontal, Edit2, Trash2, Check, X, Repeat, EyeOff, Send, 
   ExternalLink, Bookmark as BookmarkIcon, VolumeX, Ban, BarChart3, Pin, Zap, Star, ListPlus, 
-  Settings2, Code, ShieldAlert, Flag, Eye, PenTool, UserPlus, MapPin 
+  Settings2, Code, ShieldAlert, Flag, Eye, PenTool, UserPlus, MapPin, Play 
 } from "lucide-react";
 import styles from "./PostCard.module.css";
 
@@ -790,8 +790,39 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
             )}
 
             {post.videoUrl && (
-              <div style={{ marginTop: "12px", borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--color-border)", background: "black" }}>
-                <video src={post.videoUrl} controls style={{ width: "100%", maxHeight: "500px" }} />
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/shorts?postId=${post.id}`);
+                }}
+                style={{ 
+                  marginTop: "12px", 
+                  borderRadius: "var(--radius-lg)", 
+                  overflow: "hidden", 
+                  border: "1px solid var(--color-border)", 
+                  background: "black",
+                  position: "relative",
+                  cursor: "pointer"
+                }}
+                className="group"
+              >
+                <video src={post.videoUrl} style={{ width: "100%", maxHeight: "500px", objectFit: "cover", display: "block" }} />
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: "rgba(0, 0, 0, 0.3)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "white", transition: "background 0.2s ease"
+                }}>
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: "8px",
+                    background: "rgba(0, 0, 0, 0.75)", backdropFilter: "blur(8px)",
+                    padding: "10px 20px", borderRadius: "99px",
+                    fontWeight: 800, fontSize: "0.9rem", border: "1px solid rgba(255,255,255,0.2)"
+                  }}>
+                    <Play size={18} fill="white" />
+                    <span>Watch in DOST Shorts</span>
+                  </div>
+                </div>
               </div>
             )}
           </>
