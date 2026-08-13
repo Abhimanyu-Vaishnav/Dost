@@ -510,7 +510,16 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         )}
       </aside>
 
-      <main className={styles.mainContent} style={fullWidth ? { flex: 1, minWidth: 0, width: "auto", borderRight: "none", overflowY: "auto" } : {}}>
+      <main 
+        className={styles.mainContent} 
+        style={
+          pathname === "/shorts" 
+            ? { flex: 1, minWidth: 0, width: "auto", borderRight: "none", overflow: "hidden", padding: 0 } 
+            : fullWidth 
+            ? { flex: 1, minWidth: 0, width: "auto", borderRight: "none", overflowY: "auto" } 
+            : {}
+        }
+      >
         {children}
       </main>
 
