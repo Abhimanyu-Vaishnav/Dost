@@ -138,6 +138,42 @@ export default function MessagesPage() {
     }
   }, []);
 
+  // Live Message Polling Stream every 2.5 seconds
+  useEffect(() => {
+    if (!activeConvId) return;
+    const validId: string = activeConvId;
+
+    async function syncLiveMessages() {
+      try {
+        const res = await fetch(`/api/messages?convId=${validId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.messages && data.messages.length > 0) {
+            setMessagesMap(prev => {
+              const currentMsgs: ChatMessage[] = prev[validId] || [];
+              const existingIds = new Set(currentMsgs.map((m: ChatMessage) => m.id));
+              const brandNew = data.messages.filter((m: any) => !existingIds.has(m.id));
+              if (brandNew.length > 0) {
+                const updated = {
+                  ...prev,
+                  [validId]: [...currentMsgs, ...brandNew]
+                };
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
+                }
+                return updated;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (e) {}
+    }
+
+    const liveInterval = setInterval(syncLiveMessages, 2500);
+    return () => clearInterval(liveInterval);
+  }, [activeConvId]);
+
   // Auto-select first conversation on Desktop (>650px)
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth > 650 && !activeConvId) {
@@ -294,6 +330,12 @@ export default function MessagesPage() {
       }
       return c;
     }));
+
+    fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ convId: currentId, text: newMsg.text, imageUrl: newMsg.imageUrl })
+    }).catch(() => {});
 
     setInputText("");
     setAttachedImage(null);
