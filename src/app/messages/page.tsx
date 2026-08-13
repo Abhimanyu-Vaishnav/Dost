@@ -87,21 +87,30 @@ const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {
 
 export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  // Default to null on mobile, so conversation list shows first
-  const [activeConvId, setActiveConvId] = useState<string | null>("conv-1");
+  // Default activeConvId to null so on mobile only the conversation list is shown initially
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>(INITIAL_MESSAGES);
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const activeConv = conversations.find(c => c.id === (activeConvId || "conv-1")) || conversations[0];
-  const activeMessages = messagesMap[activeConv.id] || [];
+  // Auto-select first conversation on Desktop (>650px)
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth > 650 && !activeConvId) {
+      setActiveConvId("conv-1");
+    }
+  }, []);
+
+  const activeConv = conversations.find(c => c.id === activeConvId) || conversations[0];
+  const activeMessages = activeConvId ? (messagesMap[activeConvId] || []) : [];
 
   // Scroll to bottom when messages update
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeMessages]);
+    if (activeConvId) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [activeMessages, activeConvId]);
 
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -293,190 +302,207 @@ export default function MessagesPage() {
 
         {/* Right Active Chat Window */}
         <div className={`${styles.chatWindow} ${!activeConvId ? styles.chatWindowHiddenMobile : ""}`}>
-          {/* Chat Window Top Bar */}
-          <div style={{
-            padding: "12px 16px",
-            borderBottom: "1px solid var(--color-border)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "var(--color-bg-surface)"
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              {/* Back Arrow for Mobile Screen */}
-              <button 
-                onClick={() => setActiveConvId(null)}
-                className={styles.backBtn}
-                title="Back to conversations"
-              >
-                <ArrowLeft size={22} />
-              </button>
+          {activeConvId ? (
+            <>
+              {/* Chat Window Top Bar */}
+              <div style={{
+                padding: "12px 16px",
+                borderBottom: "1px solid var(--color-border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "var(--color-bg-surface)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  {/* Back Arrow for Mobile Screen */}
+                  <button 
+                    onClick={() => setActiveConvId(null)}
+                    className={styles.backBtn}
+                    title="Back to conversations"
+                  >
+                    <ArrowLeft size={20} />
+                  </button>
 
-              <img
-                src={activeConv.avatar}
-                alt={activeConv.name}
-                style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }}
-              />
-              <div>
-                <h3 style={{ fontSize: "1rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>
-                  {activeConv.name}
-                </h3>
-                <span style={{ fontSize: "0.75rem", color: activeConv.isOnline ? "#10b981" : "var(--color-text-muted)", fontWeight: 600 }}>
-                  {activeConv.isOnline ? "Active now" : "Offline"}
-                </span>
+                  <img
+                    src={activeConv.avatar}
+                    alt={activeConv.name}
+                    style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }}
+                  />
+                  <div>
+                    <h3 style={{ fontSize: "1rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>
+                      {activeConv.name}
+                    </h3>
+                    <span style={{ fontSize: "0.75rem", color: activeConv.isOnline ? "#10b981" : "var(--color-text-muted)", fontWeight: 600 }}>
+                      {activeConv.isOnline ? "Active now" : "Offline"}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
+                    <Phone size={19} />
+                  </button>
+                  <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
+                    <Video size={19} />
+                  </button>
+                  <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
+                    <MoreVertical size={19} />
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
-                <Phone size={19} />
-              </button>
-              <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
-                <Video size={19} />
-              </button>
-              <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
-                <MoreVertical size={19} />
-              </button>
-            </div>
-          </div>
+              {/* Chat Messages Feed */}
+              <div style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px"
+              }}>
+                {activeMessages.map(msg => (
+                  <div
+                    key={msg.id}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: msg.isMe ? "flex-end" : "flex-start",
+                      gap: "4px"
+                    }}
+                  >
+                    <div style={{
+                      maxWidth: "82%",
+                      padding: "12px 16px",
+                      borderRadius: msg.isMe ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
+                      backgroundColor: msg.isMe ? "var(--color-primary, #1d9bf0)" : "var(--color-bg-surface)",
+                      color: msg.isMe ? "#ffffff" : "var(--color-text-main)",
+                      border: msg.isMe ? "none" : "1px solid var(--color-border)",
+                      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                      fontSize: "0.95rem",
+                      lineHeight: "1.45",
+                      position: "relative"
+                    }}>
+                      {msg.text}
 
-          {/* Chat Messages Feed */}
-          <div style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: "20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px"
-          }}>
-            {activeMessages.map(msg => (
-              <div
-                key={msg.id}
+                      {/* Reaction Badges */}
+                      {msg.reactions && msg.reactions.length > 0 && (
+                        <div style={{
+                          position: "absolute",
+                          bottom: "-12px",
+                          right: msg.isMe ? "auto" : "12px",
+                          left: msg.isMe ? "12px" : "auto",
+                          background: "var(--color-bg-surface)",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: "99px",
+                          padding: "1px 6px",
+                          fontSize: "0.75rem",
+                          boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
+                        }}>
+                          {msg.reactions.join(" ")}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Message Timestamp & Reactions Picker */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.72rem", color: "var(--color-text-muted)" }}>
+                      <span>{msg.timestamp}</span>
+                      {msg.isMe && <CheckCheck size={14} style={{ color: "var(--color-primary)" }} />}
+                      <button 
+                        onClick={() => handleAddReaction(msg.id, "❤️")} 
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem", opacity: 0.7 }}
+                        title="React ❤️"
+                      >
+                        ❤️
+                      </button>
+                      <button 
+                        onClick={() => handleAddReaction(msg.id, "🔥")} 
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem", opacity: 0.7 }}
+                        title="React 🔥"
+                      >
+                        🔥
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Typing Indicator */}
+                {isTyping && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--color-text-muted)", fontSize: "0.85rem" }}>
+                    <span style={{ fontWeight: 600 }}>{activeConv.name} is typing...</span>
+                    <span className="animate-bounce">•</span>
+                    <span className="animate-bounce" style={{ animationDelay: "0.1s" }}>•</span>
+                    <span className="animate-bounce" style={{ animationDelay: "0.2s" }}>•</span>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Bottom Chat Input Form */}
+              <form
+                onSubmit={handleSendMessage}
                 style={{
+                  padding: "12px 16px",
+                  borderTop: "1px solid var(--color-border)",
+                  background: "var(--color-bg-surface)",
                   display: "flex",
-                  flexDirection: "column",
-                  alignItems: msg.isMe ? "flex-end" : "flex-start",
-                  gap: "4px"
+                  alignItems: "center",
+                  gap: "8px"
                 }}
               >
-                <div style={{
-                  maxWidth: "82%",
-                  padding: "12px 16px",
-                  borderRadius: msg.isMe ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
-                  backgroundColor: msg.isMe ? "var(--color-primary, #1d9bf0)" : "var(--color-bg-surface)",
-                  color: msg.isMe ? "#ffffff" : "var(--color-text-main)",
-                  border: msg.isMe ? "none" : "1px solid var(--color-border)",
-                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                  fontSize: "0.95rem",
-                  lineHeight: "1.45",
-                  position: "relative"
-                }}>
-                  {msg.text}
+                <button type="button" style={{ background: "none", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "6px" }} className="hover-bg-circle">
+                  <ImageIcon size={20} />
+                </button>
+                <button type="button" style={{ background: "none", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "6px" }} className="hover-bg-circle">
+                  <Mic size={20} />
+                </button>
 
-                  {/* Reaction Badges */}
-                  {msg.reactions && msg.reactions.length > 0 && (
-                    <div style={{
-                      position: "absolute",
-                      bottom: "-12px",
-                      right: msg.isMe ? "auto" : "12px",
-                      left: msg.isMe ? "12px" : "auto",
-                      background: "var(--color-bg-surface)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: "99px",
-                      padding: "1px 6px",
-                      fontSize: "0.75rem",
-                      boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
-                    }}>
-                      {msg.reactions.join(" ")}
-                    </div>
-                  )}
-                </div>
+                <input
+                  type="text"
+                  placeholder={`Message ${activeConv.name}...`}
+                  value={inputText}
+                  onChange={e => setInputText(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: "12px 18px",
+                    borderRadius: "9999px",
+                    border: "1px solid var(--color-border)",
+                    background: "var(--color-bg-base)",
+                    color: "var(--color-text-main)",
+                    fontSize: "0.95rem",
+                    outline: "none"
+                  }}
+                />
 
-                {/* Message Timestamp & Reactions Picker */}
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.72rem", color: "var(--color-text-muted)" }}>
-                  <span>{msg.timestamp}</span>
-                  {msg.isMe && <CheckCheck size={14} style={{ color: "var(--color-primary)" }} />}
-                  <button 
-                    onClick={() => handleAddReaction(msg.id, "❤️")} 
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem", opacity: 0.7 }}
-                    title="React ❤️"
-                  >
-                    ❤️
-                  </button>
-                  <button 
-                    onClick={() => handleAddReaction(msg.id, "🔥")} 
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem", opacity: 0.7 }}
-                    title="React 🔥"
-                  >
-                    🔥
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {/* Typing Indicator */}
-            {isTyping && (
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--color-text-muted)", fontSize: "0.85rem" }}>
-                <span style={{ fontWeight: 600 }}>{activeConv.name} is typing...</span>
-                <span className="animate-bounce">•</span>
-                <span className="animate-bounce" style={{ animationDelay: "0.1s" }}>•</span>
-                <span className="animate-bounce" style={{ animationDelay: "0.2s" }}>•</span>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Bottom Chat Input Form */}
-          <form
-            onSubmit={handleSendMessage}
-            style={{
-              padding: "12px 16px",
-              borderTop: "1px solid var(--color-border)",
-              background: "var(--color-bg-surface)",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px"
-            }}
-          >
-            <button type="button" style={{ background: "none", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "6px" }} className="hover-bg-circle">
-              <ImageIcon size={20} />
-            </button>
-            <button type="button" style={{ background: "none", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "6px" }} className="hover-bg-circle">
-              <Mic size={20} />
-            </button>
-
-            <input
-              type="text"
-              placeholder={`Message ${activeConv.name}...`}
-              value={inputText}
-              onChange={e => setInputText(e.target.value)}
-              style={{
-                flex: 1,
-                padding: "12px 18px",
-                borderRadius: "9999px",
-                border: "1px solid var(--color-border)",
-                background: "var(--color-bg-base)",
-                color: "var(--color-text-main)",
-                fontSize: "0.95rem",
-                outline: "none"
-              }}
-            />
-
-            <button
-              type="submit"
-              disabled={!inputText.trim()}
-              style={{
-                width: "44px", height: "44px", borderRadius: "50%",
-                background: inputText.trim() ? "var(--color-primary)" : "var(--color-border)",
-                color: "white", border: "none", cursor: inputText.trim() ? "pointer" : "default",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "all 0.15s ease",
-                flexShrink: 0
-              }}
-            >
-              <Send size={18} />
-            </button>
-          </form>
+                <button
+                  type="submit"
+                  disabled={!inputText.trim()}
+                  style={{
+                    width: "44px", height: "44px", borderRadius: "50%",
+                    background: inputText.trim() ? "var(--color-primary)" : "var(--color-border)",
+                    color: "white", border: "none", cursor: inputText.trim() ? "pointer" : "default",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.15s ease",
+                    flexShrink: 0
+                  }}
+                >
+                  <Send size={18} />
+                </button>
+              </form>
+            </>
+          ) : (
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              height: "100%", padding: "40px", textAlign: "center", color: "var(--color-text-muted)"
+            }}>
+              <MessageCircle size={48} style={{ color: "var(--color-primary)", marginBottom: "16px" }} />
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--color-text-main)", marginBottom: "8px" }}>
+                Select a conversation
+              </h3>
+              <p style={{ fontSize: "0.9rem", maxWidth: "300px" }}>
+                Choose from your existing messages or start a new conversation.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </AppLayout>

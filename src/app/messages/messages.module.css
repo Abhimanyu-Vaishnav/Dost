@@ -4,6 +4,7 @@
   height: calc(100dvh - 56px);
   background-color: var(--color-bg-base);
   overflow: hidden;
+  position: relative;
 }
 
 .sidebar {
@@ -13,6 +14,7 @@
   flex-direction: column;
   background-color: var(--color-bg-surface);
   flex-shrink: 0;
+  height: 100%;
 }
 
 .chatWindow {
@@ -22,12 +24,14 @@
   background-color: var(--color-bg-base);
   position: relative;
   min-width: 0;
+  height: 100%;
 }
 
 .backBtn {
   display: none;
 }
 
+/* Mobile responsive full screen view switcher */
 @media (max-width: 650px) {
   .container {
     height: calc(100dvh - 56px);
@@ -35,7 +39,15 @@
 
   .sidebar {
     width: 100%;
+    height: 100%;
     border-right: none;
+    display: flex;
+  }
+
+  .chatWindow {
+    width: 100%;
+    height: 100%;
+    display: flex;
   }
 
   .sidebarHiddenMobile {
@@ -46,20 +58,16 @@
     display: none !important;
   }
 
-  .chatWindow {
-    width: 100%;
-  }
-
   .backBtn {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: none;
+    background: rgba(255, 255, 255, 0.08);
     border: none;
     color: var(--color-text-main);
     cursor: pointer;
-    padding: 6px;
-    margin-right: 4px;
+    padding: 8px;
+    margin-right: 6px;
     border-radius: 50%;
   }
 }
