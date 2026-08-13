@@ -3,11 +3,13 @@
 import { useState, useRef, useEffect } from "react";
 import { 
   Send, Image as ImageIcon, Smile, Mic, Phone, Video, 
-  Search, Plus, MoreVertical, CheckCheck, Sparkles, MessageCircle, X, ArrowLeft
+  Search, Plus, MoreVertical, CheckCheck, Sparkles, MessageCircle, X, ArrowLeft,
+  Square, Play, Pause, Trash2
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import styles from "./messages.module.css";
 import { CallModal } from "./CallModal";
+import { uploadMediaFile } from "@/lib/upload";
 
 interface ChatMessage {
   id: string;
@@ -90,10 +92,24 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>(INITIAL_MESSAGES);
+  
+  // Chat Input States
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [activeCall, setActiveCall] = useState<{ type: "voice" | "video"; contact: any } | null>(null);
+  
+  // Media & Voice Attachment States
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [voiceRecordTime, setVoiceRecordTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<any>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-select first conversation on Desktop (>650px)
@@ -113,16 +129,107 @@ export default function MessagesPage() {
     }
   }, [activeMessages, activeConvId]);
 
+  // Handle Image Attachment Selection
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingImage(true);
+    try {
+      const url = await uploadMediaFile(file);
+      setAttachedImage(url);
+    } catch (err) {
+      console.error("Image upload error:", err);
+      // Fallback object URL
+      setAttachedImage(URL.createObjectURL(file));
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Voice Note Recording
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        sendVoiceMessage(audioUrl);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setIsRecordingVoice(true);
+      setVoiceRecordTime(0);
+
+      recordTimerRef.current = setInterval(() => {
+        setVoiceRecordTime(prev => {
+          if (prev >= 30) {
+            stopVoiceRecording();
+            return 30;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch (err) {
+      console.error("Mic error:", err);
+      // Fallback demo voice note
+      sendVoiceMessage("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4");
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecordingVoice(false);
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+  };
+
+  const sendVoiceMessage = (audioUrl: string) => {
+    if (!activeConvId) return;
+    const currentId = activeConvId;
+    const voiceMsg: ChatMessage = {
+      id: `msg-voice-${Date.now()}`,
+      senderId: "me",
+      senderName: "You",
+      text: "🎙️ Voice Note (00:15)",
+      audioUrl: audioUrl,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      isMe: true
+    };
+
+    setMessagesMap(prev => ({
+      ...prev,
+      [currentId]: [...(prev[currentId] || []), voiceMsg]
+    }));
+
+    setConversations(prev => prev.map(c => {
+      if (c.id === currentId) {
+        return { ...c, lastMessage: "🎙️ Voice Note", lastTime: "Just now", unreadCount: 0 };
+      }
+      return c;
+    }));
+  };
+
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || !activeConvId) return;
+    if ((!inputText.trim() && !attachedImage) || !activeConvId) return;
 
     const currentId = activeConvId;
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: "me",
       senderName: "You",
-      text: inputText.trim(),
+      text: inputText.trim() || (attachedImage ? "📷 Image Attached" : ""),
+      imageUrl: attachedImage || undefined,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       isMe: true
     };
@@ -134,12 +241,13 @@ export default function MessagesPage() {
 
     setConversations(prev => prev.map(c => {
       if (c.id === currentId) {
-        return { ...c, lastMessage: inputText.trim(), lastTime: "Just now", unreadCount: 0 };
+        return { ...c, lastMessage: inputText.trim() || "📷 Image", lastTime: "Just now", unreadCount: 0 };
       }
       return c;
     }));
 
     setInputText("");
+    setAttachedImage(null);
 
     // Simulate real-time automated reply after 1.5 seconds
     setTimeout(() => {
@@ -188,6 +296,15 @@ export default function MessagesPage() {
 
   return (
     <AppLayout fullWidth>
+      {/* Hidden File Input for Image Attachments */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleImageSelect} 
+        accept="image/*" 
+        style={{ display: "none" }} 
+      />
+
       <div className={styles.container}>
         {/* Left Sidebar Conversation List */}
         <div className={`${styles.sidebar} ${activeConvId ? styles.sidebarHiddenMobile : ""}`}>
@@ -393,6 +510,14 @@ export default function MessagesPage() {
                       lineHeight: "1.45",
                       position: "relative"
                     }}>
+                      {/* Attached Image inside Bubble */}
+                      {msg.imageUrl && (
+                        <div style={{ marginBottom: "8px", borderRadius: "12px", overflow: "hidden" }}>
+                          <img src={msg.imageUrl} alt="Attachment" style={{ maxWidth: "100%", maxHeight: "240px", display: "block", objectFit: "cover" }} />
+                        </div>
+                      )}
+
+                      {/* Text */}
                       {msg.text}
 
                       {/* Reaction Badges */}
@@ -448,44 +573,83 @@ export default function MessagesPage() {
                 <div ref={messagesEndRef} />
               </div>
 
+              {/* Attached Media Preview Box */}
+              {attachedImage && (
+                <div style={{ padding: "8px 16px", background: "var(--color-bg-surface)", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ position: "relative" }}>
+                    <img src={attachedImage} alt="Attachment Preview" style={{ width: "50px", height: "50px", borderRadius: "10px", objectFit: "cover" }} />
+                    <button 
+                      type="button" 
+                      onClick={() => setAttachedImage(null)}
+                      style={{ position: "absolute", top: "-6px", right: "-6px", background: "#ef4444", color: "white", borderRadius: "50%", border: "none", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                  <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)", fontWeight: 600 }}>Photo attached</span>
+                </div>
+              )}
+
               {/* Bottom Chat Input Form */}
               <form
                 onSubmit={handleSendMessage}
                 className={styles.inputForm}
               >
-                <button type="button" style={{ background: "none", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "6px" }} className="hover-bg-circle">
-                  <ImageIcon size={20} />
-                </button>
-                <button type="button" style={{ background: "none", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "6px" }} className="hover-bg-circle">
-                  <Mic size={20} />
+                <button 
+                  type="button" 
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ width: "42px", height: "42px", borderRadius: "50%", background: "rgba(29, 155, 240, 0.1)", border: "none", color: "var(--color-primary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
+                  className="hover:scale-105"
+                  title="Attach Photo"
+                >
+                  <ImageIcon size={22} />
                 </button>
 
-                <input
-                  type="text"
-                  placeholder={`Message ${activeConv.name}...`}
-                  value={inputText}
-                  onChange={e => setInputText(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: "12px 18px",
-                    borderRadius: "9999px",
-                    border: "1px solid var(--color-border)",
-                    background: "var(--color-bg-base)",
-                    color: "var(--color-text-main)",
-                    fontSize: "0.95rem",
-                    outline: "none"
-                  }}
-                />
+                <button 
+                  type="button" 
+                  onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
+                  style={{ width: "42px", height: "42px", borderRadius: "50%", background: isRecordingVoice ? "rgba(239, 68, 68, 0.15)" : "rgba(168, 85, 247, 0.1)", border: "none", color: isRecordingVoice ? "#ef4444" : "#a855f7", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
+                  className="hover:scale-105"
+                  title={isRecordingVoice ? "Stop Recording" : "Record Voice Note"}
+                >
+                  {isRecordingVoice ? <Square size={18} className="animate-pulse" /> : <Mic size={22} />}
+                </button>
+
+                {isRecordingVoice ? (
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "8px", background: "rgba(239, 68, 68, 0.1)", padding: "10px 16px", borderRadius: "9999px", color: "#ef4444", fontSize: "0.85rem", fontWeight: 700 }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444" }} className="animate-ping" />
+                    <span>Recording Voice Note: 00:{voiceRecordTime < 10 ? `0${voiceRecordTime}` : voiceRecordTime}</span>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder={`Message ${activeConv.name}...`}
+                    value={inputText}
+                    onChange={e => setInputText(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: "12px 18px",
+                      borderRadius: "9999px",
+                      border: "1px solid var(--color-border)",
+                      background: "var(--color-bg-base)",
+                      color: "var(--color-text-main)",
+                      fontSize: "0.95rem",
+                      outline: "none",
+                      minWidth: 0
+                    }}
+                  />
+                )}
 
                 <button
                   type="submit"
-                  disabled={!inputText.trim()}
+                  disabled={!inputText.trim() && !attachedImage}
                   style={{
                     width: "44px", height: "44px", borderRadius: "50%",
-                    background: inputText.trim() ? "var(--color-primary)" : "var(--color-border)",
-                    color: "white", border: "none", cursor: inputText.trim() ? "pointer" : "default",
+                    background: (inputText.trim() || attachedImage) ? "linear-gradient(135deg, #1d9bf0, #0084ff)" : "var(--color-border)",
+                    color: "white", border: "none", cursor: (inputText.trim() || attachedImage) ? "pointer" : "default",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     transition: "all 0.15s ease",
+                    boxShadow: (inputText.trim() || attachedImage) ? "0 6px 16px rgba(29, 155, 240, 0.4)" : "none",
                     flexShrink: 0
                   }}
                 >

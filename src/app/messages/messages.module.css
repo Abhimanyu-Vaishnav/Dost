@@ -31,10 +31,22 @@
   display: none;
 }
 
-/* Mobile responsive full screen view switcher */
+.inputForm {
+  padding: 14px 18px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+/* Mobile responsive full screen view switcher & bottom navbar clearance */
 @media (max-width: 650px) {
   .container {
-    height: calc(100dvh - 56px);
+    height: calc(100dvh - 120px);
+    margin-bottom: 64px;
   }
 
   .sidebar {
@@ -48,6 +60,7 @@
     width: 100%;
     height: 100%;
     display: flex;
+    padding-bottom: 12px;
   }
 
   .sidebarHiddenMobile {
@@ -56,6 +69,13 @@
 
   .chatWindowHiddenMobile {
     display: none !important;
+  }
+
+  .inputForm {
+    padding: 12px 14px;
+    gap: 8px;
+    position: relative;
+    z-index: 10;
   }
 
   .backBtn {
