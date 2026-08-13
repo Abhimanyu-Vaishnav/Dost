@@ -654,6 +654,10 @@
     max-width: 340px !important;
   }
 
+  .rightSidebar {
+    display: none !important;
+  }
+
   .mainContent {
     width: 100% !important;
     min-width: 0 !important;

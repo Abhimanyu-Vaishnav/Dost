@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { 
   Home, User, Search, LogOut, Bell, Mail, Bookmark, MoreHorizontal, EyeOff, Plus, MessageSquare, Shield, ShieldAlert,
-  Settings as SettingsIcon, List, Users, CheckCircle2, TrendingUp, BarChart3, HelpCircle, Command, Palette, Edit3, Camera, Sparkles, Feather, X
+  Settings as SettingsIcon, List, Users, CheckCircle2, TrendingUp, BarChart3, HelpCircle, Command, Palette, Edit3, Camera, Sparkles, Feather, X,
+  Flame, UserPlus
 } from "lucide-react";
 import styles from "./AppLayout.module.css";
 import { CreatePostModal } from "@/features/posts/components/CreatePostModal";
@@ -310,6 +311,12 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             <div className={styles.drawerMenuList}>
               <Link href={user?.userId ? `/profile/${user.userId}` : "/profile"} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <User size={22} /> <span>Profile</span>
+              </Link>
+              <Link href="/search?tab=trending" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <Flame size={22} style={{ color: "#ff6b00" }} /> <span>Trending & News</span>
+              </Link>
+              <Link href="/search?tab=people" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <UserPlus size={22} style={{ color: "var(--color-primary)" }} /> <span>Who to Follow</span>
               </Link>
               <Link href="/premium" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <CheckCircle2 size={22} /> <span>Premium</span>
