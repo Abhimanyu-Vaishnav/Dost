@@ -311,32 +311,32 @@ export default function MessagesPage() {
         <div className={`${styles.sidebar} ${activeConvId ? styles.sidebarHiddenMobile : ""}`}>
           {/* Header */}
           <div style={{
-            padding: "16px 20px",
+            padding: "18px 24px",
             borderBottom: "1px solid var(--color-border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between"
           }}>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>
+            <h2 style={{ fontSize: "1.4rem", fontWeight: 900, color: "var(--color-text-main)", margin: 0 }}>
               Messages
             </h2>
             <button style={{
-              width: "36px", height: "36px", borderRadius: "50%",
-              background: "rgba(29, 155, 240, 0.1)", color: "var(--color-primary)",
+              width: "40px", height: "40px", borderRadius: "50%",
+              background: "rgba(29, 155, 240, 0.12)", color: "var(--color-primary)",
               border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
             }}>
-              <Plus size={18} />
+              <Plus size={20} />
             </button>
           </div>
 
           {/* Search Bar */}
-          <div style={{ padding: "12px 16px" }}>
+          <div style={{ padding: "14px 18px" }}>
             <div style={{
               display: "flex", alignItems: "center", gap: "10px",
-              background: "var(--color-bg-base)", padding: "10px 14px",
+              background: "var(--color-bg-base)", padding: "12px 16px",
               borderRadius: "9999px", border: "1px solid var(--color-border)"
             }}>
-              <Search size={16} style={{ color: "var(--color-text-muted)" }} />
+              <Search size={18} style={{ color: "var(--color-text-muted)" }} />
               <input
                 type="text"
                 placeholder="Search Direct Messages..."
@@ -344,7 +344,7 @@ export default function MessagesPage() {
                 onChange={e => setSearchQuery(e.target.value)}
                 style={{
                   background: "none", border: "none", color: "var(--color-text-main)",
-                  outline: "none", fontSize: "0.9rem", width: "100%"
+                  outline: "none", fontSize: "0.98rem", width: "100%"
                 }}
               />
             </div>
@@ -361,11 +361,11 @@ export default function MessagesPage() {
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
+                    gap: "16px",
+                    padding: "16px 20px",
                     cursor: "pointer",
                     backgroundColor: isActive ? "rgba(29, 155, 240, 0.08)" : "transparent",
-                    borderLeft: isActive ? "3px solid var(--color-primary)" : "3px solid transparent",
+                    borderLeft: isActive ? "4px solid var(--color-primary)" : "4px solid transparent",
                     transition: "background-color 0.15s ease"
                   }}
                   className="hover-bg"
@@ -374,12 +374,12 @@ export default function MessagesPage() {
                     <img
                       src={conv.avatar}
                       alt={conv.name}
-                      style={{ width: "48px", height: "48px", borderRadius: "50%", objectFit: "cover" }}
+                      style={{ width: "52px", height: "52px", borderRadius: "50%", objectFit: "cover" }}
                     />
                     {conv.isOnline && (
                       <span style={{
                         position: "absolute", bottom: "1px", right: "1px",
-                        width: "12px", height: "12px", borderRadius: "50%",
+                        width: "14px", height: "14px", borderRadius: "50%",
                         backgroundColor: "#10b981", border: "2px solid var(--color-bg-surface)"
                       }} />
                     )}
@@ -387,17 +387,17 @@ export default function MessagesPage() {
 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                      <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--color-text-main)" }}>
+                      <span style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--color-text-main)" }}>
                         {conv.name}
                       </span>
-                      <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
                         {conv.lastTime}
                       </span>
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{
-                        fontSize: "0.85rem", color: "var(--color-text-muted)",
+                        fontSize: "0.92rem", color: "var(--color-text-muted)",
                         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
                       }}>
                         {conv.lastMessage}
@@ -405,7 +405,7 @@ export default function MessagesPage() {
                       {conv.unreadCount > 0 && (
                         <span style={{
                           background: "var(--color-primary)", color: "white",
-                          fontSize: "0.7rem", fontWeight: 800, padding: "2px 7px",
+                          fontSize: "0.75rem", fontWeight: 800, padding: "2px 8px",
                           borderRadius: "99px", flexShrink: 0
                         }}>
                           {conv.unreadCount}
@@ -425,57 +425,57 @@ export default function MessagesPage() {
             <>
               {/* Chat Window Top Bar */}
               <div style={{
-                padding: "12px 16px",
+                padding: "14px 20px",
                 borderBottom: "1px solid var(--color-border)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 background: "var(--color-bg-surface)"
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   {/* Back Arrow for Mobile Screen */}
                   <button 
                     onClick={() => setActiveConvId(null)}
                     className={styles.backBtn}
                     title="Back to conversations"
                   >
-                    <ArrowLeft size={20} />
+                    <ArrowLeft size={22} />
                   </button>
 
                   <img
                     src={activeConv.avatar}
                     alt={activeConv.name}
-                    style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }}
+                    style={{ width: "48px", height: "48px", borderRadius: "50%", objectFit: "cover" }}
                   />
                   <div>
-                    <h3 style={{ fontSize: "1rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>
+                    <h3 style={{ fontSize: "1.15rem", fontWeight: 900, color: "var(--color-text-main)", margin: 0 }}>
                       {activeConv.name}
                     </h3>
-                    <span style={{ fontSize: "0.75rem", color: activeConv.isOnline ? "#10b981" : "var(--color-text-muted)", fontWeight: 600 }}>
+                    <span style={{ fontSize: "0.85rem", color: activeConv.isOnline ? "#10b981" : "var(--color-text-muted)", fontWeight: 600 }}>
                       {activeConv.isOnline ? "Active now" : "Offline"}
                     </span>
                   </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <button 
                     onClick={() => setActiveCall({ type: "voice", contact: activeConv })}
-                    style={{ background: "rgba(29, 155, 240, 0.1)", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
+                    style={{ background: "rgba(29, 155, 240, 0.12)", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "10px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Voice Call"
                   >
-                    <Phone size={19} />
+                    <Phone size={20} />
                   </button>
                   <button 
                     onClick={() => setActiveCall({ type: "video", contact: activeConv })}
-                    style={{ background: "rgba(168, 85, 247, 0.1)", border: "none", color: "#a855f7", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
+                    style={{ background: "rgba(168, 85, 247, 0.12)", border: "none", color: "#a855f7", cursor: "pointer", padding: "10px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Video Call"
                   >
-                    <Video size={19} />
+                    <Video size={20} />
                   </button>
                   <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
-                    <MoreVertical size={19} />
+                    <MoreVertical size={20} />
                   </button>
                 </div>
               </div>
@@ -484,10 +484,10 @@ export default function MessagesPage() {
               <div style={{
                 flex: 1,
                 overflowY: "auto",
-                padding: "20px",
+                padding: "24px 20px",
                 display: "flex",
                 flexDirection: "column",
-                gap: "16px"
+                gap: "18px"
               }}>
                 {activeMessages.map(msg => (
                   <div
@@ -506,16 +506,16 @@ export default function MessagesPage() {
                         onClick={(e) => e.stopPropagation()}
                         style={{
                           position: "absolute",
-                          top: "-42px",
+                          top: "-46px",
                           right: msg.isMe ? "0" : "auto",
                           left: msg.isMe ? "auto" : "0",
                           background: "var(--color-bg-surface)",
                           border: "1px solid var(--color-primary, #1d9bf0)",
                           borderRadius: "9999px",
-                          padding: "4px 10px",
+                          padding: "6px 14px",
                           display: "flex",
                           alignItems: "center",
-                          gap: "8px",
+                          gap: "10px",
                           boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
                           zIndex: 20
                         }}
@@ -532,7 +532,7 @@ export default function MessagesPage() {
                             style={{
                               background: "none",
                               border: "none",
-                              fontSize: "1.2rem",
+                              fontSize: "1.35rem",
                               cursor: "pointer",
                               transition: "transform 0.15s ease",
                               padding: "2px"
@@ -545,7 +545,7 @@ export default function MessagesPage() {
                       </div>
                     )}
 
-                    {/* Chat Bubble Component */}
+                    {/* Scaled-Up Chat Bubble Component */}
                     <div 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -556,15 +556,16 @@ export default function MessagesPage() {
                         handleAddReaction(msg.id, "❤️");
                       }}
                       style={{
-                        maxWidth: "82%",
-                        padding: "12px 16px",
-                        borderRadius: msg.isMe ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
+                        maxWidth: "88%",
+                        padding: "14px 20px",
+                        borderRadius: msg.isMe ? "22px 22px 4px 22px" : "22px 22px 22px 4px",
                         backgroundColor: msg.isMe ? "var(--color-primary, #1d9bf0)" : "var(--color-bg-surface)",
                         color: msg.isMe ? "#ffffff" : "var(--color-text-main)",
                         border: msg.isMe ? "none" : "1px solid var(--color-border)",
-                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                        fontSize: "0.95rem",
-                        lineHeight: "1.45",
+                        boxShadow: "0 4px 14px rgba(0, 0, 0, 0.12)",
+                        fontSize: "1.08rem",
+                        lineHeight: "1.55",
+                        fontWeight: 500,
                         position: "relative",
                         cursor: "pointer",
                         userSelect: "none"
@@ -573,8 +574,8 @@ export default function MessagesPage() {
                     >
                       {/* Attached Image inside Bubble */}
                       {msg.imageUrl && (
-                        <div style={{ marginBottom: "8px", borderRadius: "12px", overflow: "hidden" }}>
-                          <img src={msg.imageUrl} alt="Attachment" style={{ maxWidth: "100%", maxHeight: "240px", display: "block", objectFit: "cover" }} />
+                        <div style={{ marginBottom: "10px", borderRadius: "14px", overflow: "hidden" }}>
+                          <img src={msg.imageUrl} alt="Attachment" style={{ maxWidth: "100%", maxHeight: "280px", display: "block", objectFit: "cover" }} />
                         </div>
                       )}
 
@@ -585,15 +586,15 @@ export default function MessagesPage() {
                       {msg.reactions && msg.reactions.length > 0 && (
                         <div style={{
                           position: "absolute",
-                          bottom: "-12px",
-                          right: msg.isMe ? "auto" : "12px",
-                          left: msg.isMe ? "12px" : "auto",
+                          bottom: "-14px",
+                          right: msg.isMe ? "auto" : "14px",
+                          left: msg.isMe ? "14px" : "auto",
                           background: "var(--color-bg-surface)",
                           border: "1px solid var(--color-border)",
                           borderRadius: "99px",
-                          padding: "1px 6px",
-                          fontSize: "0.75rem",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
+                          padding: "2px 8px",
+                          fontSize: "0.85rem",
+                          boxShadow: "0 4px 10px rgba(0,0,0,0.3)"
                         }}>
                           {msg.reactions.join(" ")}
                         </div>
@@ -601,15 +602,15 @@ export default function MessagesPage() {
                     </div>
 
                     {/* Message Timestamp & Quick Reactions */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.72rem", color: "var(--color-text-muted)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.78rem", color: "var(--color-text-muted)" }}>
                       <span>{msg.timestamp}</span>
-                      {msg.isMe && <CheckCheck size={14} style={{ color: "var(--color-primary)" }} />}
+                      {msg.isMe && <CheckCheck size={16} style={{ color: "var(--color-primary)" }} />}
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
                           handleAddReaction(msg.id, "❤️");
                         }} 
-                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem", opacity: 0.7 }}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.95rem", opacity: 0.75 }}
                         title="React ❤️"
                       >
                         ❤️
@@ -619,7 +620,7 @@ export default function MessagesPage() {
                           e.stopPropagation();
                           handleAddReaction(msg.id, "🔥");
                         }} 
-                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem", opacity: 0.7 }}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.95rem", opacity: 0.75 }}
                         title="React 🔥"
                       >
                         🔥
@@ -630,7 +631,7 @@ export default function MessagesPage() {
 
                 {/* Typing Indicator */}
                 {isTyping && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--color-text-muted)", fontSize: "0.85rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--color-text-muted)", fontSize: "0.9rem" }}>
                     <span style={{ fontWeight: 600 }}>{activeConv.name} is typing...</span>
                     <span className="animate-bounce">•</span>
                     <span className="animate-bounce" style={{ animationDelay: "0.1s" }}>•</span>
@@ -642,22 +643,22 @@ export default function MessagesPage() {
 
               {/* Attached Media Preview Box */}
               {attachedImage && (
-                <div style={{ padding: "8px 16px", background: "var(--color-bg-surface)", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ padding: "10px 20px", background: "var(--color-bg-surface)", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: "12px" }}>
                   <div style={{ position: "relative" }}>
-                    <img src={attachedImage} alt="Attachment Preview" style={{ width: "50px", height: "50px", borderRadius: "10px", objectFit: "cover" }} />
+                    <img src={attachedImage} alt="Attachment Preview" style={{ width: "56px", height: "56px", borderRadius: "12px", objectFit: "cover" }} />
                     <button 
                       type="button" 
                       onClick={() => setAttachedImage(null)}
-                      style={{ position: "absolute", top: "-6px", right: "-6px", background: "#ef4444", color: "white", borderRadius: "50%", border: "none", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                      style={{ position: "absolute", top: "-6px", right: "-6px", background: "#ef4444", color: "white", borderRadius: "50%", border: "none", width: "20px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
                     >
-                      <X size={12} />
+                      <X size={13} />
                     </button>
                   </div>
-                  <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)", fontWeight: 600 }}>Photo attached</span>
+                  <span style={{ fontSize: "0.88rem", color: "var(--color-text-muted)", fontWeight: 600 }}>Photo attached</span>
                 </div>
               )}
 
-              {/* Bottom Chat Input Form */}
+              {/* Scaled-Up Bottom Chat Input Form */}
               <form
                 onSubmit={handleSendMessage}
                 className={styles.inputForm}
@@ -665,26 +666,26 @@ export default function MessagesPage() {
                 <button 
                   type="button" 
                   onClick={() => fileInputRef.current?.click()}
-                  style={{ width: "42px", height: "42px", borderRadius: "50%", background: "rgba(29, 155, 240, 0.1)", border: "none", color: "var(--color-primary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
+                  style={{ width: "46px", height: "46px", borderRadius: "50%", background: "rgba(29, 155, 240, 0.12)", border: "none", color: "var(--color-primary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
                   className="hover:scale-105"
                   title="Attach Photo"
                 >
-                  <ImageIcon size={22} />
+                  <ImageIcon size={24} />
                 </button>
 
                 <button 
                   type="button" 
                   onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
-                  style={{ width: "42px", height: "42px", borderRadius: "50%", background: isRecordingVoice ? "rgba(239, 68, 68, 0.15)" : "rgba(168, 85, 247, 0.1)", border: "none", color: isRecordingVoice ? "#ef4444" : "#a855f7", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
+                  style={{ width: "46px", height: "46px", borderRadius: "50%", background: isRecordingVoice ? "rgba(239, 68, 68, 0.15)" : "rgba(168, 85, 247, 0.12)", border: "none", color: isRecordingVoice ? "#ef4444" : "#a855f7", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
                   className="hover:scale-105"
                   title={isRecordingVoice ? "Stop Recording" : "Record Voice Note"}
                 >
-                  {isRecordingVoice ? <Square size={18} className="animate-pulse" /> : <Mic size={22} />}
+                  {isRecordingVoice ? <Square size={20} className="animate-pulse" /> : <Mic size={24} />}
                 </button>
 
                 {isRecordingVoice ? (
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "8px", background: "rgba(239, 68, 68, 0.1)", padding: "10px 16px", borderRadius: "9999px", color: "#ef4444", fontSize: "0.85rem", fontWeight: 700 }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444" }} className="animate-ping" />
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "10px", background: "rgba(239, 68, 68, 0.12)", padding: "12px 18px", borderRadius: "9999px", color: "#ef4444", fontSize: "0.95rem", fontWeight: 700 }}>
+                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#ef4444" }} className="animate-ping" />
                     <span>Recording Voice Note: 00:{voiceRecordTime < 10 ? `0${voiceRecordTime}` : voiceRecordTime}</span>
                   </div>
                 ) : (
@@ -695,12 +696,12 @@ export default function MessagesPage() {
                     onChange={e => setInputText(e.target.value)}
                     style={{
                       flex: 1,
-                      padding: "12px 18px",
+                      padding: "14px 22px",
                       borderRadius: "9999px",
                       border: "1px solid var(--color-border)",
                       background: "var(--color-bg-base)",
                       color: "var(--color-text-main)",
-                      fontSize: "0.95rem",
+                      fontSize: "1.05rem",
                       outline: "none",
                       minWidth: 0
                     }}
@@ -711,16 +712,16 @@ export default function MessagesPage() {
                   type="submit"
                   disabled={!inputText.trim() && !attachedImage}
                   style={{
-                    width: "44px", height: "44px", borderRadius: "50%",
+                    width: "48px", height: "48px", borderRadius: "50%",
                     background: (inputText.trim() || attachedImage) ? "linear-gradient(135deg, #1d9bf0, #0084ff)" : "var(--color-border)",
                     color: "white", border: "none", cursor: (inputText.trim() || attachedImage) ? "pointer" : "default",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     transition: "all 0.15s ease",
-                    boxShadow: (inputText.trim() || attachedImage) ? "0 6px 16px rgba(29, 155, 240, 0.4)" : "none",
+                    boxShadow: (inputText.trim() || attachedImage) ? "0 8px 20px rgba(29, 155, 240, 0.45)" : "none",
                     flexShrink: 0
                   }}
                 >
-                  <Send size={18} />
+                  <Send size={20} />
                 </button>
               </form>
             </>
@@ -729,11 +730,11 @@ export default function MessagesPage() {
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
               height: "100%", padding: "40px", textAlign: "center", color: "var(--color-text-muted)"
             }}>
-              <MessageCircle size={48} style={{ color: "var(--color-primary)", marginBottom: "16px" }} />
-              <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--color-text-main)", marginBottom: "8px" }}>
+              <MessageCircle size={54} style={{ color: "var(--color-primary)", marginBottom: "16px" }} />
+              <h3 style={{ fontSize: "1.35rem", fontWeight: 900, color: "var(--color-text-main)", marginBottom: "8px" }}>
                 Select a conversation
               </h3>
-              <p style={{ fontSize: "0.9rem", maxWidth: "300px" }}>
+              <p style={{ fontSize: "1rem", maxWidth: "340px" }}>
                 Choose from your existing messages or start a new conversation.
               </p>
             </div>
