@@ -24,7 +24,7 @@ interface ParticleSystemProps {
 
 export const ParticleSystem: React.FC<ParticleSystemProps> = ({ particles }) => {
   return (
-    <div className="absolute inset-0 pointer-events-none z-30 overflow-visible">
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 99999, overflow: "visible" }}>
       <AnimatePresence>
         {particles.map((p) => (
           <motion.div
