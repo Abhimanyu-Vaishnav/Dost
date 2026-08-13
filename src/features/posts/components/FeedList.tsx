@@ -23,6 +23,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isScrolledDown, setIsScrolledDown] = useState(false);
 
   // Pull to refresh state
   const [pullDistance, setPullDistance] = useState(0);
@@ -30,6 +31,21 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   const startY = useRef<number>(0);
   const topFeedRef = useRef<HTMLDivElement>(null);
   const observerTargetRef = useRef<HTMLDivElement>(null);
+
+  // Track window scroll position to switch between top inline bar and floating pill
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPos = window.scrollY || document.documentElement.scrollTop;
+      if (scrollPos > 180) {
+        setIsScrolledDown(true);
+      } else {
+        setIsScrolledDown(false);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Reset feed state when activeTab or initialPosts change
   useEffect(() => {
@@ -105,7 +121,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   }, [activeTab]);
 
-  // Polling function for new posts to queue in the Twitter/X floating pill
+  // Polling function for new incoming posts (Paced every 40s, max 3 queued posts)
   const fetchNewPosts = useCallback(async () => {
     try {
       const topPostId = posts[0]?.id || "";
@@ -126,7 +142,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             const existingIds = new Set([...posts.map((p) => p.id), ...prev.map((p) => p.id)]);
             const brandNew = incoming.filter((np) => !existingIds.has(np.id));
             if (brandNew.length > 0) {
-              return [...prev, ...brandNew.slice(0, 5)];
+              return [...prev, ...brandNew.slice(0, 2)];
             }
             return prev;
           });
@@ -137,9 +153,9 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       console.error("Live feed polling error:", e);
     }
 
-    // Auto-generate simulated incoming demo post every 20s if DB yields 0 stream updates
+    // Auto-generate simulated incoming demo post comfortably every 40s (Max 3 queued items)
     setNewPostsQueue(prev => {
-      if (prev.length >= 5) return prev;
+      if (prev.length >= 3) return prev;
       const creatorIdx = prev.length % DEMO_INCOMING_CREATORS.length;
       const creator = DEMO_INCOMING_CREATORS[creatorIdx];
       const demoPost = {
@@ -162,7 +178,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   }, [posts, newPostsQueue, activeTab]);
 
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 12000);
+    const interval = setInterval(fetchNewPosts, 40000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
@@ -228,8 +244,8 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       onTouchEnd={handleTouchEnd}
       style={{ display: "flex", flexDirection: "column", position: "relative", width: "100%" }}
     >
-      {/* TWITTER/X EXACT FLOATING PILL BUTTON ("↑ [Avatar 1][Avatar 2] posted") */}
-      {newPostsQueue.length > 0 && (
+      {/* 1. SCROLLED DOWN: FLOATING PILL BUTTON ("↑ [Avatar 1][Avatar 2] posted") */}
+      {newPostsQueue.length > 0 && isScrolledDown && (
         <button
           onClick={handleRevealNewPosts}
           style={{
@@ -253,11 +269,10 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             backdropFilter: "blur(12px)",
             transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)"
           }}
-          className="hover:scale-105 active:scale-95"
+          className="hover:scale-105 active:scale-95 animate-fade-in"
         >
           <ArrowUp size={18} strokeWidth={3} />
 
-          {/* Stacked Overlapping Avatars */}
           <div style={{ display: "flex", alignItems: "center", marginLeft: "2px", marginRight: "2px" }}>
             {queuedAvatars.length > 0 ? (
               queuedAvatars.map((av, idx) => (
@@ -300,6 +315,35 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
           <span>
             {newPostsQueue.length === 1 ? "posted" : `${newPostsQueue.length} posted`}
           </span>
+        </button>
+      )}
+
+      {/* 2. AT TOP OF FEED: INLINE FULL-WIDTH BAR ("Show N posts") */}
+      {newPostsQueue.length > 0 && !isScrolledDown && (
+        <button
+          onClick={handleRevealNewPosts}
+          style={{
+            width: "100%",
+            padding: "14px 16px",
+            textAlign: "center",
+            color: "var(--color-primary, #1d9bf0)",
+            fontWeight: 600,
+            fontSize: "0.92rem",
+            background: "rgba(29, 155, 240, 0.04)",
+            borderBottom: "1px solid var(--color-border, #2f3336)",
+            borderTop: "none",
+            borderLeft: "none",
+            borderRight: "none",
+            cursor: "pointer",
+            transition: "background-color 0.2s ease",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(29, 155, 240, 0.1)")}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "rgba(29, 155, 240, 0.04)")}
+        >
+          <span>Show {newPostsQueue.length} {newPostsQueue.length === 1 ? "post" : "posts"}</span>
         </button>
       )}
 
