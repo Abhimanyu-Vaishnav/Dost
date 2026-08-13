@@ -202,6 +202,7 @@ export async function POST(request: NextRequest) {
         if (draft.imageUrl) postData.imageUrl = draft.imageUrl;
         if (draft.videoUrl) postData.videoUrl = draft.videoUrl;
         if (draft.gifUrl) postData.gifUrl = draft.gifUrl;
+        if (draft.location) postData.location = draft.location;
 
         const created = await (prisma.post as any).create({
           data: postData,

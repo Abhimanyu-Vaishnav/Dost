@@ -587,7 +587,14 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
                   </Link>
                 </div>
               )}
-              <span className="text-muted" style={{ fontSize: "0.85rem" }} suppressHydrationWarning>{formattedDate}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "2px" }}>
+                <span className="text-muted" style={{ fontSize: "0.85rem" }} suppressHydrationWarning>{formattedDate}</span>
+                {post.location && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.8rem", color: "var(--color-primary, #1d9bf0)", fontWeight: 700, background: "rgba(29, 155, 240, 0.12)", padding: "2px 8px", borderRadius: "9999px", border: "1px solid rgba(29, 155, 240, 0.2)" }}>
+                    <MapPin size={12} /> {post.location}
+                  </span>
+                )}
+              </div>
             </div>
         
         <div style={{ marginLeft: "auto", position: "relative" }}>

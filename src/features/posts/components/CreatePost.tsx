@@ -263,6 +263,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
               imageUrl: item.imageUrl || null,
               videoUrl: item.videoUrl || null,
               linkUrl: item.linkUrl || null,
+              location: location || null,
             }))
           }),
         });
