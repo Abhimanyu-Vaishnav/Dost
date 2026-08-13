@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect } from "react";
 import { 
   Send, Image as ImageIcon, Smile, Mic, Phone, Video, 
-  Search, Plus, MoreVertical, CheckCheck, Sparkles, MessageCircle, X
+  Search, Plus, MoreVertical, CheckCheck, Sparkles, MessageCircle, X, ArrowLeft
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import styles from "./messages.module.css";
 
 interface ChatMessage {
   id: string;
@@ -86,15 +87,16 @@ const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {
 
 export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  const [activeConvId, setActiveConvId] = useState<string>("conv-1");
+  // Default to null on mobile, so conversation list shows first
+  const [activeConvId, setActiveConvId] = useState<string | null>("conv-1");
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>(INITIAL_MESSAGES);
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const activeConv = conversations.find(c => c.id === activeConvId) || conversations[0];
-  const activeMessages = messagesMap[activeConvId] || [];
+  const activeConv = conversations.find(c => c.id === (activeConvId || "conv-1")) || conversations[0];
+  const activeMessages = messagesMap[activeConv.id] || [];
 
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -103,8 +105,9 @@ export default function MessagesPage() {
 
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || !activeConvId) return;
 
+    const currentId = activeConvId;
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: "me",
@@ -116,11 +119,11 @@ export default function MessagesPage() {
 
     setMessagesMap(prev => ({
       ...prev,
-      [activeConvId]: [...(prev[activeConvId] || []), newMsg]
+      [currentId]: [...(prev[currentId] || []), newMsg]
     }));
 
     setConversations(prev => prev.map(c => {
-      if (c.id === activeConvId) {
+      if (c.id === currentId) {
         return { ...c, lastMessage: inputText.trim(), lastTime: "Just now", unreadCount: 0 };
       }
       return c;
@@ -128,7 +131,7 @@ export default function MessagesPage() {
 
     setInputText("");
 
-    // Simulate real-time automated reply after 2 seconds
+    // Simulate real-time automated reply after 1.5 seconds
     setTimeout(() => {
       setIsTyping(true);
       setTimeout(() => {
@@ -143,13 +146,14 @@ export default function MessagesPage() {
         };
         setMessagesMap(prev => ({
           ...prev,
-          [activeConvId]: [...(prev[activeConvId] || []), replyMsg]
+          [currentId]: [...(prev[currentId] || []), replyMsg]
         }));
-      }, 1500);
-    }, 1000);
+      }, 1400);
+    }, 800);
   };
 
   const handleAddReaction = (msgId: string, emoji: string) => {
+    if (!activeConvId) return;
     setMessagesMap(prev => ({
       ...prev,
       [activeConvId]: (prev[activeConvId] || []).map(m => {
@@ -174,22 +178,9 @@ export default function MessagesPage() {
 
   return (
     <AppLayout fullWidth>
-      <div style={{
-        display: "flex",
-        width: "100%",
-        height: "calc(100dvh - 56px)",
-        backgroundColor: "var(--color-bg-base)",
-        overflow: "hidden"
-      }}>
+      <div className={styles.container}>
         {/* Left Sidebar Conversation List */}
-        <div style={{
-          width: "360px",
-          borderRight: "1px solid var(--color-border)",
-          display: "flex",
-          flexDirection: "column",
-          backgroundColor: "var(--color-bg-surface)",
-          flexShrink: 0
-        }}>
+        <div className={`${styles.sidebar} ${activeConvId ? styles.sidebarHiddenMobile : ""}`}>
           {/* Header */}
           <div style={{
             padding: "16px 20px",
@@ -301,23 +292,26 @@ export default function MessagesPage() {
         </div>
 
         {/* Right Active Chat Window */}
-        <div style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          backgroundColor: "var(--color-bg-base)",
-          position: "relative"
-        }}>
+        <div className={`${styles.chatWindow} ${!activeConvId ? styles.chatWindowHiddenMobile : ""}`}>
           {/* Chat Window Top Bar */}
           <div style={{
-            padding: "12px 20px",
+            padding: "12px 16px",
             borderBottom: "1px solid var(--color-border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             background: "var(--color-bg-surface)"
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              {/* Back Arrow for Mobile Screen */}
+              <button 
+                onClick={() => setActiveConvId(null)}
+                className={styles.backBtn}
+                title="Back to conversations"
+              >
+                <ArrowLeft size={22} />
+              </button>
+
               <img
                 src={activeConv.avatar}
                 alt={activeConv.name}
@@ -333,7 +327,7 @@ export default function MessagesPage() {
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
                 <Phone size={19} />
               </button>
@@ -366,7 +360,7 @@ export default function MessagesPage() {
                 }}
               >
                 <div style={{
-                  maxWidth: "70%",
+                  maxWidth: "82%",
                   padding: "12px 16px",
                   borderRadius: msg.isMe ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
                   backgroundColor: msg.isMe ? "var(--color-primary, #1d9bf0)" : "var(--color-bg-surface)",
@@ -398,7 +392,7 @@ export default function MessagesPage() {
                   )}
                 </div>
 
-                {/* Message Timestamp & Reactions Picker on Hover */}
+                {/* Message Timestamp & Reactions Picker */}
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.72rem", color: "var(--color-text-muted)" }}>
                   <span>{msg.timestamp}</span>
                   {msg.isMe && <CheckCheck size={14} style={{ color: "var(--color-primary)" }} />}
@@ -436,12 +430,12 @@ export default function MessagesPage() {
           <form
             onSubmit={handleSendMessage}
             style={{
-              padding: "14px 20px",
+              padding: "12px 16px",
               borderTop: "1px solid var(--color-border)",
               background: "var(--color-bg-surface)",
               display: "flex",
               alignItems: "center",
-              gap: "10px"
+              gap: "8px"
             }}
           >
             <button type="button" style={{ background: "none", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "6px" }} className="hover-bg-circle">
@@ -476,7 +470,8 @@ export default function MessagesPage() {
                 background: inputText.trim() ? "var(--color-primary)" : "var(--color-border)",
                 color: "white", border: "none", cursor: inputText.trim() ? "pointer" : "default",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "all 0.15s ease"
+                transition: "all 0.15s ease",
+                flexShrink: 0
               }}
             >
               <Send size={18} />
