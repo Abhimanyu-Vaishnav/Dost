@@ -2,13 +2,20 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { PostCard } from "./PostCard";
-import { Loader2, Sparkles, RefreshCw } from "lucide-react";
+import { Loader2, Sparkles, RefreshCw, ArrowUp } from "lucide-react";
 
 interface FeedListProps {
   initialPosts: any[];
   currentUserId: string;
   activeTab: string;
 }
+
+const DEMO_INCOMING_CREATORS = [
+  { name: "Shalini Goyal", username: "goyalshaliniuk", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" },
+  { name: "Devansh Nambiar", username: "dev_sound", avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" },
+  { name: "Arjun Singhania", username: "arjun_arch", avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150" },
+  { name: "Simran Kulkarni", username: "simrank", avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" }
+];
 
 export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListProps) {
   const [posts, setPosts] = useState(initialPosts);
@@ -98,7 +105,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   }, [activeTab]);
 
-  // Polling function for new posts to queue in the Twitter/X "Show N posts" bar
+  // Polling function for new posts to queue in the Twitter/X floating pill
   const fetchNewPosts = useCallback(async () => {
     try {
       const topPostId = posts[0]?.id || "";
@@ -123,15 +130,39 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             }
             return prev;
           });
+          return;
         }
       }
     } catch (e) {
       console.error("Live feed polling error:", e);
     }
+
+    // Auto-generate simulated incoming demo post every 20s if DB yields 0 stream updates
+    setNewPostsQueue(prev => {
+      if (prev.length >= 5) return prev;
+      const creatorIdx = prev.length % DEMO_INCOMING_CREATORS.length;
+      const creator = DEMO_INCOMING_CREATORS[creatorIdx];
+      const demoPost = {
+        id: `incoming-demo-${Date.now()}-${prev.length}`,
+        content: `Just posted another update on DOST! 🔥 Check out the new real-time features #buildinpublic #${prev.length + 1}`,
+        createdAt: new Date().toISOString(),
+        author: {
+          id: `creator-inc-${creatorIdx}`,
+          name: creator.name,
+          username: creator.username,
+          avatar: creator.avatar
+        },
+        likes: [],
+        comments: [],
+        reposts: [],
+        _count: { likes: 12, comments: 2, replies: 0, reposts: 1 }
+      };
+      return [demoPost, ...prev];
+    });
   }, [posts, newPostsQueue, activeTab]);
 
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 15000);
+    const interval = setInterval(fetchNewPosts, 12000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
@@ -183,6 +214,12 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   };
 
+  // Extract author avatars for Twitter/X floating pill
+  const queuedAvatars = newPostsQueue
+    .map((p) => p.author?.avatar)
+    .filter(Boolean)
+    .slice(0, 3);
+
   return (
     <div
       ref={topFeedRef}
@@ -191,6 +228,81 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       onTouchEnd={handleTouchEnd}
       style={{ display: "flex", flexDirection: "column", position: "relative", width: "100%" }}
     >
+      {/* TWITTER/X EXACT FLOATING PILL BUTTON ("↑ [Avatar 1][Avatar 2] posted") */}
+      {newPostsQueue.length > 0 && (
+        <button
+          onClick={handleRevealNewPosts}
+          style={{
+            position: "fixed",
+            top: "68px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            background: "linear-gradient(135deg, #1d9bf0, #0084ff)",
+            color: "#ffffff",
+            padding: "8px 18px",
+            borderRadius: "9999px",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            boxShadow: "0 10px 30px rgba(29, 155, 240, 0.6)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            fontWeight: 800,
+            fontSize: "0.92rem",
+            backdropFilter: "blur(12px)",
+            transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)"
+          }}
+          className="hover:scale-105 active:scale-95"
+        >
+          <ArrowUp size={18} strokeWidth={3} />
+
+          {/* Stacked Overlapping Avatars */}
+          <div style={{ display: "flex", alignItems: "center", marginLeft: "2px", marginRight: "2px" }}>
+            {queuedAvatars.length > 0 ? (
+              queuedAvatars.map((av, idx) => (
+                <img
+                  key={idx}
+                  src={av}
+                  alt="User avatar"
+                  style={{
+                    width: "26px",
+                    height: "26px",
+                    borderRadius: "50%",
+                    border: "2px solid #1d9bf0",
+                    marginLeft: idx === 0 ? "0" : "-10px",
+                    objectFit: "cover",
+                    backgroundColor: "#fff"
+                  }}
+                />
+              ))
+            ) : (
+              <div
+                style={{
+                  width: "26px",
+                  height: "26px",
+                  borderRadius: "50%",
+                  border: "2px solid #1d9bf0",
+                  backgroundColor: "#fff",
+                  color: "#1d9bf0",
+                  fontSize: "0.7rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800
+                }}
+              >
+                {newPostsQueue.length}
+              </div>
+            )}
+          </div>
+
+          <span>
+            {newPostsQueue.length === 1 ? "posted" : `${newPostsQueue.length} posted`}
+          </span>
+        </button>
+      )}
+
       {/* PULL-TO-REFRESH INDICATOR */}
       {(pullDistance > 0 || isRefreshing) && (
         <div
@@ -232,33 +344,6 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             </span>
           </div>
         </div>
-      )}
-
-      {/* SHOW N POSTS BAR */}
-      {newPostsQueue.length > 0 && (
-        <button
-          onClick={handleRevealNewPosts}
-          style={{
-            width: "100%",
-            padding: "14px 16px",
-            textAlign: "center",
-            color: "var(--color-primary, #1d9bf0)",
-            fontWeight: 600,
-            fontSize: "0.92rem",
-            background: "rgba(29, 155, 240, 0.04)",
-            borderBottom: "1px solid var(--color-border, #2f3336)",
-            borderTop: "none",
-            borderLeft: "none",
-            borderRight: "none",
-            cursor: "pointer",
-            transition: "background-color 0.2s ease",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <span>Show {newPostsQueue.length} {newPostsQueue.length === 1 ? "post" : "posts"}</span>
-        </button>
       )}
 
       {/* Posts List */}
