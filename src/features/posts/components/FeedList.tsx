@@ -17,11 +17,18 @@ const DEMO_INCOMING_CREATORS = [
   { name: "Simran Kulkarni", username: "simrank", avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" }
 ];
 
+const DEMO_INFINITE_POSTS = [
+  "Building custom audio spaces with real-time WebSockets and Web Audio API 🎙️ #nextjs #fullstack",
+  "Scaling serverless databases can be tricky, but proper indexing and connection pooling changes everything ⚡ 💻 #database #postgres #tech",
+  "Just published a deep dive on CSS container queries & glassmorphic design systems 🎨 #webdev #design",
+  "Morning coffee + clean code = unmatched focus 🔥 What tech stack are you using today? #coding #developer #react #nextjs",
+  "Exploring generative AI prompt engineering for realistic vector icons ✨ #ai #designtech #innovation"
+];
+
 export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListProps) {
   const [posts, setPosts] = useState(initialPosts);
   const [newPostsQueue, setNewPostsQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isScrolledDown, setIsScrolledDown] = useState(false);
 
@@ -51,12 +58,11 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   useEffect(() => {
     setPosts(initialPosts);
     setNewPostsQueue([]);
-    setHasMore(true);
   }, [initialPosts, activeTab]);
 
-  // Load next page of posts for infinite scroll
+  // Load next page of posts INSTANTLY for bottom infinite scroll
   const loadMorePosts = useCallback(async () => {
-    if (loading || !hasMore) return;
+    if (loading) return;
     setLoading(true);
 
     try {
@@ -72,7 +78,27 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             return [...prev, ...fresh];
           });
         } else {
-          setHasMore(false);
+          // Seamless fallback: Generate infinite posts so bottom feed NEVER stops loading instantly!
+          const newBatch = Array.from({ length: 10 }).map((_, idx) => {
+            const creator = DEMO_INCOMING_CREATORS[(posts.length + idx) % DEMO_INCOMING_CREATORS.length];
+            const text = DEMO_INFINITE_POSTS[(posts.length + idx) % DEMO_INFINITE_POSTS.length];
+            return {
+              id: `inf-post-${posts.length + idx + 1}`,
+              content: `${text} (Timeline Post #${posts.length + idx + 1})`,
+              createdAt: new Date(Date.now() - (posts.length + idx) * 3600000).toISOString(),
+              author: {
+                id: `creator-inf-${idx}`,
+                name: creator.name,
+                username: creator.username,
+                avatar: creator.avatar
+              },
+              likes: [],
+              comments: [],
+              reposts: [],
+              _count: { likes: Math.floor(Math.random() * 200) + 12, comments: Math.floor(Math.random() * 30) + 2, replies: 5, reposts: 8 }
+            };
+          });
+          setPosts(prev => [...prev, ...newBatch]);
         }
       }
     } catch (e) {
@@ -80,25 +106,25 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     } finally {
       setLoading(false);
     }
-  }, [activeTab, posts.length, loading, hasMore]);
+  }, [activeTab, posts.length, loading]);
 
-  // IntersectionObserver Sentinel Listener for Infinite Scroll
+  // IntersectionObserver Sentinel Listener with 1000px Pre-fetch RootMargin
   useEffect(() => {
     const target = observerTargetRef.current;
     if (!target) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !loading && hasMore) {
+        if (entries[0].isIntersecting && !loading) {
           loadMorePosts();
         }
       },
-      { threshold: 0.1, rootMargin: "400px" }
+      { threshold: 0, rootMargin: "1000px" }
     );
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [loadMorePosts, loading, hasMore]);
+  }, [loadMorePosts, loading]);
 
   // Execute manual refresh / pull refresh
   const executeRefresh = useCallback(async () => {
@@ -110,7 +136,6 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
         if (data.posts) {
           setPosts(data.posts);
           setNewPostsQueue([]);
-          setHasMore(true);
         }
       }
     } catch (e) {
@@ -121,7 +146,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   }, [activeTab]);
 
-  // Polling function for new incoming posts (Paced every 40s, max 3 queued posts)
+  // Polling function for new incoming TOP posts (Paced every 50s comfortably, max 3 queued posts)
   const fetchNewPosts = useCallback(async () => {
     try {
       const topPostId = posts[0]?.id || "";
@@ -153,7 +178,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       console.error("Live feed polling error:", e);
     }
 
-    // Auto-generate simulated incoming demo post comfortably every 40s (Max 3 queued items)
+    // Auto-generate simulated incoming demo post comfortably every 50s (Max 3 queued items)
     setNewPostsQueue(prev => {
       if (prev.length >= 3) return prev;
       const creatorIdx = prev.length % DEMO_INCOMING_CREATORS.length;
@@ -178,7 +203,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   }, [posts, newPostsQueue, activeTab]);
 
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 40000);
+    const interval = setInterval(fetchNewPosts, 50000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
@@ -417,7 +442,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
         ))
       )}
 
-      {/* Infinite Scroll Sentinel Target & Loader */}
+      {/* Instant Infinite Scroll Pre-fetch Sentinel Target */}
       <div ref={observerTargetRef} style={{ padding: "20px 0", display: "flex", justifyContent: "center" }}>
         {loading && (
           <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--color-primary)" }}>
