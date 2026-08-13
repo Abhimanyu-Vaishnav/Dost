@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import { 
   Home, User, Search, LogOut, Bell, Mail, Bookmark, MoreHorizontal, EyeOff, Plus, MessageSquare, Shield, ShieldAlert,
   Settings as SettingsIcon, List, Users, CheckCircle2, TrendingUp, BarChart3, HelpCircle, Command, Palette, Edit3, Camera, Sparkles, Feather, X,
-  Flame, UserPlus
+  Flame, UserPlus, Video
 } from "lucide-react";
 import styles from "./AppLayout.module.css";
 import { CreatePostModal } from "@/features/posts/components/CreatePostModal";
@@ -152,6 +152,8 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         return <Home size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
       case "explore":
         return <Search size={size} strokeWidth={isActive ? 3 : 2} />;
+      case "shorts":
+        return <Video size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
       case "messages":
         return <MessageSquare size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
       case "notifications":
@@ -177,6 +179,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   const desktopNavItems = [
     { href: "/feed", label: "Home", id: "home" },
     { href: "/search", label: "Explore", id: "explore" },
+    { href: "/shorts", label: "Shorts", id: "shorts" },
     { href: "/communities", label: "Communities", id: "communities" },
     { href: "/notifications", label: "Notifications", id: "notifications" },
     { href: "/messages", label: "Messages", id: "messages" },
@@ -191,7 +194,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   const mobileBottomItems = [
     { href: "/feed", label: "Home", id: "home" },
     { href: "/search", label: "Explore", id: "explore" },
-    { href: "/communities", label: "Communities", id: "communities" },
+    { href: "/shorts", label: "Shorts", id: "shorts" },
     { href: "/notifications", label: "Notifications", id: "notifications" },
     { href: "/messages", label: "Messages", id: "messages" },
     { href: "/bookmarks", label: "Bookmarks", id: "bookmarks" },

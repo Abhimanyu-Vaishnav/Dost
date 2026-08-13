@@ -6,10 +6,11 @@ import {
   Image as ImageIcon, Video, Link as LinkIcon, X, Loader2, 
   Smile, Calendar, MapPin, ListFilter, FileType,
   Globe, Users, Lock, Plus, ChevronDown, FileText,
-  Bold, Italic, Code, Hash, Trash2, Clock
+  Bold, Italic, Code, Hash, Trash2, Clock, Sparkles
 } from "lucide-react";
 import { uploadMediaFile } from "@/lib/upload";
 import { CreatePostModal } from "./CreatePostModal";
+import { GifPickerModal } from "@/components/common/GifPickerModal";
 
 interface CreatePostProps {
   userName: string;
@@ -72,6 +73,38 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
   const [showPollUI, setShowPollUI] = useState(false);
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [pollDuration, setPollDuration] = useState<number>(24);
+
+  // AI & GIF Picker state
+  const [showAiMenu, setShowAiMenu] = useState(false);
+  const [showGifModal, setShowGifModal] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
+  const handleAiAction = async (action: string) => {
+    const currentContent = threadItems[activeItemIndex]?.content || "";
+    if (!currentContent.trim()) {
+      alert("Please type a draft first so AI can help!");
+      return;
+    }
+    setIsAiLoading(true);
+    try {
+      const res = await fetch("/api/ai/assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: currentContent, action })
+      });
+      const data = await res.json();
+      if (res.ok && data.text) {
+        const updated = [...threadItems];
+        updated[activeItemIndex].content = data.text;
+        setThreadItems(updated);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsAiLoading(false);
+      setShowAiMenu(false);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -298,6 +331,12 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
         <button type="button" onClick={() => fileInputRef.current?.click()} className="hover-bg-circle" style={{ width: "36px", height: "36px", color: "var(--color-primary)" }} title="Media">
           <ImageIcon size={19} />
         </button>
+        <button type="button" onClick={() => setShowGifModal(true)} className="hover-bg-circle" style={{ width: "36px", height: "36px", color: "var(--color-primary)" }} title="GIF & Memes">
+          <FileType size={19} />
+        </button>
+        <button type="button" onClick={() => setShowAiMenu(!showAiMenu)} className="hover-bg-circle" style={{ width: "36px", height: "36px", color: "#ec4899" }} title="AI Assistant">
+          <Sparkles size={19} className={isAiLoading ? "animate-spin" : ""} />
+        </button>
         <button type="button" onClick={() => setShowPollUI(!showPollUI)} className="hover-bg-circle" style={{ width: "36px", height: "36px", color: "var(--color-primary)" }} title="Poll">
           <ListFilter size={19} />
         </button>
@@ -375,6 +414,57 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
   // Popups & Active Badges Container
   const renderBadgesAndPopups = () => (
     <>
+      {showGifModal && (
+        <GifPickerModal 
+          onClose={() => setShowGifModal(false)}
+          onSelectGif={(url) => {
+            const updated = [...threadItems];
+            updated[activeItemIndex].imageUrl = url;
+            setThreadItems(updated);
+          }}
+        />
+      )}
+
+      {/* AI Assistant Menu */}
+      {showAiMenu && (
+        <div style={{ paddingLeft: "52px", marginBottom: "10px" }}>
+          <div style={{
+            background: "linear-gradient(135deg, rgba(236, 72, 153, 0.08), rgba(139, 92, 246, 0.08))",
+            border: "1px solid rgba(236, 72, 153, 0.3)",
+            borderRadius: "16px",
+            padding: "12px 14px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#ec4899", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Sparkles size={14} /> AI Post Assistant
+              </span>
+              {isAiLoading && <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Thinking...</span>}
+            </div>
+
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              <button type="button" onClick={() => handleAiAction("hashtags")} disabled={isAiLoading} style={{ padding: "5px 12px", borderRadius: "99px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-main)", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}>
+                🏷️ Add Hashtags
+              </button>
+              <button type="button" onClick={() => handleAiAction("hype")} disabled={isAiLoading} style={{ padding: "5px 12px", borderRadius: "99px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-main)", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}>
+                🔥 Make it Hype!
+              </button>
+              <button type="button" onClick={() => handleAiAction("professional")} disabled={isAiLoading} style={{ padding: "5px 12px", borderRadius: "99px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-main)", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}>
+                💼 Professional
+              </button>
+              <button type="button" onClick={() => handleAiAction("polite")} disabled={isAiLoading} style={{ padding: "5px 12px", borderRadius: "99px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-main)", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}>
+                ✨ Friendly
+              </button>
+              <button type="button" onClick={() => handleAiAction("concise")} disabled={isAiLoading} style={{ padding: "5px 12px", borderRadius: "99px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-main)", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}>
+                ⚡ Concise
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Active Badges */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingLeft: "52px", marginBottom: "6px" }}>
         {location && (

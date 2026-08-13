@@ -14,6 +14,8 @@ import { StoryFeed } from "@/features/stories/components/StoryFeed";
 
 import { FeedTabs } from "@/features/posts/components/FeedTabs";
 import { FeedList } from "@/features/posts/components/FeedList";
+import { ActiveSpacesBar } from "@/features/spaces/components/ActiveSpacesBar";
+
 export default async function FeedPage(props: { searchParams: Promise<{ tab?: string }> }) {
   const searchParams = await props.searchParams;
   const activeTab = searchParams.tab || "for-you";
@@ -111,6 +113,7 @@ export default async function FeedPage(props: { searchParams: Promise<{ tab?: st
   return (
     <AppLayout rightSidebar={RightSidebar}>
       <PageHeader title="Home" />
+      <ActiveSpacesBar />
       <StoryFeed currentUserId={user.userId as string} currentUserAvatar={dbUser?.avatar || null} />
       <FeedTabs />
       <CreatePost 
