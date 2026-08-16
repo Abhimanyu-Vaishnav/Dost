@@ -81,10 +81,9 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     };
   }, []);
 
-  // Reset feed state when activeTab or initialPosts change
+  // Reset feed state when activeTab changes
   useEffect(() => {
     setPosts(initialPosts);
-    setNewPostsQueue([]);
   }, [initialPosts, activeTab]);
 
   // Load next page of posts INSTANTLY for bottom infinite scroll
@@ -296,8 +295,8 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       onTouchEnd={handleTouchEnd}
       style={{ display: "flex", flexDirection: "column", position: "relative", width: "100%" }}
     >
-      {/* 1. SCROLLED DOWN (5-6 POSTS DEEP): FLOATING PILL BUTTON IN FEED MID ("↑ [Avatar 1][Avatar 2] posted") */}
-      {newPostsQueue.length > 0 && isScrolledDown && (
+      {/* 1. FLOATING PILL BUTTON IN FEED MID ("↑ [Avatar 1][Avatar 2] posted") */}
+      {newPostsQueue.length > 0 && (
         <button
           onClick={handleRevealNewPosts}
           style={{
