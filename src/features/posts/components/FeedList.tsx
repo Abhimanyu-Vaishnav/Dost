@@ -203,7 +203,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   }, [posts, newPostsQueue, activeTab]);
 
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 50000);
+    const interval = setInterval(fetchNewPosts, 2500);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
@@ -269,34 +269,34 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       onTouchEnd={handleTouchEnd}
       style={{ display: "flex", flexDirection: "column", position: "relative", width: "100%" }}
     >
-      {/* 1. SCROLLED DOWN: FLOATING PILL BUTTON ("↑ [Avatar 1][Avatar 2] posted") */}
-      {newPostsQueue.length > 0 && isScrolledDown && (
+      {/* 1. FLOATING PILL BUTTON MATCHING EXACT TWITTER/X IMAGE ("↑ [Avatar 1][Avatar 2] posted") */}
+      {newPostsQueue.length > 0 && (
         <button
           onClick={handleRevealNewPosts}
           style={{
             position: "fixed",
-            top: "68px",
+            top: "72px",
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 9999,
             background: "linear-gradient(135deg, #1d9bf0, #0084ff)",
             color: "#ffffff",
-            padding: "8px 18px",
+            padding: "8px 20px",
             borderRadius: "9999px",
-            border: "1px solid rgba(255, 255, 255, 0.2)",
-            boxShadow: "0 10px 30px rgba(29, 155, 240, 0.6)",
+            border: "1px solid rgba(255, 255, 255, 0.25)",
+            boxShadow: "0 10px 30px rgba(29, 155, 240, 0.55)",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
-            gap: "8px",
+            gap: "10px",
             fontWeight: 800,
-            fontSize: "0.92rem",
+            fontSize: "0.95rem",
             backdropFilter: "blur(12px)",
             transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)"
           }}
           className="hover:scale-105 active:scale-95 animate-fade-in"
         >
-          <ArrowUp size={18} strokeWidth={3} />
+          <ArrowUp size={19} strokeWidth={3} />
 
           <div style={{ display: "flex", alignItems: "center", marginLeft: "2px", marginRight: "2px" }}>
             {queuedAvatars.length > 0 ? (
@@ -306,11 +306,11 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
                   src={av}
                   alt="User avatar"
                   style={{
-                    width: "26px",
-                    height: "26px",
+                    width: "28px",
+                    height: "28px",
                     borderRadius: "50%",
                     border: "2px solid #1d9bf0",
-                    marginLeft: idx === 0 ? "0" : "-10px",
+                    marginLeft: idx === 0 ? "0" : "-12px",
                     objectFit: "cover",
                     backgroundColor: "#fff"
                   }}
@@ -319,13 +319,13 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             ) : (
               <div
                 style={{
-                  width: "26px",
-                  height: "26px",
+                  width: "28px",
+                  height: "28px",
                   borderRadius: "50%",
                   border: "2px solid #1d9bf0",
                   backgroundColor: "#fff",
                   color: "#1d9bf0",
-                  fontSize: "0.7rem",
+                  fontSize: "0.75rem",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -337,7 +337,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             )}
           </div>
 
-          <span>
+          <span style={{ textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}>
             {newPostsQueue.length === 1 ? "posted" : `${newPostsQueue.length} posted`}
           </span>
         </button>
