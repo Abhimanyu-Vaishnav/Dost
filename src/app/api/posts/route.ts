@@ -69,23 +69,38 @@ export async function GET(request: NextRequest) {
     let posts = await (prisma.post as any).findMany({
       where,
       skip: skipCount,
+      take: takeCount,
       orderBy: { createdAt: "desc" },
-      include: {
+      select: {
+        id: true,
+        content: true,
+        imageUrl: true,
+        videoUrl: true,
+        linkUrl: true,
+        gifUrl: true,
+        pollData: true,
+        isCodeBlock: true,
+        createdAt: true,
+        views: true,
         author: {
           select: { id: true, name: true, avatar: true, username: true }
         },
         parent: {
-          include: {
+          select: {
+            id: true,
+            content: true,
             author: { select: { id: true, name: true, avatar: true, username: true } }
           }
         },
         quotePost: {
-          include: {
+          select: {
+            id: true,
+            content: true,
             author: { select: { id: true, name: true, avatar: true, username: true } }
           }
         },
         _count: {
-          select: { likes: true, comments: true, replies: true, reposts: true }
+          select: { likes: true, comments: true, reposts: true }
         },
         likes: {
           where: { userId: user.userId as string },
@@ -100,12 +115,13 @@ export async function GET(request: NextRequest) {
           select: { userId: true }
         },
         repost: {
-          include: {
+          select: {
+            id: true,
+            content: true,
             author: { select: { id: true, name: true, avatar: true, username: true } }
           }
         }
-      },
-      take: takeCount,
+      }
     });
 
     // If stream mode is enabled, fetch un-displayed posts excluding currently visible IDs
