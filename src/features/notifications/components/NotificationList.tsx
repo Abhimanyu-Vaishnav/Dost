@@ -164,7 +164,8 @@ export function NotificationList({ notifications }: { notifications: Notificatio
                 </div>
               </div>
             );
-          })}
+          })
+        )}
       </div>
 
       <LoginDetailModal
