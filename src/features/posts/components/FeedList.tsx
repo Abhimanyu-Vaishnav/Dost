@@ -27,7 +27,27 @@ const DEMO_INFINITE_POSTS = [
 
 export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListProps) {
   const [posts, setPosts] = useState(initialPosts);
-  const [newPostsQueue, setNewPostsQueue] = useState<any[]>([]);
+  const [newPostsQueue, setNewPostsQueue] = useState<any[]>(() => {
+    // Pre-populate 3 queued posts so pill is ALWAYS ready
+    return Array.from({ length: 3 }).map((_, idx) => {
+      const creator = DEMO_INCOMING_CREATORS[idx % DEMO_INCOMING_CREATORS.length];
+      return {
+        id: `incoming-init-${Date.now()}-${idx}`,
+        content: `New update #${idx + 1} posted on DOST! 🔥 Check out the latest features #buildinpublic`,
+        createdAt: new Date().toISOString(),
+        author: {
+          id: `creator-init-${idx}`,
+          name: creator.name,
+          username: creator.username,
+          avatar: creator.avatar
+        },
+        likes: [],
+        comments: [],
+        reposts: [],
+        _count: { likes: 15, comments: 3, replies: 0, reposts: 2 }
+      };
+    });
+  });
   const [loading, setLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isScrolledDown, setIsScrolledDown] = useState(false);
@@ -43,16 +63,11 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   useEffect(() => {
     const handleScroll = () => {
       const scrollPos = window.scrollY || document.documentElement.scrollTop;
-      // Show floating pill as soon as user scrolls past 2-3 posts (~150px)
-      if (scrollPos > 150) {
-        setIsScrolledDown(true);
-      } else {
-        setIsScrolledDown(false);
-      }
+      // Show floating pill as soon as user scrolls past 100px (1-2 posts)
+      setIsScrolledDown(scrollPos > 100);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
-    // Check initial scroll position immediately
     handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
