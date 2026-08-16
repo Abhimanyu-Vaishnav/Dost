@@ -28,6 +28,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
   const resolvedParams = await searchParams;
   const query = resolvedParams.q || "";
+  const activeTab = resolvedParams.tab || "trending";
 
   if (!query) {
     redirect("/trending");
