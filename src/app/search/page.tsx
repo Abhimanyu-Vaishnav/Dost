@@ -28,7 +28,10 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
   const resolvedParams = await searchParams;
   const query = resolvedParams.q || "";
-  const activeTab = resolvedParams.tab || "trending";
+
+  if (!query) {
+    redirect("/trending");
+  }
 
   let users: any[] = [];
   let posts: any[] = [];
@@ -37,8 +40,9 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     users = await prisma.user.findMany({
       where: {
         OR: [
-          { name: { contains: query } },
-          { email: { contains: query } },
+          { name: { contains: query, mode: "insensitive" } },
+          { username: { contains: query, mode: "insensitive" } },
+          { email: { contains: query, mode: "insensitive" } },
         ],
       },
       select: {
@@ -60,7 +64,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
     posts = await prisma.post.findMany({
       where: {
-        content: { contains: query },
+        content: { contains: query, mode: "insensitive" },
       },
       include: {
         author: {

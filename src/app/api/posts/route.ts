@@ -26,9 +26,27 @@ export async function GET(request: NextRequest) {
       ]
     };
 
+    const category = searchParams.get("category");
+
     if (hashtag) {
-      where.content = { contains: `#${hashtag}` };
+      where.content = { contains: `#${hashtag}`, mode: "insensitive" };
       delete where.OR;
+    } else if (category && category !== "all" && category !== "trending") {
+      const CATEGORY_KEYWORDS: Record<string, string[]> = {
+        technology: ["ai","machine","learning","model","gpt","react","nextjs","javascript","typescript","python","coding","developer","software","tech","app","code"],
+        politics: ["election","parliament","government","minister","president","vote","party","bjp","congress","policy","law","modi","gandhi","trump","biden"],
+        sports: ["cricket","football","ipl","match","player","team","score","sports","tennis","kabaddi","hockey","messi","ronaldo","rohit","virat"],
+        entertainment: ["movie","film","bollywood","netflix","series","actor","actress","music","song","trailer","show","hollywood"],
+        business: ["startup","funding","investment","ipo","market","stocks","economy","business","company","ceo","founder","fintech"],
+        news: ["news","breaking","today","reported","update","official","announces","statement"],
+      };
+
+      const keywords = CATEGORY_KEYWORDS[category];
+      if (keywords && keywords.length > 0) {
+        where.OR = keywords.map(kw => ({
+          content: { contains: kw, mode: "insensitive" as const }
+        }));
+      }
     } else if (tab === "following") {
       const following = await prisma.follows.findMany({
         where: { followerId: user.userId as string },

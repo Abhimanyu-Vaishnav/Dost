@@ -315,8 +315,8 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
               <Link href={user?.userId ? `/profile/${user.userId}` : "/profile"} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <User size={22} /> <span>Profile</span>
               </Link>
-              <Link href="/search?tab=trending" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
-                <Flame size={22} style={{ color: "#ff6b00" }} /> <span>Trending & News</span>
+              <Link href="/trending" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+                <Flame size={22} style={{ color: "#ff6b00" }} /> <span>Trending &amp; News</span>
               </Link>
               <Link href="/search?tab=people" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <UserPlus size={22} style={{ color: "var(--color-primary)" }} /> <span>Who to Follow</span>
