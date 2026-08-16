@@ -65,8 +65,8 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
 
     const handleScroll = () => {
       const scrollPos = mainEl ? mainEl.scrollTop : (window.scrollY || document.documentElement.scrollTop);
-      // Show floating pill as soon as user scrolls past 100px (1-2 posts)
-      setIsScrolledDown(scrollPos > 100);
+      // Show floating pill ONLY after user scrolls past 4 posts (~350px - 400px)
+      setIsScrolledDown(scrollPos > 350);
     };
 
     if (mainEl) {
@@ -295,78 +295,85 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       onTouchEnd={handleTouchEnd}
       style={{ display: "flex", flexDirection: "column", position: "relative", width: "100%" }}
     >
-      {/* 1. FLOATING PILL BUTTON IN FEED MID ("↑ [Avatar 1][Avatar 2] posted") */}
-      {newPostsQueue.length > 0 && (
-        <button
-          onClick={handleRevealNewPosts}
-          style={{
-            position: "fixed",
-            top: "80px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 9999,
-            background: "linear-gradient(135deg, #1d9bf0, #0084ff)",
-            color: "#ffffff",
-            padding: "8px 22px",
-            borderRadius: "9999px",
-            border: "1px solid rgba(255, 255, 255, 0.25)",
-            boxShadow: "0 10px 30px rgba(29, 155, 240, 0.55)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            fontWeight: 800,
-            fontSize: "0.95rem",
-            backdropFilter: "blur(12px)",
-            transition: "all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)"
-          }}
-          className="hover:scale-105 active:scale-95 animate-fade-in"
-        >
-          <ArrowUp size={19} strokeWidth={3} />
+      {/* 1. FLOATING PILL BUTTON IN FEED CENTER ("↑ [Avatar 1][Avatar 2] posted") - SHOWS ONLY AFTER 4 POSTS DEEP */}
+      {newPostsQueue.length > 0 && isScrolledDown && (
+        <div style={{
+          position: "sticky",
+          top: "16px",
+          zIndex: 9999,
+          display: "flex",
+          justifyContent: "center",
+          width: "100%",
+          pointerEvents: "none",
+          marginBottom: "-48px"
+        }}>
+          <button
+            onClick={handleRevealNewPosts}
+            style={{
+              pointerEvents: "auto",
+              background: "linear-gradient(135deg, #1d9bf0, #0084ff)",
+              color: "#ffffff",
+              padding: "8px 22px",
+              borderRadius: "9999px",
+              border: "1px solid rgba(255, 255, 255, 0.25)",
+              boxShadow: "0 10px 30px rgba(29, 155, 240, 0.55)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              fontWeight: 800,
+              fontSize: "0.95rem",
+              backdropFilter: "blur(12px)",
+              transition: "all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)"
+            }}
+            className="hover:scale-105 active:scale-95 animate-fade-in"
+          >
+            <ArrowUp size={19} strokeWidth={3} />
 
-          <div style={{ display: "flex", alignItems: "center", marginLeft: "2px", marginRight: "2px" }}>
-            {queuedAvatars.length > 0 ? (
-              queuedAvatars.map((av, idx) => (
-                <img
-                  key={idx}
-                  src={av}
-                  alt="User avatar"
+            <div style={{ display: "flex", alignItems: "center", marginLeft: "2px", marginRight: "2px" }}>
+              {queuedAvatars.length > 0 ? (
+                queuedAvatars.map((av, idx) => (
+                  <img
+                    key={idx}
+                    src={av}
+                    alt="User avatar"
+                    style={{
+                      width: "28px",
+                      height: "28px",
+                      borderRadius: "50%",
+                      border: "2px solid #1d9bf0",
+                      marginLeft: idx === 0 ? "0" : "-12px",
+                      objectFit: "cover",
+                      backgroundColor: "#fff"
+                    }}
+                  />
+                ))
+              ) : (
+                <div
                   style={{
                     width: "28px",
                     height: "28px",
                     borderRadius: "50%",
                     border: "2px solid #1d9bf0",
-                    marginLeft: idx === 0 ? "0" : "-12px",
-                    objectFit: "cover",
-                    backgroundColor: "#fff"
+                    backgroundColor: "#fff",
+                    color: "#1d9bf0",
+                    fontSize: "0.75rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: 800
                   }}
-                />
-              ))
-            ) : (
-              <div
-                style={{
-                  width: "28px",
-                  height: "28px",
-                  borderRadius: "50%",
-                  border: "2px solid #1d9bf0",
-                  backgroundColor: "#fff",
-                  color: "#1d9bf0",
-                  fontSize: "0.75rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 800
-                }}
-              >
-                {newPostsQueue.length}
-              </div>
-            )}
-          </div>
+                >
+                  {newPostsQueue.length}
+                </div>
+              )}
+            </div>
 
-          <span style={{ textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}>
-            {newPostsQueue.length === 1 ? "posted" : `${newPostsQueue.length} posted`}
-          </span>
-        </button>
+            <span style={{ textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}>
+              {newPostsQueue.length === 1 ? "posted" : `${newPostsQueue.length} posted`}
+            </span>
+          </button>
+        </div>
       )}
 
       {/* 2. AT TOP OF FEED: INLINE FULL-WIDTH BAR ("Show N posts") */}
