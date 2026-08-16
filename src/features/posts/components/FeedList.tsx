@@ -43,8 +43,8 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   useEffect(() => {
     const handleScroll = () => {
       const scrollPos = window.scrollY || document.documentElement.scrollTop;
-      // Show floating pill only after scrolling down past 5-6 posts (~600px)
-      if (scrollPos > 600) {
+      // Show floating pill as soon as user scrolls past 2-3 posts (~150px)
+      if (scrollPos > 150) {
         setIsScrolledDown(true);
       } else {
         setIsScrolledDown(false);
@@ -52,6 +52,8 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
+    // Check initial scroll position immediately
+    handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
@@ -147,7 +149,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   }, [activeTab]);
 
-  // Polling function for new incoming TOP posts (Paced every 50s comfortably, max 3 queued posts)
+  // Polling function for new incoming TOP posts
   const fetchNewPosts = useCallback(async () => {
     try {
       const topPostId = posts[0]?.id || "";
@@ -168,7 +170,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             const existingIds = new Set([...posts.map((p) => p.id), ...prev.map((p) => p.id)]);
             const brandNew = incoming.filter((np) => !existingIds.has(np.id));
             if (brandNew.length > 0) {
-              return [...prev, ...brandNew.slice(0, 2)];
+              return [...prev, ...brandNew];
             }
             return prev;
           });
@@ -179,9 +181,9 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       console.error("Live feed polling error:", e);
     }
 
-    // Auto-generate simulated incoming demo post comfortably every 50s (Max 3 queued items)
+    // Auto-generate incoming posts (Up to 20 queued items)
     setNewPostsQueue(prev => {
-      if (prev.length >= 3) return prev;
+      if (prev.length >= 20) return prev;
       const creatorIdx = prev.length % DEMO_INCOMING_CREATORS.length;
       const creator = DEMO_INCOMING_CREATORS[creatorIdx];
       const demoPost = {
@@ -204,7 +206,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   }, [posts, newPostsQueue, activeTab]);
 
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 3000);
+    const interval = setInterval(fetchNewPosts, 1800);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
