@@ -229,7 +229,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   }, [posts, newPostsQueue, activeTab]);
 
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 1800);
+    const interval = setInterval(fetchNewPosts, 4500);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
@@ -313,24 +313,24 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
               pointerEvents: "auto",
               background: "linear-gradient(135deg, #1d9bf0, #0084ff)",
               color: "#ffffff",
-              padding: "8px 22px",
+              padding: "6px 14px",
               borderRadius: "9999px",
               border: "1px solid rgba(255, 255, 255, 0.25)",
-              boxShadow: "0 10px 30px rgba(29, 155, 240, 0.55)",
+              boxShadow: "0 8px 24px rgba(29, 155, 240, 0.45)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: "10px",
+              gap: "6px",
               fontWeight: 800,
-              fontSize: "0.95rem",
+              fontSize: "0.84rem",
               backdropFilter: "blur(12px)",
               transition: "all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)"
             }}
             className="hover:scale-105 active:scale-95 animate-fade-in"
           >
-            <ArrowUp size={19} strokeWidth={3} />
+            <ArrowUp size={15} strokeWidth={3} />
 
-            <div style={{ display: "flex", alignItems: "center", marginLeft: "2px", marginRight: "2px" }}>
+            <div style={{ display: "flex", alignItems: "center", marginLeft: "1px", marginRight: "1px" }}>
               {queuedAvatars.length > 0 ? (
                 queuedAvatars.map((av, idx) => (
                   <img
@@ -338,11 +338,11 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
                     src={av}
                     alt="User avatar"
                     style={{
-                      width: "28px",
-                      height: "28px",
+                      width: "22px",
+                      height: "22px",
                       borderRadius: "50%",
                       border: "2px solid #1d9bf0",
-                      marginLeft: idx === 0 ? "0" : "-12px",
+                      marginLeft: idx === 0 ? "0" : "-9px",
                       objectFit: "cover",
                       backgroundColor: "#fff"
                     }}
@@ -351,13 +351,13 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
               ) : (
                 <div
                   style={{
-                    width: "28px",
-                    height: "28px",
+                    width: "22px",
+                    height: "22px",
                     borderRadius: "50%",
                     border: "2px solid #1d9bf0",
                     backgroundColor: "#fff",
                     color: "#1d9bf0",
-                    fontSize: "0.75rem",
+                    fontSize: "0.68rem",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",

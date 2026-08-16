@@ -360,9 +360,18 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             <div 
               style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}
               onClick={() => {
-                if (pathname === "/feed") {
-                  router.refresh();
-                  window.scrollTo({ top: 0, behavior: "smooth" });
+                if (pathname === "/feed" || pathname === "/") {
+                  const mainEl = document.querySelector("main");
+                  const currentScroll = mainEl ? mainEl.scrollTop : window.scrollY;
+                  if (currentScroll > 100) {
+                    if (mainEl) {
+                      mainEl.scrollTo({ top: 0, behavior: "smooth" });
+                    } else {
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }
+                  } else {
+                    router.refresh();
+                  }
                 } else {
                   router.push("/feed");
                 }
