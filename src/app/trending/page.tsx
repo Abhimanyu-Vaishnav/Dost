@@ -9,7 +9,7 @@ import { FollowSuggestions } from "@/features/users/components/FollowSuggestions
 import {
   Flame, Hash, TrendingUp, MapPin, ChevronDown, MoreHorizontal,
   RefreshCw, Globe, Loader2, Sparkles, Newspaper, Trophy, Tv, Landmark,
-  Briefcase, Zap
+  Briefcase, Zap, X, Bot, Play, Image as ImageIcon, Video
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -31,7 +31,6 @@ interface HashtagTrend {
 }
 
 interface Region { code: string; name: string; }
-interface Category { id: string; label: string; }
 
 function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -42,6 +41,7 @@ function fmt(n: number): string {
 const CATEGORY_TABS = [
   { id: "all", label: "For You", icon: Sparkles },
   { id: "trending", label: "Trending", icon: Flame },
+  { id: "shorts", label: "Shorts & Media", icon: Video },
   { id: "news", label: "News", icon: Newspaper },
   { id: "sports", label: "Sports", icon: Trophy },
   { id: "entertainment", label: "Entertainment", icon: Tv },
@@ -59,6 +59,18 @@ export default function TrendingPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [loadingTrends, setLoadingTrends] = useState(true);
   const [showRegionPicker, setShowRegionPicker] = useState(false);
+
+  // AI Summary Modal state
+  const [selectedAiTopic, setSelectedAiTopic] = useState<string | null>(null);
+  const [aiSummaryData, setAiSummaryData] = useState<{ summary: string[]; sentiment: string } | null>(null);
+  const [loadingAiSummary, setLoadingAiSummary] = useState(false);
+
+  // Live Score Ticker State
+  const [liveTicker, setLiveTicker] = useState<{ title: string; score: string; badge: string }>({
+    title: "India vs Australia 3rd T20I",
+    score: "IND 184/4 (18.2 ov) · Hype 98%",
+    badge: "LIVE SCORE"
+  });
 
   // Feed/Posts state for infinite scroll
   const [posts, setPosts] = useState<any[]>([]);
@@ -79,12 +91,37 @@ export default function TrendingPage() {
       .catch(console.error);
   }, []);
 
+  // Fetch AI Summary
+  const handleOpenAiSummary = async (topicTitle: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedAiTopic(topicTitle);
+    setLoadingAiSummary(true);
+    setAiSummaryData(null);
+
+    try {
+      const res = await fetch("/api/ai/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topicTitle, action: "summary" })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiSummaryData({ summary: data.summary, sentiment: data.sentiment });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingAiSummary(false);
+    }
+  };
+
   // Fetch Trends summary
   const fetchTrendsData = useCallback(async (reg: string, cat: string) => {
     setLoadingTrends(true);
     try {
       const params = new URLSearchParams({ region: reg });
-      if (cat !== "all") params.set("category", cat);
+      if (cat !== "all" && cat !== "shorts") params.set("category", cat);
       const r = await fetch(`/api/trends?${params}`);
       const data = await r.json();
       setTopics(data.topics || []);
@@ -109,14 +146,20 @@ export default function TrendingPage() {
         take: "10",
         skip: currentSkip.toString(),
       });
-      if (activeTab !== "all") {
+      if (activeTab !== "all" && activeTab !== "shorts") {
         params.set("category", activeTab);
       }
 
       const res = await fetch(`/api/posts?${params}`);
       if (res.ok) {
         const data = await res.json();
-        const newPosts = data.posts || [];
+        let newPosts = data.posts || [];
+        
+        // Filter media/shorts if shorts tab is selected
+        if (activeTab === "shorts") {
+          newPosts = newPosts.filter((p: any) => p.imageUrl || p.videoUrl || p.gifUrl);
+        }
+
         if (newPosts.length < 10) {
           setHasMorePosts(false);
         } else {
@@ -243,9 +286,28 @@ export default function TrendingPage() {
           </div>
         </div>
 
+        {/* Live Score Ticker Widget */}
+        <div style={{
+          padding: "6px 16px",
+          background: "linear-gradient(90deg, rgba(239,68,68,0.1), rgba(249,115,22,0.1))",
+          borderTop: "1px solid rgba(239,68,68,0.2)",
+          borderBottom: "1px solid rgba(239,68,68,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          fontSize: "0.78rem"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ background: "#ef4444", color: "white", padding: "1px 6px", borderRadius: "4px", fontWeight: 900, fontSize: "0.62rem" }}>
+              {liveTicker.badge}
+            </span>
+            <span style={{ fontWeight: 800, color: "var(--color-text-main)" }}>{liveTicker.title}</span>
+            <span style={{ color: "var(--color-text-muted)" }}>{liveTicker.score}</span>
+          </div>
+          <span style={{ color: "var(--color-primary)", fontWeight: 700, cursor: "pointer" }}>View Match</span>
+        </div>
+
         {/* Categories Tab Navigation */}
         <div style={{
-          display: "flex", gap: "4px", overflowX: "auto", padding: "0 12px 6px",
+          display: "flex", gap: "4px", overflowX: "auto", padding: "6px 12px",
           scrollbarWidth: "none", msOverflowStyle: "none",
         }}>
           {CATEGORY_TABS.map((tab) => {
@@ -294,22 +356,42 @@ export default function TrendingPage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               {topics.slice(0, 3).map((topic) => (
-                <Link
+                <div
                   key={topic.id}
-                  href={`/search?q=${encodeURIComponent(topic.searchQuery)}`}
-                  style={{ textDecoration: "none", color: "inherit", display: "block" }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
                 >
-                  <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--color-text-main)", lineHeight: 1.35, marginBottom: "4px" }}>
-                    {topic.title}
-                  </div>
-                  <div style={{ fontSize: "0.76rem", color: "var(--color-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span>Trending now</span>
-                    <span>·</span>
-                    <span>{topic.category}</span>
-                    <span>·</span>
-                    <span>{fmt(topic.postCount)} posts</span>
-                  </div>
-                </Link>
+                  <Link
+                    href={`/search?q=${encodeURIComponent(topic.searchQuery)}`}
+                    style={{ textDecoration: "none", color: "inherit", flex: 1 }}
+                  >
+                    <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--color-text-main)", lineHeight: 1.35, marginBottom: "4px" }}>
+                      {topic.title}
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "var(--color-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span>Trending now</span>
+                      <span>·</span>
+                      <span>{topic.category}</span>
+                      <span>·</span>
+                      <span>{fmt(topic.postCount)} posts</span>
+                    </div>
+                  </Link>
+
+                  {/* AI Summary Button */}
+                  <button
+                    onClick={(e) => handleOpenAiSummary(topic.title, e)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "4px",
+                      background: "rgba(120, 87, 255, 0.15)",
+                      border: "1px solid rgba(120, 87, 255, 0.3)",
+                      color: "#7857ff", borderRadius: "99px",
+                      padding: "6px 12px", fontSize: "0.75rem", fontWeight: 800,
+                      cursor: "pointer", marginLeft: "12px", flexShrink: 0
+                    }}
+                  >
+                    <Bot size={14} />
+                    <span>AI Summary</span>
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -318,20 +400,20 @@ export default function TrendingPage() {
         {/* 2. TRENDING TOPICS LIST */}
         {!loadingTrends && topics.length > 3 && (
           <div style={{ borderBottom: "8px solid var(--color-bg-surface)" }}>
-            {topics.slice(3).map((topic, idx) => (
-              <Link
+            {topics.slice(3).map((topic) => (
+              <div
                 key={topic.id}
-                href={`/search?q=${encodeURIComponent(topic.searchQuery)}`}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  textDecoration: "none", color: "inherit",
                   padding: "13px 18px",
                   borderBottom: "1px solid var(--color-border)",
-                  transition: "background 0.15s",
                 }}
                 className="hover-bg"
               >
-                <div>
+                <Link
+                  href={`/search?q=${encodeURIComponent(topic.searchQuery)}`}
+                  style={{ textDecoration: "none", color: "inherit", flex: 1 }}
+                >
                   <div style={{ fontSize: "0.74rem", color: "var(--color-text-muted)", fontWeight: 600, marginBottom: "2px" }}>
                     {topic.category} · Trending
                   </div>
@@ -341,9 +423,23 @@ export default function TrendingPage() {
                   <div style={{ fontSize: "0.74rem", color: "var(--color-text-muted)", marginTop: "2px" }}>
                     {fmt(topic.postCount)} posts
                   </div>
-                </div>
-                <MoreHorizontal size={16} style={{ color: "var(--color-text-muted)" }} />
-              </Link>
+                </Link>
+
+                <button
+                  onClick={(e) => handleOpenAiSummary(topic.title, e)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "4px",
+                    background: "rgba(120, 87, 255, 0.1)",
+                    border: "1px solid rgba(120, 87, 255, 0.2)",
+                    color: "#7857ff", borderRadius: "99px",
+                    padding: "4px 10px", fontSize: "0.72rem", fontWeight: 700,
+                    cursor: "pointer", marginLeft: "12px"
+                  }}
+                >
+                  <Bot size={13} />
+                  <span>AI Summary</span>
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -414,6 +510,74 @@ export default function TrendingPage() {
           )}
         </div>
       </div>
+
+      {/* AI SUMMARY POPUP MODAL */}
+      {selectedAiTopic && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: "20px"
+        }} onClick={() => setSelectedAiTopic(null)}>
+          <div
+            style={{
+              background: "var(--color-bg-surface)", border: "1px solid var(--color-border)",
+              borderRadius: "24px", padding: "24px", width: "100%", maxWidth: "480px",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column", gap: "16px"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#7857ff", fontWeight: 900 }}>
+                <Bot size={22} />
+                <span>AI Topic Insights</span>
+              </div>
+              <button onClick={() => setSelectedAiTopic(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)" }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: "1.15rem", fontWeight: 900, color: "var(--color-text-main)", margin: "0 0 4px" }}>
+                {selectedAiTopic}
+              </h3>
+              {aiSummaryData?.sentiment && (
+                <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "var(--color-primary)" }}>
+                  Sentiment: {aiSummaryData.sentiment}
+                </span>
+              )}
+            </div>
+
+            {loadingAiSummary ? (
+              <div style={{ padding: "30px", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                <Loader2 size={24} className="animate-spin" style={{ color: "#7857ff" }} />
+                <span style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Generating AI summary...</span>
+              </div>
+            ) : aiSummaryData ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {aiSummaryData.summary.map((point, i) => (
+                  <div key={i} style={{ display: "flex", gap: "10px", fontSize: "0.9rem", color: "var(--color-text-main)", lineHeight: 1.4 }}>
+                    <span style={{ color: "#7857ff", fontWeight: 800 }}>•</span>
+                    <span>{point}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: "var(--color-text-muted)", fontSize: "0.85rem" }}>Could not load AI summary.</p>
+            )}
+
+            <button
+              onClick={() => setSelectedAiTopic(null)}
+              style={{
+                marginTop: "8px", padding: "10px", borderRadius: "99px",
+                background: "var(--color-primary)", color: "white", fontWeight: 700,
+                border: "none", cursor: "pointer", textAlign: "center"
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }
