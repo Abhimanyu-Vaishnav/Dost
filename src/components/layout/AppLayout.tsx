@@ -414,7 +414,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
                         }
                         window.scrollTo({ top: 0, behavior: "smooth" });
                       } else {
-                        window.location.reload();
+                        window.dispatchEvent(new CustomEvent("dost:refresh-feed"));
                       }
                     }
                   }}

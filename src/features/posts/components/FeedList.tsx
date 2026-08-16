@@ -172,6 +172,16 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
     }
   }, [activeTab]);
 
+  // Listen to custom window event for in-memory feed refresh from Home nav click
+  useEffect(() => {
+    const handleCustomRefresh = () => {
+      executeRefresh();
+    };
+
+    window.addEventListener("dost:refresh-feed", handleCustomRefresh);
+    return () => window.removeEventListener("dost:refresh-feed", handleCustomRefresh);
+  }, [executeRefresh]);
+
   // Polling function for new incoming TOP posts
   const fetchNewPosts = useCallback(async () => {
     try {
