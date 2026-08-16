@@ -402,6 +402,22 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
                   key={item.id} 
                   href={item.href} 
                   className={`${styles.navItem} ${!isMobileBottomItem ? styles.desktopOnly : ""} ${active ? styles.navItemActive : ""}`}
+                  onClick={(e) => {
+                    if (item.id === "home" && (pathname === "/feed" || pathname === "/")) {
+                      e.preventDefault();
+                      const mainEl = document.querySelector("main");
+                      const currentScroll = mainEl ? mainEl.scrollTop : (window.scrollY || document.documentElement.scrollTop);
+                      
+                      if (currentScroll > 50) {
+                        if (mainEl) {
+                          mainEl.scrollTo({ top: 0, behavior: "smooth" });
+                        }
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      } else {
+                        window.location.reload();
+                      }
+                    }
+                  }}
                 >
                   <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                     {renderNavIcon(item.id, active)}
