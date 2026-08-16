@@ -59,17 +59,26 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   const topFeedRef = useRef<HTMLDivElement>(null);
   const observerTargetRef = useRef<HTMLDivElement>(null);
 
-  // Track window scroll position to switch between top inline bar and floating pill
+  // Track mainContent container scroll position to switch between top inline bar and floating pill
   useEffect(() => {
+    const mainEl = document.querySelector("main");
+
     const handleScroll = () => {
-      const scrollPos = window.scrollY || document.documentElement.scrollTop;
+      const scrollPos = mainEl ? mainEl.scrollTop : (window.scrollY || document.documentElement.scrollTop);
       // Show floating pill as soon as user scrolls past 100px (1-2 posts)
       setIsScrolledDown(scrollPos > 100);
     };
 
+    if (mainEl) {
+      mainEl.addEventListener("scroll", handleScroll, { passive: true });
+    }
     window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
+
+    return () => {
+      if (mainEl) mainEl.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   // Reset feed state when activeTab or initialPosts change
