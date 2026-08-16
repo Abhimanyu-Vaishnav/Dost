@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 // ── All supported categories ──────────────────────────────────────────────────
-export const CATEGORIES: { id: string; label: string; keywords: string[] }[] = [
+const CATEGORIES: { id: string; label: string; keywords: string[] }[] = [
   {
     id: "technology",
     label: "Technology",
@@ -56,7 +56,7 @@ export const CATEGORIES: { id: string; label: string; keywords: string[] }[] = [
 ];
 
 // ── Region config ─────────────────────────────────────────────────────────────
-export const REGIONS: { code: string; name: string; keywords: string[] }[] = [
+const REGIONS: { code: string; name: string; keywords: string[] }[] = [
   { code: "IN", name: "India", keywords: ["india","bharat","delhi","mumbai","bengaluru","ipl","rupee","modi","bjp","bollywood","isro"] },
   { code: "US", name: "United States", keywords: ["usa","america","trump","biden","nyc","dollar","nfl","nba","silicon valley","federal","nasa","hollywood"] },
   { code: "GB", name: "United Kingdom", keywords: ["uk","london","england","premier league","bbc","pound","nhs","westminster"] },
