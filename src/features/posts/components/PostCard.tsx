@@ -148,6 +148,22 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
   const [views, setViews] = useState(post.views || 0);
   const isAuthor = currentUserId === post.author.id;
 
+  // Re-sync local states when post prop or currentUserId changes (Universal state sync)
+  useEffect(() => {
+    const updatedLiked = post.likes?.some(l => l.userId === currentUserId) || false;
+    const updatedBookmarked = post.bookmarkedBy?.some(b => b.userId === currentUserId) || false;
+    const updatedLikeCount = post._count?.likes ?? post.likes?.length ?? 0;
+    const updatedViews = post.views || 0;
+
+    setIsLiked(updatedLiked);
+    setIsBookmarked(updatedBookmarked);
+    setLikeCount(updatedLikeCount);
+    setViews(updatedViews);
+    if (post.comments) {
+      setComments(post.comments);
+    }
+  }, [post, currentUserId]);
+
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<Comment[]>(post.comments || []);
