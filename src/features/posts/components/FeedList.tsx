@@ -43,7 +43,8 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   useEffect(() => {
     const handleScroll = () => {
       const scrollPos = window.scrollY || document.documentElement.scrollTop;
-      if (scrollPos > 180) {
+      // Show floating pill only after scrolling down past 5-6 posts (~600px)
+      if (scrollPos > 600) {
         setIsScrolledDown(true);
       } else {
         setIsScrolledDown(false);
@@ -203,7 +204,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
   }, [posts, newPostsQueue, activeTab]);
 
   useEffect(() => {
-    const interval = setInterval(fetchNewPosts, 2500);
+    const interval = setInterval(fetchNewPosts, 3000);
     return () => clearInterval(interval);
   }, [fetchNewPosts]);
 
@@ -269,19 +270,19 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
       onTouchEnd={handleTouchEnd}
       style={{ display: "flex", flexDirection: "column", position: "relative", width: "100%" }}
     >
-      {/* 1. FLOATING PILL BUTTON MATCHING EXACT TWITTER/X IMAGE ("↑ [Avatar 1][Avatar 2] posted") */}
-      {newPostsQueue.length > 0 && (
+      {/* 1. SCROLLED DOWN (5-6 POSTS DEEP): FLOATING PILL BUTTON IN FEED MID ("↑ [Avatar 1][Avatar 2] posted") */}
+      {newPostsQueue.length > 0 && isScrolledDown && (
         <button
           onClick={handleRevealNewPosts}
           style={{
             position: "fixed",
-            top: "72px",
+            top: "80px",
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 9999,
             background: "linear-gradient(135deg, #1d9bf0, #0084ff)",
             color: "#ffffff",
-            padding: "8px 20px",
+            padding: "8px 22px",
             borderRadius: "9999px",
             border: "1px solid rgba(255, 255, 255, 0.25)",
             boxShadow: "0 10px 30px rgba(29, 155, 240, 0.55)",
@@ -292,7 +293,7 @@ export function FeedList({ initialPosts, currentUserId, activeTab }: FeedListPro
             fontWeight: 800,
             fontSize: "0.95rem",
             backdropFilter: "blur(12px)",
-            transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)"
+            transition: "all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)"
           }}
           className="hover:scale-105 active:scale-95 animate-fade-in"
         >
