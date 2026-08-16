@@ -734,16 +734,17 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
                   return (
                     <>
                       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        {pollState.options.map((opt: any) => {
+                        {pollState.options.map((opt: any, index: number) => {
                           const votes = opt.votes?.length || 0;
                           const hasVotedThisOption = currentUserId ? opt.votes?.includes(currentUserId) : false;
                           const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+                          const optionKey = opt.id || `poll-opt-${index}-${opt.text || ""}`;
 
                           return (
                             <button
-                              key={opt.id}
+                              key={optionKey}
                               type="button"
-                              onClick={() => handleVotePoll(opt.id)}
+                              onClick={() => handleVotePoll(opt.id || String(index))}
                               style={{
                                 position: "relative",
                                 overflow: "hidden",
