@@ -29,38 +29,80 @@ export function SpaceModal({ space, onClose }: SpaceModalProps) {
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
   const [listenersCount, setListenersCount] = useState(38);
   const [audioActive, setAudioActive] = useState(true);
+  const [micStream, setMicStream] = useState<MediaStream | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Synthesize realistic ambient voice sound when unmuted
+  // Initialize Microphone Web Audio Stream for live speaking
   useEffect(() => {
-    if (!isMuted && audioActive) {
-      try {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtx) {
-          const ctx = new AudioCtx();
-          audioCtxRef.current = ctx;
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
+    let streamObj: MediaStream | null = null;
 
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(180, ctx.currentTime); // Pitch around voice frequency
-          gain.gain.setValueAtTime(0.015, ctx.currentTime); // Low non-intrusive ambient hum
+    async function initMicrophone() {
+      if (!isMuted && (role === "host" || role === "speaker")) {
+        try {
+          streamObj = await navigator.mediaDevices.getUserMedia({ audio: true });
+          setMicStream(streamObj);
 
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start();
+          const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioCtx) {
+            const ctx = new AudioCtx();
+            audioCtxRef.current = ctx;
+            const source = ctx.createMediaStreamSource(streamObj);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 64;
+            source.connect(analyser);
+            analyserRef.current = analyser;
 
-          return () => {
-            try {
-              osc.stop();
-              ctx.close();
-            } catch (e) {}
-          };
+            // Draw Frequency Visualizer Bar
+            const drawVisualizer = () => {
+              if (canvasRef.current && analyserRef.current) {
+                const canvas = canvasRef.current;
+                const canvasCtx = canvas.getContext("2d");
+                const bufferLength = analyserRef.current.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                analyserRef.current.getByteFrequencyData(dataArray);
+
+                if (canvasCtx) {
+                  canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+                  const barWidth = (canvas.width / bufferLength) * 2;
+                  let x = 0;
+
+                  for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * canvas.height;
+                    canvasCtx.fillStyle = "#10b981";
+                    canvasCtx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+                    x += barWidth;
+                  }
+                }
+              }
+              animFrameRef.current = requestAnimationFrame(drawVisualizer);
+            };
+
+            drawVisualizer();
+          }
+        } catch (e) {
+          console.log("Microphone access permission denied or unavailable", e);
         }
-      } catch (e) {}
+      }
     }
-  }, [isMuted, audioActive]);
+
+    initMicrophone();
+
+    return () => {
+      if (streamObj) {
+        streamObj.getTracks().forEach((track) => track.stop());
+      }
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+      if (audioCtxRef.current) {
+        try { audioCtxRef.current.close(); } catch (e) {}
+      }
+    };
+  }, [isMuted, role]);
 
   const triggerReaction = (emoji: string) => {
     const newEmoji: FloatingEmoji = {
