@@ -1,17 +1,25 @@
 :root, [data-theme="dark"], [data-theme="midnight"] {
-  /* Color Palette - X Style Pitch Dark (Default) */
+  /* Color Palette - Aurora Hyper-Glow Dark (Default) */
   --color-primary: #1d9bf0;
   --color-primary-light: #71c9f8;
   --color-primary-dark: #1a8cd8;
+
+  /* Aurora Signature Neon Accents */
+  --aurora-cyan: #00f2fe;
+  --aurora-purple: #7b2cbf;
+  --aurora-pink: #ff007f;
+  --aurora-emerald: #10b981;
+  --aurora-gradient: linear-gradient(135deg, #00f2fe 0%, #4facfe 50%, #7b2cbf 100%);
+  --aurora-border-glow: linear-gradient(135deg, rgba(0,242,254,0.3), rgba(123,44,191,0.3));
   
-  --color-bg-base: #000000;
-  --color-bg-surface: #16181c;
-  --color-bg-hover: rgba(239, 243, 244, 0.1);
-  --color-bg-glass: rgba(0, 0, 0, 0.85);
+  --color-bg-base: #0b0d14;
+  --color-bg-surface: rgba(18, 22, 34, 0.75);
+  --color-bg-hover: rgba(0, 242, 254, 0.08);
+  --color-bg-glass: rgba(11, 13, 20, 0.85);
   
-  --color-text-main: #e7e9ea;
-  --color-text-muted: #71767b;
-  --color-border: #2f3336;
+  --color-text-main: #f1f5f9;
+  --color-text-muted: #94a3b8;
+  --color-border: rgba(255, 255, 255, 0.1);
 
   /* Spacing */
   --space-1: 0.25rem;
@@ -23,20 +31,23 @@
   --space-8: 3rem;
 
   /* Border Radius */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 1rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+  /* Shadows & Glows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
   --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  --glow-primary: 0 0 20px rgba(29, 155, 240, 0.35);
+  --glow-cyan: 0 0 24px rgba(0, 242, 254, 0.4);
 
   /* Transitions */
-  --transition-fast: 150ms ease-in-out;
-  --transition-normal: 300ms ease-in-out;
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 [data-theme="dim"] {
@@ -120,10 +131,50 @@ body {
 .text-muted { font-size: 0.9rem; color: var(--color-text-muted); }
 .text-sm { font-size: 0.85rem; }
 
-/* Glassmorphism Utility -> Transitioned to Solid Minimal Panel */
+/* Aurora Glassmorphism Utility */
 .glass {
   background: var(--color-bg-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--color-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: all var(--transition-normal);
+}
+
+.aurora-card {
+  background: linear-gradient(145deg, rgba(22, 28, 45, 0.7), rgba(14, 17, 27, 0.85));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s ease;
+}
+
+.aurora-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(0, 242, 254, 0.15), 0 0 20px rgba(123, 44, 191, 0.1);
+  border-color: rgba(0, 242, 254, 0.3);
+}
+
+.aurora-badge {
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(123, 44, 191, 0.15));
+  border: 1px solid rgba(0, 242, 254, 0.3);
+  color: #00f2fe;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aurora-gradient-text {
+  background: linear-gradient(135deg, #00f2fe 0%, #4facfe 50%, #ff007f 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* Hover Utilities */
