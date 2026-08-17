@@ -112,7 +112,6 @@ export default async function FeedPage(props: { searchParams: Promise<{ tab?: st
 
   return (
     <AppLayout rightSidebar={RightSidebar}>
-      <PageHeader title="Home" />
       <ActiveSpacesBar />
       <StoryFeed currentUserId={user.userId as string} currentUserAvatar={dbUser?.avatar || null} />
       <FeedTabs />
