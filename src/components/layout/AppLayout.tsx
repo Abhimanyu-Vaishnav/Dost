@@ -312,37 +312,37 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
 
             {/* Mobile Drawer Options List (Our App Data) */}
             <div className={styles.drawerMenuList}>
-              <Link href={user?.userId ? `/profile/${user.userId}` : "/profile"} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href={user?.userId ? `/profile/${user.userId}` : "/profile"} prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <User size={22} /> <span>Profile</span>
               </Link>
-              <Link href="/trending" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/trending" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <Flame size={22} style={{ color: "#ff6b00" }} /> <span>Trending &amp; News</span>
               </Link>
-              <Link href="/search?tab=people" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/search?tab=people" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <UserPlus size={22} style={{ color: "var(--color-primary)" }} /> <span>Who to Follow</span>
               </Link>
-              <Link href="/premium" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/premium" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <CheckCircle2 size={22} /> <span>Premium</span>
               </Link>
-              <Link href="/bookmarks" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/bookmarks" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <Bookmark size={22} /> <span>Bookmarks</span>
               </Link>
-              <Link href="/lists" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/lists" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <List size={22} /> <span>Lists</span>
               </Link>
-              <Link href="/communities" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/communities" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <Users size={22} /> <span>Communities</span>
               </Link>
-              <Link href="/analytics" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/analytics" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <BarChart3 size={22} /> <span>Analytics</span>
               </Link>
               <button className={styles.drawerMenuItem} onClick={() => { setShowThemeModal(true); setShowSideDrawer(false); }}>
                 <Palette size={22} /> <span>Display & Font</span>
               </button>
-              <Link href="/settings" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/settings" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <SettingsIcon size={22} /> <span>Settings and privacy</span>
               </Link>
-              <Link href="/help" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/help" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <HelpCircle size={22} /> <span>Help Center</span>
               </Link>
               <button className={styles.drawerMenuItem} style={{ color: "#ff4d4d", marginTop: "8px" }} onClick={() => { handleLogout(); setShowSideDrawer(false); }}>
@@ -401,6 +401,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
                 <Link 
                   key={item.id} 
                   href={item.href} 
+                  prefetch={true}
                   className={`${styles.navItem} ${!isMobileBottomItem ? styles.desktopOnly : ""} ${active ? styles.navItemActive : ""}`}
                   onClick={(e) => {
                     if (item.id === "home" && (pathname === "/feed" || pathname === "/")) {
