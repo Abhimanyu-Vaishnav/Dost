@@ -15,9 +15,17 @@ let GLOBAL_MESSAGES_STORE: Record<string, any[]> = {
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getUserFromRequest(request);
+    const currentUserId = user?.userId || "me";
     const { searchParams } = new URL(request.url);
     const convId = searchParams.get("convId") || "conv-1";
-    const messages = GLOBAL_MESSAGES_STORE[convId] || [];
+    const rawMessages = GLOBAL_MESSAGES_STORE[convId] || [];
+
+    const messages = rawMessages.map((m: any) => ({
+      ...m,
+      isMe: m.senderId === currentUserId || (currentUserId === "me" && m.senderId === "me")
+    }));
+
     return NextResponse.json({ messages }, { status: 200 });
   } catch (e) {
     return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
@@ -28,22 +36,24 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);
     const body = await request.json();
-    const { convId, text, imageUrl, audioUrl } = body;
+    const { convId, text, imageUrl, audioUrl, senderName } = body;
 
     if (!convId || (!text && !imageUrl && !audioUrl)) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
     }
 
+    const currentUserId = user?.userId || "me";
     const newMsg = {
       id: body.id || `msg-${Date.now()}`,
-      senderId: user?.userId || "me",
-      senderName: user?.name || "You",
+      senderId: currentUserId,
+      senderName: user?.name || senderName || "You",
       text: text || "",
       imageUrl: imageUrl || undefined,
       audioUrl: audioUrl || undefined,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      isMe: true,
-      reactions: []
+      reactions: [],
+      isDelivered: true,
+      isRead: false
     };
 
     if (!GLOBAL_MESSAGES_STORE[convId]) {
@@ -52,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     GLOBAL_MESSAGES_STORE[convId].push(newMsg);
 
-    return NextResponse.json({ success: true, message: newMsg }, { status: 201 });
+    return NextResponse.json({ success: true, message: { ...newMsg, isMe: true } }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
   }

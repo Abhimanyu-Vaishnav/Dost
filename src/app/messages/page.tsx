@@ -41,7 +41,7 @@ interface Conversation {
 
 const AVAILABLE_CONTACTS_DIRECTORY = [
   {
-    id: "conv-1",
+    id: "conv-goyalshaliniuk",
     name: "Shalini Goyal",
     username: "goyalshaliniuk",
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
@@ -49,7 +49,7 @@ const AVAILABLE_CONTACTS_DIRECTORY = [
     isFollowing: true
   },
   {
-    id: "conv-2",
+    id: "conv-dev_sound",
     name: "Devansh Nambiar",
     username: "dev_sound",
     avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
@@ -57,7 +57,7 @@ const AVAILABLE_CONTACTS_DIRECTORY = [
     isFollowing: true
   },
   {
-    id: "conv-3",
+    id: "conv-arjun_arch",
     name: "Arjun Singhania",
     username: "arjun_arch",
     avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150",
@@ -65,12 +65,20 @@ const AVAILABLE_CONTACTS_DIRECTORY = [
     isFollower: true
   },
   {
-    id: "conv-4",
+    id: "conv-simrank",
     name: "Simran Kulkarni",
     username: "simrank",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
     isOnline: true,
     isFollowing: true
+  },
+  {
+    id: "conv-sumit",
+    name: "Sumit",
+    username: "sumit",
+    avatar: "https://ui-avatars.com/api/?name=Sumit&background=00f2fe&color=ffffff&bold=true",
+    isOnline: true,
+    isFollower: true
   }
 ];
 
@@ -600,7 +608,11 @@ export default function MessagesPage() {
                     >
                       <img src={contact.avatar} alt={contact.name} style={{ width: "38px", height: "38px", borderRadius: "50%", objectFit: "cover" }} />
                       <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                        <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--color-text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{contact.name}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--color-text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{contact.name}</span>
+                          {contact.isFollowing && <span style={{ fontSize: "0.7rem", padding: "1px 6px", borderRadius: "99px", background: "rgba(0, 242, 254, 0.15)", color: "#00f2fe", fontWeight: 700 }}>Following</span>}
+                          {!contact.isFollowing && contact.isFollower && <span style={{ fontSize: "0.7rem", padding: "1px 6px", borderRadius: "99px", background: "rgba(168, 85, 247, 0.15)", color: "#a855f7", fontWeight: 700 }}>Follower</span>}
+                        </div>
                         <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>@{contact.username}</span>
                       </div>
                       <span style={{ fontSize: "0.82rem", color: "#00f2fe", fontWeight: 700, flexShrink: 0 }}>Chat</span>
