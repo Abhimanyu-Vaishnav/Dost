@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     const newMsg = {
-      id: `msg-${Date.now()}`,
+      id: body.id || `msg-${Date.now()}`,
       senderId: user?.userId || "me",
       senderName: user?.name || "You",
       text: text || "",

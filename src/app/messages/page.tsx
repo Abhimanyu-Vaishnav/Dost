@@ -23,6 +23,8 @@ interface ChatMessage {
   videoUrl?: string;
   timestamp: string;
   isMe: boolean;
+  isDelivered?: boolean;
+  isRead?: boolean;
   reactions?: string[];
 }
 
@@ -43,35 +45,32 @@ const AVAILABLE_CONTACTS_DIRECTORY = [
     name: "Shalini Goyal",
     username: "goyalshaliniuk",
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-    isOnline: true
+    isOnline: true,
+    isFollowing: true
   },
   {
     id: "conv-2",
     name: "Devansh Nambiar",
     username: "dev_sound",
     avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
-    isOnline: true
+    isOnline: true,
+    isFollowing: true
   },
   {
     id: "conv-3",
     name: "Arjun Singhania",
     username: "arjun_arch",
     avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150",
-    isOnline: false
+    isOnline: false,
+    isFollower: true
   },
   {
     id: "conv-4",
     name: "Simran Kulkarni",
     username: "simrank",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-    isOnline: true
-  },
-  {
-    id: "conv-5",
-    name: "Rohan Sharma",
-    username: "rohan_sharma",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-    isOnline: true
+    isOnline: true,
+    isFollowing: true
   }
 ];
 
@@ -131,6 +130,9 @@ export default function MessagesPage() {
   useEffect(() => {
     if (targetUserParam) {
       const targetClean = targetUserParam.replace("@", "").toLowerCase();
+      const urlName = searchParams?.get("name") || (targetClean.charAt(0).toUpperCase() + targetClean.slice(1));
+      const urlAvatar = searchParams?.get("avatar") || `https://ui-avatars.com/api/?name=${encodeURIComponent(urlName)}&background=00f2fe&color=ffffff&bold=true`;
+
       const existing = conversations.find(c => 
         c.username.toLowerCase() === targetClean || 
         c.id === targetUserParam || 
@@ -142,10 +144,10 @@ export default function MessagesPage() {
       } else {
         const contactMatch = AVAILABLE_CONTACTS_DIRECTORY.find(c => c.username.toLowerCase() === targetClean);
         const newConv: Conversation = {
-          id: contactMatch ? contactMatch.id : `conv-${Date.now()}`,
-          name: contactMatch ? contactMatch.name : (targetUserParam.charAt(0).toUpperCase() + targetUserParam.slice(1)),
+          id: contactMatch ? contactMatch.id : `conv-${targetClean}`,
+          name: contactMatch ? contactMatch.name : urlName,
           username: contactMatch ? contactMatch.username : targetClean,
-          avatar: contactMatch ? contactMatch.avatar : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+          avatar: contactMatch ? contactMatch.avatar : urlAvatar,
           isOnline: true,
           unreadCount: 0,
           lastMessage: "Conversation started",
@@ -155,7 +157,7 @@ export default function MessagesPage() {
         handleSelectConversation(newConv.id);
       }
     }
-  }, [targetUserParam]);
+  }, [targetUserParam, searchParams]);
 
   const handleStartChatWithUser = (contact: { id: string; name: string; username: string; avatar: string; isOnline?: boolean }) => {
     const existing = conversations.find(c => c.id === contact.id || c.username.toLowerCase() === contact.username.toLowerCase());
@@ -265,7 +267,11 @@ export default function MessagesPage() {
             setMessagesMap(prev => {
               const currentMsgs: ChatMessage[] = prev[validId] || [];
               const existingIds = new Set(currentMsgs.map((m: ChatMessage) => m.id));
-              const brandNew = data.messages.filter((m: any) => !existingIds.has(m.id));
+              const brandNew = data.messages.filter((m: any) => {
+                if (existingIds.has(m.id)) return false;
+                const isDuplicateMe = currentMsgs.some(c => c.isMe && c.text === m.text);
+                return !isDuplicateMe;
+              });
               if (brandNew.length > 0) {
                 const updated = {
                   ...prev,
@@ -289,10 +295,10 @@ export default function MessagesPage() {
 
   // Auto-select first conversation on Desktop (>650px)
   useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth > 650 && !activeConvId) {
-      handleSelectConversation("conv-1");
+    if (typeof window !== "undefined" && window.innerWidth > 650 && !activeConvId && conversations.length > 0) {
+      handleSelectConversation(conversations[0].id);
     }
-  }, []);
+  }, [conversations]);
 
   useEffect(() => {
     if (activeConvId) {
@@ -382,7 +388,9 @@ export default function MessagesPage() {
       text: "🎙️ Voice Note (00:15)",
       audioUrl: audioUrl,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      isMe: true
+      isMe: true,
+      isDelivered: true,
+      isRead: false
     };
 
     setMessagesMap(prev => {
@@ -407,20 +415,32 @@ export default function MessagesPage() {
     if ((!inputText.trim() && !attachedImage) || !activeConvId) return;
 
     const currentId = activeConvId;
+    const newMsgText = inputText.trim() || (attachedImage ? "📷 Image Attached" : "");
+    const newMsgImg = attachedImage || undefined;
+
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: "me",
       senderName: "You",
-      text: inputText.trim() || (attachedImage ? "📷 Image Attached" : ""),
-      imageUrl: attachedImage || undefined,
+      text: newMsgText,
+      imageUrl: newMsgImg,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      isMe: true
+      isMe: true,
+      isDelivered: true,
+      isRead: false
     };
 
+    setInputText("");
+    setAttachedImage(null);
+
     setMessagesMap(prev => {
+      const currentList = prev[currentId] || [];
+      if (currentList.some(m => m.id === newMsg.id || (m.isMe && m.text === newMsg.text && m.timestamp === newMsg.timestamp))) {
+        return prev;
+      }
       const updated = {
         ...prev,
-        [currentId]: [...(prev[currentId] || []), newMsg]
+        [currentId]: [...currentList, newMsg]
       };
       if (typeof window !== "undefined") localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
       return updated;
@@ -428,7 +448,7 @@ export default function MessagesPage() {
 
     setConversations(prev => prev.map(c => {
       if (c.id === currentId) {
-        return { ...c, lastMessage: inputText.trim() || "📷 Image", lastTime: "Just now", unreadCount: 0 };
+        return { ...c, lastMessage: newMsgText, lastTime: "Just now", unreadCount: 0 };
       }
       return c;
     }));
@@ -436,11 +456,8 @@ export default function MessagesPage() {
     fetch("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ convId: currentId, text: newMsg.text, imageUrl: newMsg.imageUrl })
+      body: JSON.stringify({ id: newMsg.id, convId: currentId, text: newMsg.text, imageUrl: newMsg.imageUrl })
     }).catch(() => {});
-
-    setInputText("");
-    setAttachedImage(null);
   };
 
   const handleAddReaction = (msgId: string, emoji: string) => {
@@ -564,11 +581,12 @@ export default function MessagesPage() {
                   />
                 </div>
 
-                {/* Contacts Directory List */}
+                {/* Contacts Directory List (Following / Followers only) */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px", maxHeight: "260px", overflowY: "auto", paddingRight: "4px" }}>
                   {AVAILABLE_CONTACTS_DIRECTORY.filter(c => 
-                    c.name.toLowerCase().includes(newChatSearch.toLowerCase()) || 
-                    c.username.toLowerCase().includes(newChatSearch.toLowerCase())
+                    (c.isFollowing || c.isFollower) &&
+                    (c.name.toLowerCase().includes(newChatSearch.toLowerCase()) || 
+                     c.username.toLowerCase().includes(newChatSearch.toLowerCase()))
                   ).map(contact => (
                     <div 
                       key={contact.id}
@@ -588,6 +606,32 @@ export default function MessagesPage() {
                       <span style={{ fontSize: "0.82rem", color: "#00f2fe", fontWeight: 700, flexShrink: 0 }}>Chat</span>
                     </div>
                   ))}
+
+                  {/* Allow starting chat with ANY typed username if not in following list */}
+                  {newChatSearch.trim().length > 0 && !AVAILABLE_CONTACTS_DIRECTORY.some(c => c.username.toLowerCase() === newChatSearch.replace("@", "").trim().toLowerCase()) && (
+                    <button
+                      onClick={() => {
+                        const cleanTag = newChatSearch.replace("@", "").trim();
+                        handleStartChatWithUser({
+                          id: `conv-${cleanTag}`,
+                          name: cleanTag.charAt(0).toUpperCase() + cleanTag.slice(1),
+                          username: cleanTag,
+                          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanTag)}&background=00f2fe&color=ffffff&bold=true`,
+                          isOnline: true
+                        });
+                      }}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                        padding: "10px", borderRadius: "12px", background: "rgba(0, 242, 254, 0.12)",
+                        border: "1px solid #00f2fe", color: "#00f2fe", fontWeight: 700, fontSize: "0.88rem",
+                        cursor: "pointer", marginTop: "6px"
+                      }}
+                      className="hover:scale-102 active:scale-95"
+                    >
+                      <UserPlus size={16} />
+                      <span>Start Chat with @{newChatSearch.replace("@", "").trim()}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </>
@@ -1477,8 +1521,15 @@ export default function MessagesPage() {
 
                     {/* Message Timestamp */}
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", color: "var(--color-text-muted)", marginTop: "2px" }}>
-                      <span>{msg.timestamp}</span>
-                      {msg.isMe && <CheckCheck size={15} style={{ color: "#00f2fe" }} />}
+                      {msg.isMe && (
+                        msg.isRead ? (
+                          <CheckCheck size={15} style={{ color: "#00f2fe" }} />
+                        ) : msg.isDelivered ? (
+                          <CheckCheck size={15} style={{ color: "var(--color-text-muted)" }} />
+                        ) : (
+                          <Check size={15} style={{ color: "var(--color-text-muted)" }} />
+                        )
+                      )}
                     </div>
                   </div>
                 );
