@@ -638,17 +638,17 @@ export default function MessagesPage() {
                         <div 
                           className="glass animate-scale-in"
                           style={{
-                            position: "fixed",
-                            top: "58px",
-                            right: "16px",
-                            width: "240px",
-                            maxWidth: "calc(100vw - 32px)",
+                            position: "absolute",
+                            top: "100%",
+                            right: "4px",
+                            width: "220px",
+                            maxWidth: "calc(100% - 8px)",
                             background: "var(--color-bg-surface)",
                             border: "1px solid var(--color-border)",
                             borderRadius: "18px",
                             padding: "6px",
                             boxShadow: "0 14px 40px rgba(0,0,0,0.5)",
-                            zIndex: 9999,
+                            zIndex: 100,
                             display: "flex",
                             flexDirection: "column",
                             gap: "2px"
@@ -1211,6 +1211,117 @@ export default function MessagesPage() {
                   <Send size={18} />
                 </button>
               </form>
+              {/* Long-Press Message Context Sheet Modal (Constrained Inside Active Chat Container) */}
+              {longPressMsg && (
+                <>
+                  <div 
+                    style={{
+                      position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                      background: "rgba(0,0,0,0.4)",
+                      zIndex: 900
+                    }}
+                    onClick={() => setLongPressMsg(null)}
+                  />
+                  <div 
+                    className="glass animate-spring-pop"
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      width: "calc(100% - 24px)",
+                      maxWidth: "340px",
+                      background: "var(--color-bg-surface)",
+                      border: "1px solid #00f2fe",
+                      borderRadius: "24px",
+                      padding: "16px",
+                      boxShadow: "0 20px 60px rgba(0,242,254,0.25), 0 10px 40px rgba(0,0,0,0.6)",
+                      zIndex: 999,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px"
+                    }}
+                  >
+                    {/* Quick Emoji Reaction Row */}
+                    <div style={{ display: "flex", justifyContent: "space-around", paddingBottom: "10px", borderBottom: "1px solid var(--color-border)" }}>
+                      {EMOJI_REACTIONS_PRESETS.map(emoji => (
+                        <button
+                          key={emoji}
+                          onClick={() => {
+                            handleAddReaction(longPressMsg.id, emoji);
+                            setLongPressMsg(null);
+                          }}
+                          style={{ background: "none", border: "none", fontSize: "1.65rem", cursor: "pointer" }}
+                          className="hover:scale-125 active:scale-90"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Target Message Preview */}
+                    <div style={{ padding: "8px 12px", background: "var(--color-bg-base)", borderRadius: "12px", fontSize: "0.88rem", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      "{longPressMsg.text}"
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <button
+                        onClick={() => {
+                          setReplyingToMsg(longPressMsg);
+                          setInputText(`Replying to "${longPressMsg.text.slice(0, 30)}...": `);
+                          setLongPressMsg(null);
+                        }}
+                        style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.95rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                        className="hover-bg"
+                      >
+                        <Reply size={18} style={{ color: "#00f2fe" }} />
+                        <span>Reply to Message</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (typeof navigator !== "undefined" && navigator.clipboard) {
+                            navigator.clipboard.writeText(longPressMsg.text);
+                            showToast("Message copied to clipboard!");
+                          }
+                          setLongPressMsg(null);
+                        }}
+                        style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.95rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                        className="hover-bg"
+                      >
+                        <Copy size={18} style={{ color: "var(--color-primary)" }} />
+                        <span>Copy Text</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (activeConvId) {
+                            setMessagesMap(prev => ({
+                              ...prev,
+                              [activeConvId]: (prev[activeConvId] || []).filter(m => m.id !== longPressMsg.id)
+                            }));
+                            showToast("Message deleted");
+                          }
+                          setLongPressMsg(null);
+                        }}
+                        style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", border: "none", background: "transparent", color: "#ef4444", fontSize: "0.95rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                        className="hover-bg"
+                      >
+                        <Trash2 size={18} />
+                        <span>Delete Message</span>
+                      </button>
+
+                      <button
+                        onClick={() => setLongPressMsg(null)}
+                        style={{ padding: "10px", border: "1px solid var(--color-border)", background: "var(--color-bg-base)", color: "var(--color-text-muted)", fontSize: "0.92rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", marginTop: "2px" }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <div style={{
@@ -1236,118 +1347,6 @@ export default function MessagesPage() {
           contact={activeCall.contact}
           onEndCall={() => setActiveCall(null)}
         />
-      )}
-
-      {/* Long-Press Message Context Sheet Modal */}
-      {longPressMsg && (
-        <>
-          <div 
-            style={{
-              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-              background: "rgba(0,0,0,0.35)",
-              zIndex: 9998
-            }}
-            onClick={() => setLongPressMsg(null)}
-          />
-          <div 
-            className="glass animate-spring-pop"
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "calc(100% - 32px)",
-              maxWidth: "380px",
-              background: "var(--color-bg-surface)",
-              border: "1px solid #00f2fe",
-              borderRadius: "24px",
-              padding: "18px",
-              boxShadow: "0 20px 60px rgba(0,242,254,0.25), 0 10px 40px rgba(0,0,0,0.6)",
-              zIndex: 10000,
-              display: "flex",
-              flexDirection: "column",
-              gap: "12px"
-            }}
-          >
-            {/* Quick Emoji Reaction Row */}
-            <div style={{ display: "flex", justifyContent: "space-around", paddingBottom: "12px", borderBottom: "1px solid var(--color-border)" }}>
-              {EMOJI_REACTIONS_PRESETS.map(emoji => (
-                <button
-                  key={emoji}
-                  onClick={() => {
-                    handleAddReaction(longPressMsg.id, emoji);
-                    setLongPressMsg(null);
-                  }}
-                  style={{ background: "none", border: "none", fontSize: "1.65rem", cursor: "pointer" }}
-                  className="hover:scale-125 active:scale-90"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-
-            {/* Target Message Preview */}
-            <div style={{ padding: "8px 12px", background: "var(--color-bg-base)", borderRadius: "12px", fontSize: "0.88rem", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              "{longPressMsg.text}"
-            </div>
-
-            {/* Action Buttons */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <button
-                onClick={() => {
-                  setReplyingToMsg(longPressMsg);
-                  setInputText(`Replying to "${longPressMsg.text.slice(0, 30)}...": `);
-                  setLongPressMsg(null);
-                }}
-                style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.98rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                className="hover-bg"
-              >
-                <Reply size={20} style={{ color: "#00f2fe" }} />
-                <span>Reply to Message</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  if (typeof navigator !== "undefined" && navigator.clipboard) {
-                    navigator.clipboard.writeText(longPressMsg.text);
-                    showToast("Message copied to clipboard!");
-                  }
-                  setLongPressMsg(null);
-                }}
-                style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.98rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                className="hover-bg"
-              >
-                <Copy size={20} style={{ color: "var(--color-primary)" }} />
-                <span>Copy Text</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  if (activeConvId) {
-                    setMessagesMap(prev => ({
-                      ...prev,
-                      [activeConvId]: (prev[activeConvId] || []).filter(m => m.id !== longPressMsg.id)
-                    }));
-                    showToast("Message deleted");
-                  }
-                  setLongPressMsg(null);
-                }}
-                style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", border: "none", background: "transparent", color: "#ef4444", fontSize: "0.98rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                className="hover-bg"
-              >
-                <Trash2 size={20} />
-                <span>Delete Message</span>
-              </button>
-
-              <button
-                onClick={() => setLongPressMsg(null)}
-                style={{ padding: "12px", border: "1px solid var(--color-border)", background: "var(--color-bg-base)", color: "var(--color-text-muted)", fontSize: "0.95rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", marginTop: "4px" }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </>
       )}
     </AppLayout>
   );
