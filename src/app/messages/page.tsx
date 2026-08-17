@@ -20,6 +20,7 @@ interface ChatMessage {
   text: string;
   audioUrl?: string;
   imageUrl?: string;
+  videoUrl?: string;
   timestamp: string;
   isMe: boolean;
   reactions?: string[];
@@ -394,30 +395,6 @@ export default function MessagesPage() {
 
     setInputText("");
     setAttachedImage(null);
-
-    // Simulate real-time automated reply after 1.5 seconds
-    setTimeout(() => {
-      setIsTyping(true);
-      setTimeout(() => {
-        setIsTyping(false);
-        const replyMsg: ChatMessage = {
-          id: `reply-${Date.now()}`,
-          senderId: activeConv.id,
-          senderName: activeConv.name,
-          text: `Awesome! Received your update: "${newMsg.text}" 👍`,
-          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          isMe: false
-        };
-        setMessagesMap(prev => {
-          const updated = {
-            ...prev,
-            [currentId]: [...(prev[currentId] || []), replyMsg]
-          };
-          if (typeof window !== "undefined") localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
-          return updated;
-        });
-      }, 1400);
-    }, 800);
   };
 
   const handleAddReaction = (msgId: string, emoji: string) => {
