@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
   Send, Image as ImageIcon, Smile, Mic, Phone, Video, 
   Search, Plus, MoreVertical, CheckCheck, Sparkles, MessageCircle, X, ArrowLeft,
   Square, Play, Pause, Trash2, User, Pin, BellOff, Bell, ShieldAlert, Check, Copy, Reply,
-  Mail, MailCheck
+  Mail, MailCheck, UserPlus
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import styles from "./messages.module.css";
@@ -37,6 +37,44 @@ interface Conversation {
   lastTime: string;
 }
 
+const AVAILABLE_CONTACTS_DIRECTORY = [
+  {
+    id: "conv-1",
+    name: "Shalini Goyal",
+    username: "goyalshaliniuk",
+    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
+    isOnline: true
+  },
+  {
+    id: "conv-2",
+    name: "Devansh Nambiar",
+    username: "dev_sound",
+    avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+    isOnline: true
+  },
+  {
+    id: "conv-3",
+    name: "Arjun Singhania",
+    username: "arjun_arch",
+    avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150",
+    isOnline: false
+  },
+  {
+    id: "conv-4",
+    name: "Simran Kulkarni",
+    username: "simrank",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+    isOnline: true
+  },
+  {
+    id: "conv-5",
+    name: "Rohan Sharma",
+    username: "rohan_sharma",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
+    isOnline: true
+  }
+];
+
 const EMOJI_REACTIONS_PRESETS = ["❤️", "🔥", "😂", "👏", "💯", "😮", "👍"];
 
 const FULL_EMOJI_GRID = [
@@ -54,10 +92,17 @@ const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {};
 
 export default function MessagesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const targetUserParam = searchParams?.get("user") || searchParams?.get("target");
+
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>(INITIAL_MESSAGES);
   
+  // New Chat Modal States
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [newChatSearch, setNewChatSearch] = useState("");
+
   // Chat Input & Popover States
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -81,6 +126,57 @@ export default function MessagesPage() {
   const [unreadConvs, setUnreadConvs] = useState<string[]>([]);
   const [replyingToMsg, setReplyingToMsg] = useState<ChatMessage | null>(null);
   const touchTimerRef = useRef<any>(null);
+
+  // Handle URL query ?user=username (e.g. from Profile page "Message" button click)
+  useEffect(() => {
+    if (targetUserParam) {
+      const targetClean = targetUserParam.replace("@", "").toLowerCase();
+      const existing = conversations.find(c => 
+        c.username.toLowerCase() === targetClean || 
+        c.id === targetUserParam || 
+        c.name.toLowerCase() === targetClean
+      );
+
+      if (existing) {
+        handleSelectConversation(existing.id);
+      } else {
+        const contactMatch = AVAILABLE_CONTACTS_DIRECTORY.find(c => c.username.toLowerCase() === targetClean);
+        const newConv: Conversation = {
+          id: contactMatch ? contactMatch.id : `conv-${Date.now()}`,
+          name: contactMatch ? contactMatch.name : (targetUserParam.charAt(0).toUpperCase() + targetUserParam.slice(1)),
+          username: contactMatch ? contactMatch.username : targetClean,
+          avatar: contactMatch ? contactMatch.avatar : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+          isOnline: true,
+          unreadCount: 0,
+          lastMessage: "Conversation started",
+          lastTime: "Just now"
+        };
+        setConversations(prev => [newConv, ...prev.filter(c => c.id !== newConv.id)]);
+        handleSelectConversation(newConv.id);
+      }
+    }
+  }, [targetUserParam]);
+
+  const handleStartChatWithUser = (contact: { id: string; name: string; username: string; avatar: string; isOnline?: boolean }) => {
+    const existing = conversations.find(c => c.id === contact.id || c.username.toLowerCase() === contact.username.toLowerCase());
+    if (existing) {
+      handleSelectConversation(existing.id);
+    } else {
+      const newConv: Conversation = {
+        id: contact.id,
+        name: contact.name,
+        username: contact.username,
+        avatar: contact.avatar,
+        isOnline: contact.isOnline ?? true,
+        unreadCount: 0,
+        lastMessage: "Conversation started",
+        lastTime: "Just now"
+      };
+      setConversations(prev => [newConv, ...prev]);
+      handleSelectConversation(newConv.id);
+    }
+    setShowNewChatModal(false);
+  };
 
   const handleTouchStart = (msg: ChatMessage) => {
     touchTimerRef.current = setTimeout(() => {
@@ -400,11 +496,16 @@ export default function MessagesPage() {
             <h2 style={{ fontSize: "1.5rem", fontWeight: 900, color: "var(--color-text-main)", margin: 0 }}>
               Messages
             </h2>
-            <button style={{
-              width: "44px", height: "44px", borderRadius: "50%",
-              background: "rgba(29, 155, 240, 0.12)", color: "var(--color-primary)",
-              border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-            }}>
+            <button 
+              onClick={() => setShowNewChatModal(true)}
+              style={{
+                width: "44px", height: "44px", borderRadius: "50%",
+                background: "rgba(29, 155, 240, 0.12)", color: "var(--color-primary)",
+                border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
+              }}
+              title="Start New Chat"
+              className="hover:scale-105 active:scale-95"
+            >
               <Plus size={22} />
             </button>
           </div>
@@ -1420,6 +1521,91 @@ export default function MessagesPage() {
           contact={activeCall.contact}
           onEndCall={() => setActiveCall(null)}
         />
+      )}
+
+      {/* New Chat Contacts Modal */}
+      {showNewChatModal && (
+        <>
+          <div 
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.5)", zIndex: 9998
+            }}
+            onClick={() => setShowNewChatModal(false)}
+          />
+          <div 
+            className="glass animate-scale-in"
+            style={{
+              position: "fixed", top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "calc(100% - 32px)", maxWidth: "420px",
+              background: "var(--color-bg-surface)",
+              border: "1px solid #00f2fe",
+              borderRadius: "24px",
+              padding: "20px",
+              boxShadow: "0 20px 60px rgba(0,242,254,0.25), 0 10px 40px rgba(0,0,0,0.7)",
+              zIndex: 9999,
+              display: "flex", flexDirection: "column", gap: "14px"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <UserPlus size={22} style={{ color: "#00f2fe" }} />
+                <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>
+                  New Message
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowNewChatModal(false)}
+                style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Search Input inside New Chat Modal */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: "10px",
+              background: "var(--color-bg-base)", padding: "10px 14px",
+              borderRadius: "14px", border: "1px solid var(--color-border)"
+            }}>
+              <Search size={18} style={{ color: "var(--color-text-muted)" }} />
+              <input 
+                type="text"
+                placeholder="Search user by name or @username..."
+                value={newChatSearch}
+                onChange={e => setNewChatSearch(e.target.value)}
+                style={{ background: "none", border: "none", color: "var(--color-text-main)", outline: "none", fontSize: "0.95rem", width: "100%" }}
+              />
+            </div>
+
+            {/* Contacts Directory List */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "280px", overflowY: "auto", paddingRight: "4px" }}>
+              {AVAILABLE_CONTACTS_DIRECTORY.filter(c => 
+                c.name.toLowerCase().includes(newChatSearch.toLowerCase()) || 
+                c.username.toLowerCase().includes(newChatSearch.toLowerCase())
+              ).map(contact => (
+                <div 
+                  key={contact.id}
+                  onClick={() => handleStartChatWithUser(contact)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "12px",
+                    padding: "10px 12px", borderRadius: "14px", cursor: "pointer",
+                    transition: "background 0.15s ease"
+                  }}
+                  className="hover-bg"
+                >
+                  <img src={contact.avatar} alt={contact.name} style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }} />
+                  <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+                    <span style={{ fontWeight: 700, fontSize: "1rem", color: "var(--color-text-main)" }}>{contact.name}</span>
+                    <span style={{ fontSize: "0.82rem", color: "var(--color-text-muted)" }}>@{contact.username}</span>
+                  </div>
+                  <span style={{ fontSize: "0.85rem", color: "#00f2fe", fontWeight: 700 }}>Chat</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
       )}
     </AppLayout>
   );
