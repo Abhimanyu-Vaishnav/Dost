@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 
 export default async function ProfileRedirectPage() {
   const cookieStore = await cookies();
@@ -16,6 +17,11 @@ export default async function ProfileRedirectPage() {
     redirect("/login");
   }
 
-  // Redirect to the universal profile page
-  redirect(`/profile/${user.userId}`);
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.userId as string },
+    select: { username: true }
+  });
+
+  // Redirect to the universal profile page with username or userId
+  redirect(`/profile/${dbUser?.username || user.userId}`);
 }

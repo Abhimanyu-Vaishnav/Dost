@@ -187,7 +187,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
     { href: "/lists", label: "Lists", id: "lists" },
     { href: "/premium", label: "Premium", id: "premium" },
     { href: "/analytics", label: "Analytics", id: "analytics" },
-    { href: user?.userId ? `/profile/${user.userId}` : "/profile", label: "Profile", id: "profile" },
+    { href: user?.username ? `/profile/${user.username}` : user?.userId ? `/profile/${user.userId}` : "/profile", label: "Profile", id: "profile" },
   ];
 
   // Exactly 6 Mobile Bottom Bar Navigation Items (Spanning Start to End)
@@ -519,7 +519,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
                   onClick={(e) => { e.stopPropagation(); setShowProfileMenu(false); }}
                 />
                 <div className={`${styles.moreMenu} animate-scale-in`} style={{ bottom: "60px", left: "0" }}>
-                  <Link href={`/profile/${user.userId}`} className={styles.moreMenuItem} onClick={() => setShowProfileMenu(false)}>
+                  <Link href={user?.username ? `/profile/${user.username}` : user?.userId ? `/profile/${user.userId}` : "/profile"} className={styles.moreMenuItem} onClick={() => setShowProfileMenu(false)}>
                     <User size={18} /> <span>View Profile</span>
                   </Link>
                   <button className={styles.moreMenuItem} onClick={() => { setShowThemeModal(true); setShowProfileMenu(false); }}>

@@ -31,10 +31,15 @@ export default async function UniversalProfilePage({ params }: { params: Promise
   }
 
   const resolvedParams = await params;
-  const profileUserId = resolvedParams.id;
+  const rawIdentifier = resolvedParams.id;
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: profileUserId },
+  const dbUser = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { id: rawIdentifier },
+        { username: { equals: rawIdentifier, mode: "insensitive" } }
+      ]
+    },
     include: {
       _count: {
         select: { followers: true, following: true, posts: true },
@@ -61,6 +66,7 @@ export default async function UniversalProfilePage({ params }: { params: Promise
     );
   }
 
+  const profileUserId = dbUser.id;
   const isBlockedByMe = dbUser.blockedBy.length > 0;
   const hasBlockedMe = dbUser.blockedUsers.length > 0;
   const isFollowing = dbUser.followers.length > 0;

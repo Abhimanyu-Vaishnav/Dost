@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
         gifUrl: true,
         pollData: true,
         isCodeBlock: true,
+        mediaTags: true,
         createdAt: true,
         views: true,
         author: {
@@ -271,7 +272,8 @@ export async function POST(request: NextRequest) {
       isCodeBlock,
       threadId,
       threadPosition,
-      isThreadStart
+      isThreadStart,
+      mediaTags
     } = body;
 
     if (!content && !imageUrl && !videoUrl && !gifUrl && !pollData && !quotePostId) {
@@ -298,6 +300,7 @@ export async function POST(request: NextRequest) {
     if (location) createData.location = location;
     if (audioUrl) createData.audioUrl = audioUrl;
     if (isCodeBlock) createData.isCodeBlock = true;
+    if (mediaTags) createData.mediaTags = typeof mediaTags === "string" ? mediaTags : JSON.stringify(mediaTags);
     if (pollData) createData.pollData = typeof pollData === "string" ? pollData : JSON.stringify(pollData);
     if (scheduledAt) createData.scheduledAt = new Date(scheduledAt);
     if (parentId) createData.parentId = parentId;
@@ -334,6 +337,7 @@ export async function POST(request: NextRequest) {
       delete createData.location;
       delete createData.gifUrl;
       delete createData.isCodeBlock;
+      delete createData.mediaTags;
       post = await (prisma.post as any).create({
         data: createData,
         include: {
@@ -356,9 +360,60 @@ export async function POST(request: NextRequest) {
       await processPostHashtags(content);
     }
 
+    // Process mentions and media tags notifications
+    await processMentionsAndMediaTags(post.id, user.userId as string, content, mediaTags);
+
     return NextResponse.json({ post }, { status: 201 });
   } catch (error) {
     console.error("Create post error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+async function processMentionsAndMediaTags(postId: string, actorId: string, content?: string, mediaTags?: any) {
+  try {
+    if (content) {
+      const mentionMatches = content.match(/@([a-zA-Z0-9_]+)/g);
+      if (mentionMatches && mentionMatches.length > 0) {
+        const usernames = Array.from(new Set(mentionMatches.map(m => m.slice(1))));
+        const mentionedUsers = await prisma.user.findMany({
+          where: { username: { in: usernames, mode: "insensitive" } },
+          select: { id: true }
+        });
+
+        for (const u of mentionedUsers) {
+          if (u.id !== actorId) {
+            await prisma.notification.create({
+              data: {
+                type: "MENTION",
+                userId: u.id,
+                actorId,
+                postId,
+              }
+            });
+          }
+        }
+      }
+    }
+
+    if (mediaTags) {
+      const tagsArray = typeof mediaTags === "string" ? JSON.parse(mediaTags) : mediaTags;
+      if (Array.isArray(tagsArray) && tagsArray.length > 0) {
+        for (const tag of tagsArray) {
+          if (tag.userId && tag.userId !== actorId) {
+            await prisma.notification.create({
+              data: {
+                type: "TAG",
+                userId: tag.userId,
+                actorId,
+                postId,
+              }
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error processing mentions/mediaTags:", err);
   }
 }

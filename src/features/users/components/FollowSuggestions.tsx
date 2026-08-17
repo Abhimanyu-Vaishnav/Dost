@@ -53,7 +53,7 @@ export function FollowSuggestions() {
           const userHandle = `@${user.username || (user.name ? user.name.toLowerCase().replace(/\s+/g, "") : "user")}`;
           return (
             <div key={user.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <Link href={`/profile/${user.id}`} style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none", overflow: "hidden" }}>
+              <Link href={`/profile/${user.username || user.id}`} style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none", overflow: "hidden" }}>
                 <div style={{
                   width: "40px", height: "40px", borderRadius: "50%",
                   backgroundColor: "var(--color-bg-base)", color: "var(--color-primary)",

@@ -8,6 +8,7 @@ interface SearchUserRowProps {
   user: {
     id: string;
     name: string | null;
+    username?: string | null;
     avatar: string | null;
     stories: any[];
   };
@@ -16,6 +17,7 @@ interface SearchUserRowProps {
 export function SearchUserRow({ user }: SearchUserRowProps) {
   const [showViewer, setShowViewer] = useState(false);
   const hasStories = user.stories && user.stories.length > 0;
+  const profileLink = `/profile/${user.username || user.id}`;
 
   const handleAvatarClick = (e: React.MouseEvent) => {
     if (hasStories) {
@@ -98,7 +100,7 @@ export function SearchUserRow({ user }: SearchUserRowProps) {
           </div>
 
           {/* Name & Profile link */}
-          <Link href={`/profile/${user.id}`} style={{ textDecoration: "none", display: "flex", flexDirection: "column" }}>
+          <Link href={profileLink} style={{ textDecoration: "none", display: "flex", flexDirection: "column" }}>
             <span style={{ fontWeight: 700, color: "var(--color-text-main)", fontSize: "1.05rem" }}>{user.name}</span>
             {hasStories && (
               <span style={{ fontSize: "0.75rem", color: "var(--color-primary)", fontWeight: 600 }}>
@@ -110,7 +112,7 @@ export function SearchUserRow({ user }: SearchUserRowProps) {
 
         {/* View Profile Action Link */}
         <Link 
-          href={`/profile/${user.id}`}
+          href={profileLink}
           style={{
             padding: "6px 16px",
             borderRadius: "99px",

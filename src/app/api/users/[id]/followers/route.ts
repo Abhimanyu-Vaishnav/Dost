@@ -7,9 +7,25 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: targetUserId } = await params;
+    const { id: rawTargetId } = await params;
     const currentUser = await getUserFromRequest(request);
     const currentUserId = currentUser?.userId as string | undefined;
+
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: rawTargetId },
+          { username: { equals: rawTargetId, mode: "insensitive" } }
+        ]
+      },
+      select: { id: true }
+    });
+
+    if (!targetUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const targetUserId = targetUser.id;
 
     const userSelect = {
       id: true,

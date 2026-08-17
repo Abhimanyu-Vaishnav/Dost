@@ -120,6 +120,7 @@ model Post {
   pollData    String?
   gifUrl      String?
   isCodeBlock Boolean   @default(false)
+  mediaTags   String?
   scheduledAt DateTime?
   author      User      @relation(fields: [authorId], references: [id])
   authorId  String

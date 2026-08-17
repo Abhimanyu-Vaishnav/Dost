@@ -6,7 +6,8 @@ import {
   Image as ImageIcon, Video, Link as LinkIcon, X, Loader2, 
   Smile, Calendar, MapPin, ListFilter, FileType,
   Globe, Users, Lock, Plus, ChevronDown, FileText,
-  Bold, Italic, Code, Hash, Trash2, Clock, Sparkles, Mic, Square, Play, Pause, Volume2
+  Bold, Italic, Code, Hash, Trash2, Clock, Sparkles, Mic, Square, Play, Pause, Volume2,
+  UserPlus, AtSign, Tag
 } from "lucide-react";
 import { uploadMediaFile } from "@/lib/upload";
 import { CreatePostModal } from "./CreatePostModal";
@@ -110,7 +111,6 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
       }, 1000);
     } catch (err) {
       console.error("Mic access error:", err);
-      // Demo voice note fallback if mic unavailable
       setRecordedAudioUrl("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4");
     }
   };
@@ -123,6 +123,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
   };
 
+  // Poll State
   const [pollData, setPollData] = useState<{ question: string; options: string[]; durationHours: number } | null>(null);
   const [showPollUI, setShowPollUI] = useState(false);
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
@@ -160,6 +161,106 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
     }
   };
 
+  // @Mention Autocomplete State
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionResults, setMentionResults] = useState<{ id: string; name: string; username: string; avatar?: string }[]>([]);
+  const [mentionMatchIndex, setMentionMatchIndex] = useState<{ start: number; end: number } | null>(null);
+
+  // Media Tagging State
+  interface TaggedUser {
+    userId: string;
+    username: string;
+    name: string;
+  }
+  const [taggedUsers, setTaggedUsers] = useState<TaggedUser[]>([]);
+  const [showTagPeopleModal, setShowTagPeopleModal] = useState(false);
+  const [tagSearchQuery, setTagSearchQuery] = useState("");
+  const [tagSearchResults, setTagSearchResults] = useState<{ id: string; name: string; username: string; avatar?: string }[]>([]);
+
+  // Mention Search Fetcher
+  useEffect(() => {
+    if (!mentionQuery || !mentionQuery.trim()) {
+      setMentionResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(mentionQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setMentionResults(data.users || []);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [mentionQuery]);
+
+  // Tag People Search Fetcher
+  useEffect(() => {
+    if (!tagSearchQuery.trim()) {
+      setTagSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(tagSearchQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setTagSearchResults(data.users || []);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [tagSearchQuery]);
+
+  const checkMentionTrigger = (val: string, target: HTMLTextAreaElement) => {
+    const cursorPos = target.selectionStart || val.length;
+    const textBeforeCursor = val.slice(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@");
+
+    if (lastAtIndex !== -1) {
+      const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : " ";
+      if (charBeforeAt === " " || charBeforeAt === "\n") {
+        const query = textBeforeCursor.slice(lastAtIndex + 1);
+        if (!query.includes(" ")) {
+          setMentionQuery(query);
+          setMentionMatchIndex({ start: lastAtIndex, end: cursorPos });
+          return;
+        }
+      }
+    }
+    setMentionQuery(null);
+    setMentionMatchIndex(null);
+  };
+
+  const insertMention = (username: string) => {
+    if (!mentionMatchIndex) return;
+    const currentText = threadItems[activeItemIndex]?.content || "";
+    const newText = currentText.slice(0, mentionMatchIndex.start) + `@${username} ` + currentText.slice(mentionMatchIndex.end);
+
+    const updated = [...threadItems];
+    updated[activeItemIndex].content = newText;
+    setThreadItems(updated);
+
+    setMentionQuery(null);
+    setMentionMatchIndex(null);
+  };
+
+  const toggleTagUser = (u: { id: string; username?: string | null; name?: string | null }) => {
+    const handle = u.username || u.name || "user";
+    const displayName = u.name || handle;
+    const exists = taggedUsers.some(existing => existing.userId === u.id);
+    if (exists) {
+      setTaggedUsers(taggedUsers.filter(existing => existing.userId !== u.id));
+    } else {
+      setTaggedUsers([...taggedUsers, { userId: u.id, username: handle, name: displayName }]);
+    }
+  };
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem("dost_saved_drafts");
@@ -192,6 +293,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
     updated[index].content = val;
     setThreadItems(updated);
     resizeTextarea(target);
+    checkMentionTrigger(val, target);
   };
 
   // Text Formatting Helper (Bold, Italic, Code, Hashtag)
@@ -341,6 +443,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
             linkUrl: item.linkUrl,
             location: location,
             audioUrl: recordedAudioUrl,
+            mediaTags: taggedUsers.length > 0 ? JSON.stringify(taggedUsers) : null,
             pollData: pollData ? {
               question: item.content || "Poll",
               options: pollData.options.map((text, i) => ({ id: i + 1, text, votes: [] })),
@@ -363,6 +466,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
       setLocation(null);
       setScheduledAt(null);
       setRecordedAudioUrl(null);
+      setTaggedUsers([]);
       router.refresh();
       if (onPostSuccess) onPostSuccess();
     } catch (error) {
@@ -533,6 +637,12 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
 
       {/* Active Badges */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingLeft: "52px", marginBottom: "6px" }}>
+        {taggedUsers.map((u) => (
+          <div key={u.userId} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(29, 155, 240, 0.15)", color: "var(--color-primary)", padding: "4px 10px", borderRadius: "9999px", fontSize: "0.8rem", fontWeight: 700 }}>
+            <UserPlus size={13} /> Tagged: @{u.username}
+            <button type="button" onClick={() => setTaggedUsers(taggedUsers.filter(item => item.userId !== u.userId))} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", display: "flex", padding: 0 }}><X size={12} /></button>
+          </div>
+        ))}
         {location && (
           <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(29, 155, 240, 0.12)", color: "var(--color-primary)", padding: "4px 10px", borderRadius: "9999px", fontSize: "0.8rem", fontWeight: 600 }}>
             <MapPin size={13} /> {location}
@@ -565,6 +675,97 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
           </div>
         )}
       </div>
+
+      {/* Mention Suggestions Popup */}
+      {mentionResults.length > 0 && mentionQuery !== null && (
+        <div style={{ paddingLeft: "52px", marginBottom: "10px", position: "relative", zIndex: 50 }}>
+          <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", borderRadius: "14px", padding: "6px", boxShadow: "var(--shadow-lg)", display: "flex", flexDirection: "column", gap: "2px", maxHeight: "200px", overflowY: "auto" }}>
+            <div style={{ padding: "4px 8px", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-muted)" }}>Mention Accounts</div>
+            {mentionResults.map((user) => (
+              <button
+                key={user.id}
+                type="button"
+                onClick={() => insertMention(user.username || user.name)}
+                style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", borderRadius: "8px", border: "none", background: "transparent", cursor: "pointer", width: "100%", textAlign: "left", color: "var(--color-text-main)" }}
+                className="hover-bg"
+              >
+                <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "var(--color-primary)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "0.8rem", overflow: "hidden", flexShrink: 0 }}>
+                  {user.avatar ? <img src={user.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : user.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>{user.name}</span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>@{user.username || user.name}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tag People Modal */}
+      {showTagPeopleModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+          <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", borderRadius: "20px", padding: "20px", width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "14px", boxShadow: "var(--shadow-xl)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "1rem", fontWeight: 800, color: "var(--color-text-main)", display: "flex", alignItems: "center", gap: "8px" }}>
+                <UserPlus size={18} style={{ color: "var(--color-primary)" }} /> Tag People on Media
+              </span>
+              <button type="button" onClick={() => setShowTagPeopleModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Search username or name..."
+              value={tagSearchQuery}
+              onChange={(e) => setTagSearchQuery(e.target.value)}
+              style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-bg-base)", color: "var(--color-text-main)", fontSize: "0.9rem" }}
+            />
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "220px", overflowY: "auto" }}>
+              {tagSearchResults.length === 0 ? (
+                <div style={{ padding: "12px", textAlign: "center", fontSize: "0.85rem", color: "var(--color-text-muted)" }}>
+                  {tagSearchQuery.trim() ? "No users found" : "Type a name to search people"}
+                </div>
+              ) : (
+                tagSearchResults.map((user) => {
+                  const isTagged = taggedUsers.some(u => u.userId === user.id);
+                  return (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => toggleTagUser(user)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: "10px", background: isTagged ? "rgba(29, 155, 240, 0.12)" : "transparent", border: "1px solid var(--color-border)", cursor: "pointer", color: "var(--color-text-main)" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "var(--color-primary)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, overflow: "hidden" }}>
+                          {user.avatar ? <img src={user.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : user.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
+                          <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>{user.name}</span>
+                          <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>@{user.username || user.name}</span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: isTagged ? "var(--color-primary)" : "var(--color-text-muted)" }}>
+                        {isTagged ? "Tagged ✓" : "+ Tag"}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowTagPeopleModal(false)}
+              style={{ padding: "10px", borderRadius: "9999px", background: "var(--color-primary)", color: "white", fontWeight: 700, border: "none", cursor: "pointer", marginTop: "6px" }}
+            >
+              Done ({taggedUsers.length} Tagged)
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Location Picker Popup */}
       {showLocationUI && (
@@ -731,8 +932,15 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
         {/* Media Preview */}
         {(threadItems[0].imageUrl || threadItems[0].videoUrl) && (
           <div style={{ marginTop: "6px", borderRadius: "16px", position: "relative", overflow: "hidden", border: "1px solid var(--color-border)", marginLeft: "52px" }}>
-            <button type="button" onClick={() => { const updated = [...threadItems]; updated[0].imageUrl = ""; updated[0].videoUrl = ""; setThreadItems(updated); }} style={{ position: "absolute", right: "10px", top: "10px", color: "white", background: "rgba(0, 0, 0, 0.7)", borderRadius: "50%", padding: "5px", zIndex: 2, cursor: "pointer", border: "none" }}>
+            <button type="button" onClick={() => { const updated = [...threadItems]; updated[0].imageUrl = ""; updated[0].videoUrl = ""; setThreadItems(updated); setTaggedUsers([]); }} style={{ position: "absolute", right: "10px", top: "10px", color: "white", background: "rgba(0, 0, 0, 0.7)", borderRadius: "50%", padding: "5px", zIndex: 2, cursor: "pointer", border: "none" }}>
               <X size={15} />
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setShowTagPeopleModal(true)} 
+              style={{ position: "absolute", left: "10px", bottom: "10px", color: "white", background: "rgba(0, 0, 0, 0.75)", backdropFilter: "blur(6px)", borderRadius: "9999px", padding: "6px 12px", zIndex: 2, cursor: "pointer", border: "1px solid rgba(255,255,255,0.2)", display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", fontWeight: 700 }}
+            >
+              <UserPlus size={14} /> {taggedUsers.length > 0 ? `${taggedUsers.length} Tagged` : "Tag People"}
             </button>
             {threadItems[0].imageUrl && <img src={threadItems[0].imageUrl} style={{ width: "100%", maxHeight: "320px", objectFit: "cover" }} alt="Preview" />}
             {threadItems[0].videoUrl && <video src={threadItems[0].videoUrl} controls style={{ width: "100%", maxHeight: "320px" }} />}

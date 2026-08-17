@@ -37,6 +37,7 @@ interface Post {
   linkUrl?: string | null;
   location?: string | null;
   audioUrl?: string | null;
+  mediaTags?: string | null;
   pollData?: string | null;
   scheduledAt?: string | null;
   createdAt: string;
@@ -277,8 +278,8 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
   const renderContent = (content: string) => {
     if (!content) return null;
     
-    // Global regex parser for bold **text**, italic *text*, code `text`, #hashtags, and links
-    const regex = /(\*\*[\s\S]*?\*\*|\*[\s\S]*?\*|`[\s\S]*?`|#[a-zA-Z0-9_]+|https?:\/\/[^\s]+)/g;
+    // Global regex parser for bold **text**, italic *text*, code `text`, #hashtags, @mentions, and links
+    const regex = /(\*\*[\s\S]*?\*\*|\*[\s\S]*?\*|`[\s\S]*?`|#[a-zA-Z0-9_]+|@[a-zA-Z0-9_]+|https?:\/\/[^\s]+)/g;
     const parts = content.split(regex);
     
     return parts.map((part, i) => {
@@ -299,10 +300,24 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
       }
       if (part.startsWith("#") && part.length > 1) {
         const tag = part.substring(1).replace(/[.,!?;:]$/, "");
-        return <Link key={i} href={`/hashtag/${tag}`} style={{ color: "var(--color-primary)", fontWeight: 600 }}>{part}</Link>;
+        return <Link key={i} href={`/hashtag/${tag}`} onClick={(e) => e.stopPropagation()} style={{ color: "var(--color-primary)", fontWeight: 600 }}>{part}</Link>;
+      }
+      if (part.startsWith("@") && part.length > 1) {
+        const handle = part.substring(1).replace(/[.,!?;:]$/, "");
+        return (
+          <Link 
+            key={i} 
+            href={`/profile/${handle}`} 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ color: "var(--color-primary)", fontWeight: 700, textDecoration: "none" }}
+            className="hover:underline"
+          >
+            {part}
+          </Link>
+        );
       }
       if (part.startsWith("http://") || part.startsWith("https://")) {
-        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>{part}</a>;
+        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "var(--color-primary)", textDecoration: "underline" }}>{part}</a>;
       }
       
       return <span key={i}>{part}</span>;
@@ -594,7 +609,7 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
       <div className={styles.threadWrapper}>
         <div className={styles.avatarColumn}>
           {hasThreadChild && <div className={styles.threadLineTop} />}
-          <Link href={`/profile/${post.author.id}`} className={styles.avatar}>
+          <Link href={`/profile/${post.author.username || post.author.id}`} className={styles.avatar}>
             {post.author.avatar ? (
               <img src={post.author.avatar} alt={post.author.name || ""} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
             ) : getInitials(post.author.name)}
@@ -605,7 +620,7 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
         <div className={styles.mainColumn}>
           <div className={styles.header}>
             <div className={styles.authorInfo} style={{ marginLeft: 0 }}>
-              <Link href={`/profile/${post.author.id}`} className={styles.authorName} style={{ textDecoration: "none" }}>
+              <Link href={`/profile/${post.author.username || post.author.id}`} className={styles.authorName} style={{ textDecoration: "none" }}>
                 {post.author.name || "Unknown User"}
               </Link>
               {post.parent?.author && (
@@ -825,8 +840,34 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
             )}
 
             {post.imageUrl && (
-              <div style={{ marginTop: "12px", borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--color-border)" }}>
+              <div style={{ marginTop: "12px", borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--color-border)", position: "relative" }}>
                 <img src={post.imageUrl} alt="Post image" style={{ width: "100%", display: "block", maxHeight: "500px", objectFit: "cover" }} />
+                {(() => {
+                  if (!post.mediaTags) return null;
+                  try {
+                    const tags = JSON.parse(post.mediaTags);
+                    if (!Array.isArray(tags) || tags.length === 0) return null;
+                    return (
+                      <div style={{ position: "absolute", bottom: "10px", left: "10px", zIndex: 10, display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        {tags.map((t: any, idx: number) => (
+                          <Link
+                            key={t.userId || idx}
+                            href={`/profile/${t.username || t.userId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "4px",
+                              background: "rgba(0, 0, 0, 0.75)", backdropFilter: "blur(6px)",
+                              color: "white", padding: "4px 10px", borderRadius: "9999px",
+                              fontSize: "0.78rem", fontWeight: 600, textDecoration: "none", border: "1px solid rgba(255,255,255,0.2)"
+                            }}
+                          >
+                            <span style={{ color: "var(--color-primary, #1d9bf0)" }}>👤</span> @{t.username || t.name}
+                          </Link>
+                        ))}
+                      </div>
+                    );
+                  } catch (e) { return null; }
+                })()}
               </div>
             )}
 
@@ -848,6 +889,32 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
                 className="group"
               >
                 <video src={post.videoUrl} style={{ width: "100%", maxHeight: "500px", objectFit: "cover", display: "block" }} />
+                {(() => {
+                  if (!post.mediaTags) return null;
+                  try {
+                    const tags = JSON.parse(post.mediaTags);
+                    if (!Array.isArray(tags) || tags.length === 0) return null;
+                    return (
+                      <div style={{ position: "absolute", top: "10px", left: "10px", zIndex: 10, display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        {tags.map((t: any, idx: number) => (
+                          <Link
+                            key={t.userId || idx}
+                            href={`/profile/${t.username || t.userId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "4px",
+                              background: "rgba(0, 0, 0, 0.75)", backdropFilter: "blur(6px)",
+                              color: "white", padding: "4px 10px", borderRadius: "9999px",
+                              fontSize: "0.78rem", fontWeight: 600, textDecoration: "none", border: "1px solid rgba(255,255,255,0.2)"
+                            }}
+                          >
+                            <span style={{ color: "var(--color-primary, #1d9bf0)" }}>👤</span> @{t.username || t.name}
+                          </Link>
+                        ))}
+                      </div>
+                    );
+                  } catch (e) { return null; }
+                })()}
                 <div style={{
                   position: "absolute", inset: 0,
                   background: "rgba(0, 0, 0, 0.3)",
