@@ -97,7 +97,9 @@ const INITIAL_CONVERSATIONS: Conversation[] = [];
 
 const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {};
 
-export default function MessagesPage() {
+import { Suspense } from "react";
+
+function MessagesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const targetUserParam = searchParams?.get("user") || searchParams?.get("target");
@@ -1669,5 +1671,13 @@ export default function MessagesPage() {
         />
       )}
     </AppLayout>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: "20px", color: "var(--color-text-main)" }}>Loading messages...</div>}>
+      <MessagesContent />
+    </Suspense>
   );
 }
