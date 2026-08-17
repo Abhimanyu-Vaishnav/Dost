@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { 
   Send, Image as ImageIcon, Smile, Mic, Phone, Video, 
   Search, Plus, MoreVertical, CheckCheck, Sparkles, MessageCircle, X, ArrowLeft,
-  Square, Play, Pause, Trash2
+  Square, Play, Pause, Trash2, User, Pin, BellOff, Bell, ShieldAlert, Check
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import styles from "./messages.module.css";
@@ -100,6 +101,7 @@ const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {
 };
 
 export default function MessagesPage() {
+  const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>(INITIAL_MESSAGES);
@@ -112,6 +114,19 @@ export default function MessagesPage() {
   const [activeCall, setActiveCall] = useState<{ type: "voice" | "video"; contact: any } | null>(null);
   const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
   const [fullEmojiPickerMsgId, setFullEmojiPickerMsgId] = useState<string | null>(null);
+
+  // 3-Dots Menu & In-Chat Search States
+  const [showTopMenu, setShowTopMenu] = useState(false);
+  const [inChatSearch, setInChatSearch] = useState("");
+  const [showInChatSearch, setShowInChatSearch] = useState(false);
+  const [mutedConvs, setMutedConvs] = useState<string[]>([]);
+  const [pinnedConvs, setPinnedConvs] = useState<string[]>([]);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
   
   // Media & Voice Attachment States
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
@@ -450,70 +465,78 @@ export default function MessagesPage() {
 
           {/* Conversation Items */}
           <div style={{ flex: 1, overflowY: "auto" }}>
-            {filteredConversations.map(conv => {
-              const isActive = conv.id === activeConvId;
-              return (
-                <div
-                  key={conv.id}
-                  onClick={() => handleSelectConversation(conv.id)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "16px",
-                    padding: "18px 22px",
-                    cursor: "pointer",
-                    backgroundColor: isActive ? "rgba(29, 155, 240, 0.08)" : "transparent",
-                    borderLeft: isActive ? "4px solid var(--color-primary)" : "4px solid transparent",
-                    transition: "background-color 0.15s ease"
-                  }}
-                  className="hover-bg"
-                >
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <img
-                      src={conv.avatar}
-                      alt={conv.name}
-                      style={{ width: "58px", height: "58px", borderRadius: "50%", objectFit: "cover" }}
-                    />
-                    {conv.isOnline && (
-                      <span style={{
-                        position: "absolute", bottom: "2px", right: "2px",
-                        width: "15px", height: "15px", borderRadius: "50%",
-                        backgroundColor: "#10b981", border: "3px solid var(--color-bg-surface)"
-                      }} />
-                    )}
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                      <span style={{ fontWeight: 800, fontSize: "1.2rem", color: "var(--color-text-main)" }}>
-                        {conv.name}
-                      </span>
-                      <span style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>
-                        {conv.lastTime}
-                      </span>
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{
-                        fontSize: "1.02rem", color: "var(--color-text-muted)",
-                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
-                      }}>
-                        {conv.lastMessage}
-                      </span>
-                      {conv.unreadCount > 0 && (
+            {[...filteredConversations]
+              .sort((a, b) => (pinnedConvs.includes(b.id) ? 1 : 0) - (pinnedConvs.includes(a.id) ? 1 : 0))
+              .map(conv => {
+                const isActive = conv.id === activeConvId;
+                const isPinned = pinnedConvs.includes(conv.id);
+                const isMuted = mutedConvs.includes(conv.id);
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => handleSelectConversation(conv.id)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "16px",
+                      padding: "16px 20px",
+                      cursor: "pointer",
+                      backgroundColor: isActive ? "rgba(0, 242, 254, 0.08)" : "transparent",
+                      borderLeft: isActive ? "4px solid #00f2fe" : "4px solid transparent",
+                      transition: "background-color 0.15s ease"
+                    }}
+                    className="hover-bg"
+                  >
+                    <div style={{ position: "relative", flexShrink: 0 }}>
+                      <img
+                        src={conv.avatar}
+                        alt={conv.name}
+                        style={{ width: "52px", height: "52px", borderRadius: "50%", objectFit: "cover" }}
+                      />
+                      {conv.isOnline && (
                         <span style={{
-                          background: "var(--color-primary)", color: "white",
-                          fontSize: "0.8rem", fontWeight: 800, padding: "3px 9px",
-                          borderRadius: "99px", flexShrink: 0
-                        }}>
-                          {conv.unreadCount}
-                        </span>
+                          position: "absolute", bottom: "2px", right: "2px",
+                          width: "14px", height: "14px", borderRadius: "50%",
+                          backgroundColor: "#10b981", border: "2px solid var(--color-bg-surface)"
+                        }} />
                       )}
                     </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+                          <span style={{ fontWeight: 800, fontSize: "1.1rem", color: "var(--color-text-main)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                            {conv.name}
+                          </span>
+                          {isPinned && <Pin size={14} style={{ color: "#f59e0b", flexShrink: 0 }} />}
+                          {isMuted && <BellOff size={14} style={{ color: "#a855f7", flexShrink: 0 }} />}
+                        </div>
+                        <span style={{ fontSize: "0.82rem", color: "var(--color-text-muted)", flexShrink: 0 }}>
+                          {conv.lastTime}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{
+                          fontSize: "0.95rem", color: "var(--color-text-muted)",
+                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+                        }}>
+                          {conv.lastMessage}
+                        </span>
+                        {conv.unreadCount > 0 && (
+                          <span style={{
+                            background: "linear-gradient(135deg, #00f2fe, #7b2cbf)", color: "white",
+                            fontSize: "0.78rem", fontWeight: 800, padding: "2px 8px",
+                            borderRadius: "99px", flexShrink: 0
+                          }}>
+                            {conv.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
 
@@ -572,11 +595,235 @@ export default function MessagesPage() {
                   >
                     <Video size={22} />
                   </button>
-                  <button style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} className="hover-bg-circle">
-                    <MoreVertical size={22} />
-                  </button>
+                  <div style={{ position: "relative" }}>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowTopMenu(!showTopMenu);
+                      }}
+                      style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} 
+                      className="hover-bg-circle"
+                      title="More Options"
+                    >
+                      <MoreVertical size={22} />
+                    </button>
+
+                    {/* 3-Dots Advanced Options Dropdown Menu */}
+                    {showTopMenu && (
+                      <>
+                        <div 
+                          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
+                          onClick={() => setShowTopMenu(false)}
+                        />
+                        <div 
+                          className="glass animate-scale-in"
+                          style={{
+                            position: "absolute",
+                            top: "100%",
+                            right: 0,
+                            marginTop: "8px",
+                            width: "240px",
+                            background: "var(--color-bg-surface)",
+                            border: "1px solid var(--color-border)",
+                            borderRadius: "18px",
+                            padding: "6px",
+                            boxShadow: "0 14px 40px rgba(0,0,0,0.5)",
+                            zIndex: 100,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "2px"
+                          }}
+                        >
+                          {/* 1. View Profile */}
+                          <button
+                            onClick={() => {
+                              setShowTopMenu(false);
+                              router.push(`/profile/${activeConv.username || activeConv.id}`);
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: "12px",
+                              padding: "10px 14px", border: "none", background: "transparent",
+                              color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 600,
+                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
+                            }}
+                            className="hover-bg"
+                          >
+                            <User size={18} style={{ color: "#00f2fe" }} />
+                            <span>View Profile</span>
+                          </button>
+
+                          {/* 2. Search in Conversation */}
+                          <button
+                            onClick={() => {
+                              setShowTopMenu(false);
+                              setShowInChatSearch(!showInChatSearch);
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: "12px",
+                              padding: "10px 14px", border: "none", background: "transparent",
+                              color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 600,
+                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
+                            }}
+                            className="hover-bg"
+                          >
+                            <Search size={18} style={{ color: "var(--color-primary)" }} />
+                            <span>Search in Chat</span>
+                          </button>
+
+                          {/* 3. Pin / Unpin Conversation */}
+                          <button
+                            onClick={() => {
+                              setShowTopMenu(false);
+                              const isPinned = pinnedConvs.includes(activeConv.id);
+                              if (isPinned) {
+                                setPinnedConvs(pinnedConvs.filter(id => id !== activeConv.id));
+                                showToast(`Unpinned conversation with ${activeConv.name}`);
+                              } else {
+                                setPinnedConvs([...pinnedConvs, activeConv.id]);
+                                showToast(`Pinned conversation with ${activeConv.name}`);
+                              }
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: "12px",
+                              padding: "10px 14px", border: "none", background: "transparent",
+                              color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 600,
+                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
+                            }}
+                            className="hover-bg"
+                          >
+                            <Pin size={18} style={{ color: "#f59e0b" }} />
+                            <span>{pinnedConvs.includes(activeConv.id) ? "Unpin Conversation" : "Pin to Top"}</span>
+                          </button>
+
+                          {/* 4. Mute / Unmute Notifications */}
+                          <button
+                            onClick={() => {
+                              setShowTopMenu(false);
+                              const isMuted = mutedConvs.includes(activeConv.id);
+                              if (isMuted) {
+                                setMutedConvs(mutedConvs.filter(id => id !== activeConv.id));
+                                showToast(`Unmuted notifications for ${activeConv.name}`);
+                              } else {
+                                setMutedConvs([...mutedConvs, activeConv.id]);
+                                showToast(`Muted notifications for ${activeConv.name}`);
+                              }
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: "12px",
+                              padding: "10px 14px", border: "none", background: "transparent",
+                              color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 600,
+                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
+                            }}
+                            className="hover-bg"
+                          >
+                            {mutedConvs.includes(activeConv.id) ? (
+                              <Bell size={18} style={{ color: "#10b981" }} />
+                            ) : (
+                              <BellOff size={18} style={{ color: "#a855f7" }} />
+                            )}
+                            <span>{mutedConvs.includes(activeConv.id) ? "Unmute Notifications" : "Mute Notifications"}</span>
+                          </button>
+
+                          <div style={{ height: "1px", background: "var(--color-border)", margin: "4px 0" }} />
+
+                          {/* 5. Clear Chat History */}
+                          <button
+                            onClick={() => {
+                              setShowTopMenu(false);
+                              if (confirm(`Are you sure you want to clear chat history with ${activeConv.name}?`)) {
+                                setMessagesMap(prev => ({
+                                  ...prev,
+                                  [activeConv.id]: []
+                                }));
+                                showToast("Chat history cleared");
+                              }
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: "12px",
+                              padding: "10px 14px", border: "none", background: "transparent",
+                              color: "#ef4444", fontSize: "0.92rem", fontWeight: 600,
+                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
+                            }}
+                            className="hover-bg"
+                          >
+                            <Trash2 size={18} />
+                            <span>Clear History</span>
+                          </button>
+
+                          {/* 6. Block & Report */}
+                          <button
+                            onClick={() => {
+                              setShowTopMenu(false);
+                              showToast(`Blocked & reported ${activeConv.name}`);
+                              setActiveConvId(null);
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: "12px",
+                              padding: "10px 14px", border: "none", background: "transparent",
+                              color: "#ef4444", fontSize: "0.92rem", fontWeight: 600,
+                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
+                            }}
+                            className="hover-bg"
+                          >
+                            <ShieldAlert size={18} />
+                            <span>Block &amp; Report</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* In-Chat Search Bar Drawer (When triggered from 3-Dots menu) */}
+              {showInChatSearch && (
+                <div 
+                  className="animate-slide-up"
+                  style={{
+                    padding: "8px 16px",
+                    background: "var(--color-bg-surface)",
+                    borderBottom: "1px solid var(--color-border)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px"
+                  }}
+                >
+                  <Search size={18} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder={`Search messages in chat with ${activeConv.name}...`}
+                    value={inChatSearch}
+                    onChange={(e) => setInChatSearch(e.target.value)}
+                    style={{
+                      flex: 1,
+                      background: "none",
+                      border: "none",
+                      outline: "none",
+                      color: "var(--color-text-main)",
+                      fontSize: "0.92rem",
+                      fontWeight: 600
+                    }}
+                  />
+                  {inChatSearch && (
+                    <button
+                      onClick={() => setInChatSearch("")}
+                      style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "4px" }}
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowInChatSearch(false);
+                      setInChatSearch("");
+                    }}
+                    style={{ background: "none", border: "none", color: "var(--color-primary)", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer" }}
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
 
               {/* Chat Messages Feed */}
               <div style={{
@@ -585,9 +832,40 @@ export default function MessagesPage() {
                 padding: "24px 20px",
                 display: "flex",
                 flexDirection: "column",
-                gap: "20px"
+                gap: "20px",
+                position: "relative"
               }}>
-                {activeMessages.map(msg => (
+                {/* Floating Toast Notification Banner */}
+                {toastMsg && (
+                  <div 
+                    className="glass animate-slide-up"
+                    style={{
+                      position: "sticky",
+                      top: "10px",
+                      alignSelf: "center",
+                      background: "var(--color-bg-surface)",
+                      border: "1px solid var(--aurora-cyan, var(--color-primary))",
+                      borderRadius: "99px",
+                      padding: "8px 18px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      color: "var(--color-text-main)",
+                      fontSize: "0.88rem",
+                      fontWeight: 700,
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                      zIndex: 80
+                    }}
+                  >
+                    <Check size={16} style={{ color: "#10b981" }} />
+                    <span>{toastMsg}</span>
+                  </div>
+                )}
+
+                {(inChatSearch.trim() 
+                  ? activeMessages.filter(m => m.text.toLowerCase().includes(inChatSearch.toLowerCase()))
+                  : activeMessages
+                ).map(msg => (
                   <div
                     key={msg.id}
                     style={{
