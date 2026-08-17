@@ -135,18 +135,18 @@ export default function MessagesPage() {
     touchTimerRef.current = setTimeout(() => {
       setLongPressMsg(msg);
       if (typeof window !== "undefined" && window.navigator && window.navigator.vibrate) {
-        window.navigator.vibrate(40);
+        window.navigator.vibrate(30);
       }
-    }, 450);
+    }, 200);
   };
 
   const handleTouchStartConv = (conv: Conversation) => {
     touchTimerRef.current = setTimeout(() => {
       setLongPressConv(conv);
       if (typeof window !== "undefined" && window.navigator && window.navigator.vibrate) {
-        window.navigator.vibrate(40);
+        window.navigator.vibrate(30);
       }
-    }, 450);
+    }, 200);
   };
 
   const handleTouchEnd = () => {
@@ -518,7 +518,6 @@ export default function MessagesPage() {
                     onClick={() => handleSelectConversation(conv.id)}
                     onTouchStart={() => handleTouchStartConv(conv)}
                     onTouchEnd={handleTouchEnd}
-                    onTouchMove={handleTouchEnd}
                     onMouseDown={() => handleTouchStartConv(conv)}
                     onMouseUp={handleTouchEnd}
                     onMouseLeave={handleTouchEnd}
@@ -534,7 +533,8 @@ export default function MessagesPage() {
                       cursor: "pointer",
                       backgroundColor: isActive ? "rgba(0, 242, 254, 0.08)" : "transparent",
                       borderLeft: isActive ? "4px solid #00f2fe" : "4px solid transparent",
-                      transition: "background-color 0.15s ease"
+                      transition: "background-color 0.15s ease",
+                      position: "relative"
                     }}
                     className="hover-bg"
                   >
@@ -586,151 +586,114 @@ export default function MessagesPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* Anchored Options Dropdown Menu for Long-Pressed Chat */}
+                    {longPressConv?.id === conv.id && (
+                      <>
+                        <div 
+                          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLongPressConv(null);
+                          }}
+                        />
+                        <div 
+                          className="glass animate-scale-in"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            position: "absolute",
+                            top: "70%",
+                            right: "16px",
+                            width: "210px",
+                            background: "var(--color-bg-surface)",
+                            border: "1px solid #00f2fe",
+                            borderRadius: "18px",
+                            padding: "8px",
+                            boxShadow: "0 12px 36px rgba(0,0,0,0.7), 0 0 20px rgba(0,242,254,0.3)",
+                            zIndex: 100,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "2px"
+                          }}
+                        >
+                          <button
+                            onClick={() => {
+                              if (isUnread) {
+                                setUnreadConvs(unreadConvs.filter(id => id !== conv.id));
+                                setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unreadCount: 0 } : c));
+                                showToast(`Marked as Read`);
+                              } else {
+                                setUnreadConvs([...unreadConvs, conv.id]);
+                                setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unreadCount: 1 } : c));
+                                showToast(`Marked as Unread`);
+                              }
+                              setLongPressConv(null);
+                            }}
+                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                            className="hover-bg"
+                          >
+                            {isUnread ? <MailCheck size={16} style={{ color: "#10b981" }} /> : <Mail size={16} style={{ color: "#00f2fe" }} />}
+                            <span>{isUnread ? "Mark as Read" : "Mark as Unread"}</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (isPinned) {
+                                setPinnedConvs(pinnedConvs.filter(id => id !== conv.id));
+                                showToast(`Unpinned ${conv.name}`);
+                              } else {
+                                setPinnedConvs([...pinnedConvs, conv.id]);
+                                showToast(`Pinned ${conv.name} to top`);
+                              }
+                              setLongPressConv(null);
+                            }}
+                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                            className="hover-bg"
+                          >
+                            <Pin size={16} style={{ color: "#f59e0b" }} />
+                            <span>{isPinned ? "Unpin Conversation" : "Pin to Top"}</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (isMuted) {
+                                setMutedConvs(mutedConvs.filter(id => id !== conv.id));
+                                showToast(`Unmuted ${conv.name}`);
+                              } else {
+                                setMutedConvs([...mutedConvs, conv.id]);
+                                showToast(`Muted ${conv.name}`);
+                              }
+                              setLongPressConv(null);
+                            }}
+                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                            className="hover-bg"
+                          >
+                            {isMuted ? <Bell size={16} style={{ color: "#10b981" }} /> : <BellOff size={16} style={{ color: "#a855f7" }} />}
+                            <span>{isMuted ? "Unmute Notifications" : "Mute Notifications"}</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (confirm(`Delete conversation with ${conv.name}?`)) {
+                                setConversations(conversations.filter(c => c.id !== conv.id));
+                                if (activeConvId === conv.id) setActiveConvId(null);
+                                showToast("Conversation deleted");
+                              }
+                              setLongPressConv(null);
+                            }}
+                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "#ef4444", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                            className="hover-bg"
+                          >
+                            <Trash2 size={16} />
+                            <span>Delete Conversation</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
           </div>
-
-          {/* Long-Press Conversation Action Sheet Modal (Constrained 100% Inside Sidebar / Mobile View) */}
-          {longPressConv && (
-            <>
-              <div 
-                style={{
-                  position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                  background: "rgba(0,0,0,0.45)",
-                  zIndex: 900
-                }}
-                onClick={() => setLongPressConv(null)}
-              />
-              <div 
-                className="glass animate-spring-pop"
-                style={{
-                  position: "absolute",
-                  bottom: "16px",
-                  left: "16px",
-                  right: "16px",
-                  width: "calc(100% - 32px)",
-                  maxWidth: "300px",
-                  margin: "0 auto",
-                  background: "var(--color-bg-surface)",
-                  border: "1px solid #00f2fe",
-                  borderRadius: "24px",
-                  padding: "16px",
-                  boxShadow: "0 20px 60px rgba(0,242,254,0.25), 0 10px 40px rgba(0,0,0,0.6)",
-                  zIndex: 999,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px"
-                }}
-              >
-                {/* Contact Header Preview */}
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "10px", borderBottom: "1px solid var(--color-border)" }}>
-                  <img src={longPressConv.avatar} alt={longPressConv.name} style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }} />
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--color-text-main)" }}>{longPressConv.name}</span>
-                    <span style={{ fontSize: "0.82rem", color: "var(--color-text-muted)" }}>@{longPressConv.username}</span>
-                  </div>
-                </div>
-
-                {/* Conversation Actions */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                  {/* Mark as Read / Unread */}
-                  <button
-                    onClick={() => {
-                      const isUnread = unreadConvs.includes(longPressConv.id) || longPressConv.unreadCount > 0;
-                      if (isUnread) {
-                        setUnreadConvs(unreadConvs.filter(id => id !== longPressConv.id));
-                        setConversations(prev => prev.map(c => c.id === longPressConv.id ? { ...c, unreadCount: 0 } : c));
-                        showToast(`Marked chat with ${longPressConv.name} as Read`);
-                      } else {
-                        setUnreadConvs([...unreadConvs, longPressConv.id]);
-                        setConversations(prev => prev.map(c => c.id === longPressConv.id ? { ...c, unreadCount: 1 } : c));
-                        showToast(`Marked chat with ${longPressConv.name} as Unread`);
-                      }
-                      setLongPressConv(null);
-                    }}
-                    style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                    className="hover-bg"
-                  >
-                    {(unreadConvs.includes(longPressConv.id) || longPressConv.unreadCount > 0) ? (
-                      <>
-                        <MailCheck size={18} style={{ color: "#10b981" }} />
-                        <span>Mark as Read</span>
-                      </>
-                    ) : (
-                      <>
-                        <Mail size={18} style={{ color: "#00f2fe" }} />
-                        <span>Mark as Unread</span>
-                      </>
-                    )}
-                  </button>
-
-                  {/* Pin / Unpin */}
-                  <button
-                    onClick={() => {
-                      const isPinned = pinnedConvs.includes(longPressConv.id);
-                      if (isPinned) {
-                        setPinnedConvs(pinnedConvs.filter(id => id !== longPressConv.id));
-                        showToast(`Unpinned ${longPressConv.name}`);
-                      } else {
-                        setPinnedConvs([...pinnedConvs, longPressConv.id]);
-                        showToast(`Pinned ${longPressConv.name} to top`);
-                      }
-                      setLongPressConv(null);
-                    }}
-                    style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                    className="hover-bg"
-                  >
-                    <Pin size={18} style={{ color: "#f59e0b" }} />
-                    <span>{pinnedConvs.includes(longPressConv.id) ? "Unpin Conversation" : "Pin to Top"}</span>
-                  </button>
-
-                  {/* Mute / Unmute */}
-                  <button
-                    onClick={() => {
-                      const isMuted = mutedConvs.includes(longPressConv.id);
-                      if (isMuted) {
-                        setMutedConvs(mutedConvs.filter(id => id !== longPressConv.id));
-                        showToast(`Unmuted ${longPressConv.name}`);
-                      } else {
-                        setMutedConvs([...mutedConvs, longPressConv.id]);
-                        showToast(`Muted ${longPressConv.name}`);
-                      }
-                      setLongPressConv(null);
-                    }}
-                    style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                    className="hover-bg"
-                  >
-                    {mutedConvs.includes(longPressConv.id) ? (
-                      <Bell size={18} style={{ color: "#10b981" }} />
-                    ) : (
-                      <BellOff size={18} style={{ color: "#a855f7" }} />
-                    )}
-                    <span>{mutedConvs.includes(longPressConv.id) ? "Unmute Notifications" : "Mute Notifications"}</span>
-                  </button>
-
-                  <div style={{ height: "1px", background: "var(--color-border)", margin: "4px 0" }} />
-
-                  {/* Delete Conversation */}
-                  <button
-                    onClick={() => {
-                      if (confirm(`Delete conversation with ${longPressConv.name}?`)) {
-                        setConversations(conversations.filter(c => c.id !== longPressConv.id));
-                        if (activeConvId === longPressConv.id) setActiveConvId(null);
-                        showToast("Conversation deleted");
-                      }
-                      setLongPressConv(null);
-                    }}
-                    style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", border: "none", background: "transparent", color: "#ef4444", fontSize: "0.92rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                    className="hover-bg"
-                  >
-                    <Trash2 size={18} />
-                    <span>Delete Conversation</span>
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
         </div>
 
         {/* Right Active Chat Window */}
