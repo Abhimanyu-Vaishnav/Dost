@@ -1,6 +1,7 @@
 .container {
   display: flex;
   width: 100%;
+  height: calc(100vh - 56px);
   height: calc(100dvh - 56px);
   background-color: var(--color-bg-base);
   overflow: hidden;
@@ -32,21 +33,22 @@
 }
 
 .inputForm {
-  padding: 14px 18px;
+  padding: 12px 18px;
   border-top: 1px solid var(--color-border);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: nowrap;
+  gap: 12px;
   width: 100%;
 }
 
-/* Mobile responsive full screen view switcher & bottom navbar clearance */
+/* Mobile responsive full screen view switcher & 0 dead-gap bottom navbar layout */
 @media (max-width: 650px) {
   .container {
-    height: calc(100dvh - 120px);
-    margin-bottom: 64px;
+    height: calc(100dvh - 108px) !important;
+    margin-bottom: 0 !important;
   }
 
   .sidebar {
@@ -60,7 +62,7 @@
     width: 100%;
     height: 100%;
     display: flex;
-    padding-bottom: 12px;
+    padding-bottom: 0 !important;
   }
 
   .sidebarHiddenMobile {
@@ -72,17 +74,18 @@
   }
 
   .inputForm {
-    padding: 12px 14px;
+    padding: 10px 14px;
     gap: 8px;
     position: relative;
     z-index: 10;
+    border-top: 1px solid var(--color-border);
   }
 
   .backBtn {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--color-bg-hover);
     border: none;
     color: var(--color-text-main);
     cursor: pointer;

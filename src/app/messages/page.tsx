@@ -736,7 +736,7 @@ export default function MessagesPage() {
                       </div>
                     )}
 
-                    {/* Scaled-Up Chat Bubble Component */}
+                    {/* Scaled Aurora Chat Bubble Component */}
                     <div 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -747,26 +747,30 @@ export default function MessagesPage() {
                         handleAddReaction(msg.id, "❤️");
                       }}
                       style={{
-                        maxWidth: "88%",
-                        padding: "16px 22px",
-                        borderRadius: msg.isMe ? "24px 24px 4px 24px" : "24px 24px 24px 4px",
-                        backgroundColor: msg.isMe ? "var(--color-primary, #1d9bf0)" : "var(--color-bg-surface)",
+                        maxWidth: "82%",
+                        padding: "12px 18px",
+                        borderRadius: msg.isMe ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
+                        background: msg.isMe 
+                          ? "linear-gradient(135deg, #00f2fe 0%, #3b82f6 50%, #7b2cbf 100%)" 
+                          : "var(--color-bg-surface)",
                         color: msg.isMe ? "#ffffff" : "var(--color-text-main)",
                         border: msg.isMe ? "none" : "1px solid var(--color-border)",
-                        boxShadow: "0 6px 16px rgba(0, 0, 0, 0.15)",
-                        fontSize: "1.22rem",
-                        lineHeight: "1.6",
-                        fontWeight: 500,
+                        boxShadow: msg.isMe 
+                          ? "0 4px 18px rgba(0, 242, 254, 0.25)" 
+                          : "var(--shadow-sm)",
+                        fontSize: "1rem",
+                        lineHeight: "1.5",
+                        fontWeight: msg.isMe ? 600 : 500,
                         position: "relative",
                         cursor: "pointer",
                         userSelect: "none"
                       }}
-                      className="hover:opacity-95 transition-opacity"
+                      className="hover:opacity-95 transition-all"
                     >
                       {/* Attached Image inside Bubble */}
                       {msg.imageUrl && (
-                        <div style={{ marginBottom: "12px", borderRadius: "16px", overflow: "hidden" }}>
-                          <img src={msg.imageUrl} alt="Attachment" style={{ maxWidth: "100%", maxHeight: "320px", display: "block", objectFit: "cover" }} />
+                        <div style={{ marginBottom: "8px", borderRadius: "14px", overflow: "hidden" }}>
+                          <img src={msg.imageUrl} alt="Attachment" style={{ maxWidth: "100%", maxHeight: "280px", display: "block", objectFit: "cover" }} />
                         </div>
                       )}
 
@@ -777,45 +781,25 @@ export default function MessagesPage() {
                       {msg.reactions && msg.reactions.length > 0 && (
                         <div style={{
                           position: "absolute",
-                          bottom: "-14px",
-                          right: msg.isMe ? "auto" : "16px",
-                          left: msg.isMe ? "16px" : "auto",
+                          bottom: "-12px",
+                          right: msg.isMe ? "auto" : "12px",
+                          left: msg.isMe ? "12px" : "auto",
                           background: "var(--color-bg-surface)",
                           border: "1px solid var(--color-border)",
                           borderRadius: "99px",
-                          padding: "3px 10px",
-                          fontSize: "0.9rem",
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+                          padding: "2px 8px",
+                          fontSize: "0.85rem",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
                         }}>
                           {msg.reactions.join(" ")}
                         </div>
                       )}
                     </div>
 
-                    {/* Message Timestamp & Quick Reactions */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.85rem", color: "var(--color-text-muted)" }}>
+                    {/* Message Timestamp */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", color: "var(--color-text-muted)", marginTop: "2px" }}>
                       <span>{msg.timestamp}</span>
-                      {msg.isMe && <CheckCheck size={18} style={{ color: "var(--color-primary)" }} />}
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAddReaction(msg.id, "❤️");
-                        }} 
-                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1.05rem", opacity: 0.8 }}
-                        title="React ❤️"
-                      >
-                        ❤️
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAddReaction(msg.id, "🔥");
-                        }} 
-                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1.05rem", opacity: 0.8 }}
-                        title="React 🔥"
-                      >
-                        🔥
-                      </button>
+                      {msg.isMe && <CheckCheck size={15} style={{ color: "#00f2fe" }} />}
                     </div>
                   </div>
                 ))}
@@ -849,7 +833,7 @@ export default function MessagesPage() {
                 </div>
               )}
 
-              {/* Scaled-Up Bottom Chat Input Form */}
+              {/* Sleek Bottom Chat Input Form */}
               <form
                 onSubmit={handleSendMessage}
                 className={styles.inputForm}
@@ -857,26 +841,26 @@ export default function MessagesPage() {
                 <button 
                   type="button" 
                   onClick={() => fileInputRef.current?.click()}
-                  style={{ width: "50px", height: "50px", borderRadius: "50%", background: "rgba(29, 155, 240, 0.12)", border: "none", color: "var(--color-primary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
+                  style={{ width: "42px", height: "42px", borderRadius: "50%", background: "rgba(0, 242, 254, 0.12)", border: "none", color: "var(--aurora-cyan)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
                   className="hover:scale-105"
                   title="Attach Photo"
                 >
-                  <ImageIcon size={26} />
+                  <ImageIcon size={20} />
                 </button>
 
                 <button 
                   type="button" 
                   onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
-                  style={{ width: "50px", height: "50px", borderRadius: "50%", background: isRecordingVoice ? "rgba(239, 68, 68, 0.15)" : "rgba(168, 85, 247, 0.12)", border: "none", color: isRecordingVoice ? "#ef4444" : "#a855f7", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
+                  style={{ width: "42px", height: "42px", borderRadius: "50%", background: isRecordingVoice ? "rgba(239, 68, 68, 0.15)" : "rgba(123, 44, 191, 0.15)", border: "none", color: isRecordingVoice ? "#ef4444" : "#a855f7", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
                   className="hover:scale-105"
                   title={isRecordingVoice ? "Stop Recording" : "Record Voice Note"}
                 >
-                  {isRecordingVoice ? <Square size={22} className="animate-pulse" /> : <Mic size={26} />}
+                  {isRecordingVoice ? <Square size={18} className="animate-pulse" /> : <Mic size={20} />}
                 </button>
 
                 {isRecordingVoice ? (
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "10px", background: "rgba(239, 68, 68, 0.12)", padding: "14px 20px", borderRadius: "9999px", color: "#ef4444", fontSize: "1.05rem", fontWeight: 700 }}>
-                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#ef4444" }} className="animate-ping" />
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "8px", background: "rgba(239, 68, 68, 0.12)", padding: "10px 16px", borderRadius: "9999px", color: "#ef4444", fontSize: "0.92rem", fontWeight: 700 }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444" }} className="animate-ping" />
                     <span>Recording Voice Note: 00:{voiceRecordTime < 10 ? `0${voiceRecordTime}` : voiceRecordTime}</span>
                   </div>
                 ) : (
@@ -887,12 +871,12 @@ export default function MessagesPage() {
                     onChange={e => setInputText(e.target.value)}
                     style={{
                       flex: 1,
-                      padding: "16px 24px",
+                      padding: "11px 18px",
                       borderRadius: "9999px",
                       border: "1px solid var(--color-border)",
                       background: "var(--color-bg-base)",
                       color: "var(--color-text-main)",
-                      fontSize: "1.15rem",
+                      fontSize: "0.98rem",
                       outline: "none",
                       minWidth: 0
                     }}
@@ -903,16 +887,16 @@ export default function MessagesPage() {
                   type="submit"
                   disabled={!inputText.trim() && !attachedImage}
                   style={{
-                    width: "52px", height: "52px", borderRadius: "50%",
-                    background: (inputText.trim() || attachedImage) ? "linear-gradient(135deg, #1d9bf0, #0084ff)" : "var(--color-border)",
+                    width: "42px", height: "42px", borderRadius: "50%",
+                    background: (inputText.trim() || attachedImage) ? "linear-gradient(135deg, #00f2fe, #7b2cbf)" : "var(--color-border)",
                     color: "white", border: "none", cursor: (inputText.trim() || attachedImage) ? "pointer" : "default",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     transition: "all 0.15s ease",
-                    boxShadow: (inputText.trim() || attachedImage) ? "0 8px 20px rgba(29, 155, 240, 0.45)" : "none",
+                    boxShadow: (inputText.trim() || attachedImage) ? "0 4px 14px rgba(0, 242, 254, 0.4)" : "none",
                     flexShrink: 0
                   }}
                 >
-                  <Send size={22} />
+                  <Send size={18} />
                 </button>
               </form>
             </>
