@@ -700,56 +700,58 @@ export default function MessagesPage() {
         <div className={`${styles.chatWindow} ${!activeConvId ? styles.chatWindowHiddenMobile : ""}`}>
           {activeConvId ? (
             <>
-              {/* Chat Window Top Bar */}
+              {/* Chat Window Top Bar (Super Compact Modern Height) */}
               <div style={{
-                padding: "16px 22px",
+                padding: "8px 14px",
                 borderBottom: "1px solid var(--color-border)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                background: "var(--color-bg-surface)"
+                background: "var(--color-bg-surface)",
+                zIndex: 50
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   {/* Back Arrow for Mobile Screen */}
                   <button 
                     onClick={() => setActiveConvId(null)}
                     className={styles.backBtn}
                     title="Back to conversations"
+                    style={{ padding: "4px", borderRadius: "50%", background: "none", border: "none" }}
                   >
-                    <ArrowLeft size={24} />
+                    <ArrowLeft size={20} />
                   </button>
 
                   <img
                     src={activeConv.avatar}
                     alt={activeConv.name}
-                    style={{ width: "54px", height: "54px", borderRadius: "50%", objectFit: "cover" }}
+                    style={{ width: "38px", height: "38px", borderRadius: "50%", objectFit: "cover" }}
                   />
                   <div>
-                    <h3 style={{ fontSize: "1.3rem", fontWeight: 900, color: "var(--color-text-main)", margin: 0 }}>
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0, lineHeight: 1.2 }}>
                       {activeConv.name}
                     </h3>
-                    <span style={{ fontSize: "0.95rem", color: activeConv.isOnline ? "#10b981" : "var(--color-text-muted)", fontWeight: 600 }}>
+                    <span style={{ fontSize: "0.78rem", color: activeConv.isOnline ? "#10b981" : "var(--color-text-muted)", fontWeight: 600 }}>
                       {activeConv.isOnline ? "Active now" : "Offline"}
                     </span>
                   </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <button 
                     onClick={() => setActiveCall({ type: "voice", contact: activeConv })}
-                    style={{ background: "rgba(29, 155, 240, 0.12)", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "12px", borderRadius: "50%" }} 
+                    style={{ background: "rgba(29, 155, 240, 0.12)", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Voice Call"
                   >
-                    <Phone size={22} />
+                    <Phone size={17} />
                   </button>
                   <button 
                     onClick={() => setActiveCall({ type: "video", contact: activeConv })}
-                    style={{ background: "rgba(168, 85, 247, 0.12)", border: "none", color: "#a855f7", cursor: "pointer", padding: "12px", borderRadius: "50%" }} 
+                    style={{ background: "rgba(168, 85, 247, 0.12)", border: "none", color: "#a855f7", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Video Call"
                   >
-                    <Video size={22} />
+                    <Video size={17} />
                   </button>
                   <div style={{ position: "relative" }}>
                     <button 
@@ -1023,6 +1025,7 @@ export default function MessagesPage() {
                   : activeMessages
                 ).map((msg, index, array) => {
                   const isNearBottom = index >= array.length - 2;
+                  const isNearTop = index <= 1;
                   return (
                   <div
                     key={msg.id}
@@ -1040,7 +1043,7 @@ export default function MessagesPage() {
                         onClick={(e) => e.stopPropagation()}
                         style={{
                           position: "absolute",
-                          top: "-50px",
+                          ...(isNearTop ? { top: "calc(100% + 6px)" } : { top: "-50px" }),
                           right: msg.isMe ? "0" : "auto",
                           left: msg.isMe ? "auto" : "0",
                           background: "var(--color-bg-surface)",
@@ -1051,7 +1054,7 @@ export default function MessagesPage() {
                           alignItems: "center",
                           gap: "10px",
                           boxShadow: "0 12px 36px rgba(0, 0, 0, 0.6)",
-                          zIndex: 20
+                          zIndex: 100
                         }}
                         className="animate-scale-in"
                       >
