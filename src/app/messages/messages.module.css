@@ -16,6 +16,8 @@
   background-color: var(--color-bg-surface);
   flex-shrink: 0;
   height: 100%;
+  position: relative;
+  overflow: hidden;
 }
 
 .chatWindow {

@@ -590,6 +590,147 @@ export default function MessagesPage() {
                 );
               })}
           </div>
+
+          {/* Long-Press Conversation Action Sheet Modal (Constrained 100% Inside Sidebar / Mobile View) */}
+          {longPressConv && (
+            <>
+              <div 
+                style={{
+                  position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                  background: "rgba(0,0,0,0.45)",
+                  zIndex: 900
+                }}
+                onClick={() => setLongPressConv(null)}
+              />
+              <div 
+                className="glass animate-spring-pop"
+                style={{
+                  position: "absolute",
+                  bottom: "16px",
+                  left: "16px",
+                  right: "16px",
+                  width: "calc(100% - 32px)",
+                  maxWidth: "300px",
+                  margin: "0 auto",
+                  background: "var(--color-bg-surface)",
+                  border: "1px solid #00f2fe",
+                  borderRadius: "24px",
+                  padding: "16px",
+                  boxShadow: "0 20px 60px rgba(0,242,254,0.25), 0 10px 40px rgba(0,0,0,0.6)",
+                  zIndex: 999,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px"
+                }}
+              >
+                {/* Contact Header Preview */}
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "10px", borderBottom: "1px solid var(--color-border)" }}>
+                  <img src={longPressConv.avatar} alt={longPressConv.name} style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }} />
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--color-text-main)" }}>{longPressConv.name}</span>
+                    <span style={{ fontSize: "0.82rem", color: "var(--color-text-muted)" }}>@{longPressConv.username}</span>
+                  </div>
+                </div>
+
+                {/* Conversation Actions */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                  {/* Mark as Read / Unread */}
+                  <button
+                    onClick={() => {
+                      const isUnread = unreadConvs.includes(longPressConv.id) || longPressConv.unreadCount > 0;
+                      if (isUnread) {
+                        setUnreadConvs(unreadConvs.filter(id => id !== longPressConv.id));
+                        setConversations(prev => prev.map(c => c.id === longPressConv.id ? { ...c, unreadCount: 0 } : c));
+                        showToast(`Marked chat with ${longPressConv.name} as Read`);
+                      } else {
+                        setUnreadConvs([...unreadConvs, longPressConv.id]);
+                        setConversations(prev => prev.map(c => c.id === longPressConv.id ? { ...c, unreadCount: 1 } : c));
+                        showToast(`Marked chat with ${longPressConv.name} as Unread`);
+                      }
+                      setLongPressConv(null);
+                    }}
+                    style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                    className="hover-bg"
+                  >
+                    {(unreadConvs.includes(longPressConv.id) || longPressConv.unreadCount > 0) ? (
+                      <>
+                        <MailCheck size={18} style={{ color: "#10b981" }} />
+                        <span>Mark as Read</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mail size={18} style={{ color: "#00f2fe" }} />
+                        <span>Mark as Unread</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Pin / Unpin */}
+                  <button
+                    onClick={() => {
+                      const isPinned = pinnedConvs.includes(longPressConv.id);
+                      if (isPinned) {
+                        setPinnedConvs(pinnedConvs.filter(id => id !== longPressConv.id));
+                        showToast(`Unpinned ${longPressConv.name}`);
+                      } else {
+                        setPinnedConvs([...pinnedConvs, longPressConv.id]);
+                        showToast(`Pinned ${longPressConv.name} to top`);
+                      }
+                      setLongPressConv(null);
+                    }}
+                    style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                    className="hover-bg"
+                  >
+                    <Pin size={18} style={{ color: "#f59e0b" }} />
+                    <span>{pinnedConvs.includes(longPressConv.id) ? "Unpin Conversation" : "Pin to Top"}</span>
+                  </button>
+
+                  {/* Mute / Unmute */}
+                  <button
+                    onClick={() => {
+                      const isMuted = mutedConvs.includes(longPressConv.id);
+                      if (isMuted) {
+                        setMutedConvs(mutedConvs.filter(id => id !== longPressConv.id));
+                        showToast(`Unmuted ${longPressConv.name}`);
+                      } else {
+                        setMutedConvs([...mutedConvs, longPressConv.id]);
+                        showToast(`Muted ${longPressConv.name}`);
+                      }
+                      setLongPressConv(null);
+                    }}
+                    style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                    className="hover-bg"
+                  >
+                    {mutedConvs.includes(longPressConv.id) ? (
+                      <Bell size={18} style={{ color: "#10b981" }} />
+                    ) : (
+                      <BellOff size={18} style={{ color: "#a855f7" }} />
+                    )}
+                    <span>{mutedConvs.includes(longPressConv.id) ? "Unmute Notifications" : "Mute Notifications"}</span>
+                  </button>
+
+                  <div style={{ height: "1px", background: "var(--color-border)", margin: "4px 0" }} />
+
+                  {/* Delete Conversation */}
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete conversation with ${longPressConv.name}?`)) {
+                        setConversations(conversations.filter(c => c.id !== longPressConv.id));
+                        if (activeConvId === longPressConv.id) setActiveConvId(null);
+                        showToast("Conversation deleted");
+                      }
+                      setLongPressConv(null);
+                    }}
+                    style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", border: "none", background: "transparent", color: "#ef4444", fontSize: "0.92rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                    className="hover-bg"
+                  >
+                    <Trash2 size={18} />
+                    <span>Delete Conversation</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right Active Chat Window */}
@@ -1243,13 +1384,13 @@ export default function MessagesPage() {
                   <Send size={18} />
                 </button>
               </form>
-              {/* Long-Press Message Context Sheet Modal (Constrained 100% Inside Active Chat Container) */}
+              {/* Long-Press Message Context Sheet Modal (Positioned at bottom inside Active Chat Container) */}
               {longPressMsg && (
                 <>
                   <div 
                     style={{
                       position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                      background: "rgba(0,0,0,0.35)",
+                      background: "rgba(0,0,0,0.4)",
                       zIndex: 900
                     }}
                     onClick={() => setLongPressMsg(null)}
@@ -1258,16 +1399,16 @@ export default function MessagesPage() {
                     className="glass animate-spring-pop"
                     style={{
                       position: "absolute",
-                      top: "50%",
+                      bottom: "16px",
                       left: "16px",
                       right: "16px",
-                      transform: "translateY(-50%)",
-                      maxWidth: "280px",
+                      width: "calc(100% - 32px)",
+                      maxWidth: "300px",
                       margin: "0 auto",
                       background: "var(--color-bg-surface)",
                       border: "1px solid #00f2fe",
                       borderRadius: "24px",
-                      padding: "16px",
+                      padding: "14px",
                       boxShadow: "0 20px 60px rgba(0,242,254,0.25), 0 10px 40px rgba(0,0,0,0.6)",
                       zIndex: 999,
                       display: "flex",
@@ -1292,12 +1433,7 @@ export default function MessagesPage() {
                       ))}
                     </div>
 
-                    {/* Target Message Preview */}
-                    <div style={{ padding: "6px 10px", background: "var(--color-bg-base)", borderRadius: "10px", fontSize: "0.85rem", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      "{longPressMsg.text}"
-                    </div>
-
-                    {/* Action Buttons */}
+                    {/* Action Buttons (Tap outside backdrop dismisses modal) */}
                     <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                       <button
                         onClick={() => {
@@ -1344,13 +1480,6 @@ export default function MessagesPage() {
                         <Trash2 size={17} />
                         <span>Delete Message</span>
                       </button>
-
-                      <button
-                        onClick={() => setLongPressMsg(null)}
-                        style={{ padding: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg-base)", color: "var(--color-text-muted)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", marginTop: "4px" }}
-                      >
-                        Cancel
-                      </button>
                     </div>
                   </div>
                 </>
@@ -1372,153 +1501,6 @@ export default function MessagesPage() {
           )}
         </div>
       </div>
-
-      {/* Long-Press Conversation Action Sheet Modal (Mark as Read / Unread, Pin, Mute) */}
-      {longPressConv && (
-        <>
-          <div 
-            style={{
-              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-              background: "rgba(0,0,0,0.4)",
-              zIndex: 9998
-            }}
-            onClick={() => setLongPressConv(null)}
-          />
-          <div 
-            className="glass animate-spring-pop"
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "calc(100% - 32px)",
-              maxWidth: "320px",
-              background: "var(--color-bg-surface)",
-              border: "1px solid #00f2fe",
-              borderRadius: "24px",
-              padding: "18px",
-              boxShadow: "0 20px 60px rgba(0,242,254,0.25), 0 10px 40px rgba(0,0,0,0.6)",
-              zIndex: 10000,
-              display: "flex",
-              flexDirection: "column",
-              gap: "12px"
-            }}
-          >
-            {/* Contact Header Preview */}
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "12px", borderBottom: "1px solid var(--color-border)" }}>
-              <img src={longPressConv.avatar} alt={longPressConv.name} style={{ width: "44px", height: "44px", borderRadius: "50%", objectFit: "cover" }} />
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--color-text-main)" }}>{longPressConv.name}</span>
-                <span style={{ fontSize: "0.82rem", color: "var(--color-text-muted)" }}>@{longPressConv.username}</span>
-              </div>
-            </div>
-
-            {/* Conversation Actions */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              {/* Mark as Read / Unread */}
-              <button
-                onClick={() => {
-                  const isUnread = unreadConvs.includes(longPressConv.id) || longPressConv.unreadCount > 0;
-                  if (isUnread) {
-                    setUnreadConvs(unreadConvs.filter(id => id !== longPressConv.id));
-                    setConversations(prev => prev.map(c => c.id === longPressConv.id ? { ...c, unreadCount: 0 } : c));
-                    showToast(`Marked chat with ${longPressConv.name} as Read`);
-                  } else {
-                    setUnreadConvs([...unreadConvs, longPressConv.id]);
-                    setConversations(prev => prev.map(c => c.id === longPressConv.id ? { ...c, unreadCount: 1 } : c));
-                    showToast(`Marked chat with ${longPressConv.name} as Unread`);
-                  }
-                  setLongPressConv(null);
-                }}
-                style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.95rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                className="hover-bg"
-              >
-                {(unreadConvs.includes(longPressConv.id) || longPressConv.unreadCount > 0) ? (
-                  <>
-                    <MailCheck size={18} style={{ color: "#10b981" }} />
-                    <span>Mark as Read</span>
-                  </>
-                ) : (
-                  <>
-                    <Mail size={18} style={{ color: "#00f2fe" }} />
-                    <span>Mark as Unread</span>
-                  </>
-                )}
-              </button>
-
-              {/* Pin / Unpin */}
-              <button
-                onClick={() => {
-                  const isPinned = pinnedConvs.includes(longPressConv.id);
-                  if (isPinned) {
-                    setPinnedConvs(pinnedConvs.filter(id => id !== longPressConv.id));
-                    showToast(`Unpinned ${longPressConv.name}`);
-                  } else {
-                    setPinnedConvs([...pinnedConvs, longPressConv.id]);
-                    showToast(`Pinned ${longPressConv.name} to top`);
-                  }
-                  setLongPressConv(null);
-                }}
-                style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.95rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                className="hover-bg"
-              >
-                <Pin size={18} style={{ color: "#f59e0b" }} />
-                <span>{pinnedConvs.includes(longPressConv.id) ? "Unpin Conversation" : "Pin to Top"}</span>
-              </button>
-
-              {/* Mute / Unmute */}
-              <button
-                onClick={() => {
-                  const isMuted = mutedConvs.includes(longPressConv.id);
-                  if (isMuted) {
-                    setMutedConvs(mutedConvs.filter(id => id !== longPressConv.id));
-                    showToast(`Unmuted ${longPressConv.name}`);
-                  } else {
-                    setMutedConvs([...mutedConvs, longPressConv.id]);
-                    showToast(`Muted ${longPressConv.name}`);
-                  }
-                  setLongPressConv(null);
-                }}
-                style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.95rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                className="hover-bg"
-              >
-                {mutedConvs.includes(longPressConv.id) ? (
-                  <Bell size={18} style={{ color: "#10b981" }} />
-                ) : (
-                  <BellOff size={18} style={{ color: "#a855f7" }} />
-                )}
-                <span>{mutedConvs.includes(longPressConv.id) ? "Unmute Notifications" : "Mute Notifications"}</span>
-              </button>
-
-              <div style={{ height: "1px", background: "var(--color-border)", margin: "4px 0" }} />
-
-              {/* Delete Conversation */}
-              <button
-                onClick={() => {
-                  if (confirm(`Delete conversation with ${longPressConv.name}?`)) {
-                    setConversations(conversations.filter(c => c.id !== longPressConv.id));
-                    if (activeConvId === longPressConv.id) setActiveConvId(null);
-                    showToast("Conversation deleted");
-                  }
-                  setLongPressConv(null);
-                }}
-                style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", border: "none", background: "transparent", color: "#ef4444", fontSize: "0.95rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                className="hover-bg"
-              >
-                <Trash2 size={18} />
-                <span>Delete Conversation</span>
-              </button>
-
-              <button
-                onClick={() => setLongPressConv(null)}
-                style={{ padding: "10px", border: "1px solid var(--color-border)", background: "var(--color-bg-base)", color: "var(--color-text-muted)", fontSize: "0.92rem", fontWeight: 700, borderRadius: "12px", cursor: "pointer", marginTop: "4px" }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* Voice or Video Call Modal Overlay */}
       {activeCall && (
