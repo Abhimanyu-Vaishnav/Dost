@@ -48,59 +48,9 @@ const FULL_EMOJI_GRID = [
   "✋", "🖐️", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉"
 ];
 
-const INITIAL_CONVERSATIONS: Conversation[] = [
-  {
-    id: "conv-1",
-    name: "Shalini Goyal",
-    username: "goyalshaliniuk",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-    isOnline: true,
-    unreadCount: 2,
-    lastMessage: "The new DOST Shorts update looks incredible! 🔥",
-    lastTime: "12:45 PM"
-  },
-  {
-    id: "conv-2",
-    name: "Devansh Nambiar",
-    username: "dev_sound",
-    avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
-    isOnline: true,
-    unreadCount: 0,
-    lastMessage: "Check out this new lofi track for the Audio Space",
-    lastTime: "11:20 AM"
-  },
-  {
-    id: "conv-3",
-    name: "Arjun Singhania",
-    username: "arjun_arch",
-    avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150",
-    isOnline: false,
-    unreadCount: 0,
-    lastMessage: "Thanks for sharing the Blender 3D motion loop tips",
-    lastTime: "Yesterday"
-  },
-  {
-    id: "conv-4",
-    name: "Simran Kulkarni",
-    username: "simrank",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-    isOnline: true,
-    unreadCount: 1,
-    lastMessage: "Are we hosting the next Audio Space at 6 PM?",
-    lastTime: "2 days ago"
-  }
-];
+const INITIAL_CONVERSATIONS: Conversation[] = [];
 
-const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {
-  "conv-1": [
-    { id: "m1", senderId: "conv-1", senderName: "Shalini Goyal", text: "Hey Abhimanyu! How's the DOST application build coming along?", timestamp: "12:40 PM", isMe: false },
-    { id: "m2", senderId: "me", senderName: "You", text: "It's going amazing! Just deployed infinite feed scroll and particle explosions 🚀", timestamp: "12:42 PM", isMe: true, reactions: ["🔥"] },
-    { id: "m3", senderId: "conv-1", senderName: "Shalini Goyal", text: "The new DOST Shorts update looks incredible! 🔥", timestamp: "12:45 PM", isMe: false, reactions: ["❤️"] }
-  ],
-  "conv-2": [
-    { id: "m4", senderId: "conv-2", senderName: "Devansh Nambiar", text: "Hey, check out this new lofi track for the Audio Space", timestamp: "11:20 AM", isMe: false }
-  ]
-};
+const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {};
 
 export default function MessagesPage() {
   const router = useRouter();
@@ -128,7 +78,7 @@ export default function MessagesPage() {
   // Long-Press Gesture & Quick Reply States
   const [longPressMsg, setLongPressMsg] = useState<ChatMessage | null>(null);
   const [longPressConv, setLongPressConv] = useState<Conversation | null>(null);
-  const [unreadConvs, setUnreadConvs] = useState<string[]>(["conv-1"]);
+  const [unreadConvs, setUnreadConvs] = useState<string[]>([]);
   const [replyingToMsg, setReplyingToMsg] = useState<ChatMessage | null>(null);
   const touchTimerRef = useRef<any>(null);
 
@@ -254,7 +204,7 @@ export default function MessagesPage() {
     }
   }, [activeConvId]);
 
-  const activeConv = conversations.find(c => c.id === activeConvId) || conversations[0];
+  const activeConv = conversations.find(c => c.id === activeConvId) || null;
   const activeMessages = activeConvId ? (messagesMap[activeConvId] || []) : [];
 
   // Scroll to bottom when messages update
@@ -482,14 +432,25 @@ export default function MessagesPage() {
 
           {/* Conversation Items */}
           <div style={{ flex: 1, overflowY: "auto" }}>
-            {[...filteredConversations]
-              .sort((a, b) => (pinnedConvs.includes(b.id) ? 1 : 0) - (pinnedConvs.includes(a.id) ? 1 : 0))
-              .map(conv => {
-                const isActive = conv.id === activeConvId;
-                const isPinned = pinnedConvs.includes(conv.id);
-                const isMuted = mutedConvs.includes(conv.id);
-                const isUnread = unreadConvs.includes(conv.id) || conv.unreadCount > 0;
-                return (
+            {filteredConversations.length === 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center", color: "var(--color-text-muted)" }}>
+                <MessageCircle size={48} style={{ color: "#00f2fe", marginBottom: "14px", opacity: 0.8 }} />
+                <h4 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--color-text-main)", marginBottom: "6px" }}>
+                  No messages yet
+                </h4>
+                <p style={{ fontSize: "0.9rem", maxWidth: "230px", lineHeight: "1.4" }}>
+                  Start a conversation by searching above or tapping the <strong style={{ color: "#00f2fe" }}>+</strong> button.
+                </p>
+              </div>
+            ) : (
+              [...filteredConversations]
+                .sort((a, b) => (pinnedConvs.includes(b.id) ? 1 : 0) - (pinnedConvs.includes(a.id) ? 1 : 0))
+                .map(conv => {
+                  const isActive = conv.id === activeConvId;
+                  const isPinned = pinnedConvs.includes(conv.id);
+                  const isMuted = mutedConvs.includes(conv.id);
+                  const isUnread = unreadConvs.includes(conv.id) || conv.unreadCount > 0;
+                  return (
                   <div
                     key={conv.id}
                     onClick={() => handleSelectConversation(conv.id)}
@@ -669,13 +630,14 @@ export default function MessagesPage() {
                     )}
                   </div>
                 );
-              })}
+              })
+            )}
           </div>
         </div>
 
         {/* Right Active Chat Window */}
         <div className={`${styles.chatWindow} ${!activeConvId ? styles.chatWindowHiddenMobile : ""}`}>
-          {activeConvId ? (
+          {(activeConvId && activeConv) ? (
             <>
               {/* Chat Window Top Bar (Super Compact Modern Height) */}
               <div style={{
