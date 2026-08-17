@@ -1021,7 +1021,9 @@ export default function MessagesPage() {
                 {(inChatSearch.trim() 
                   ? activeMessages.filter(m => m.text.toLowerCase().includes(inChatSearch.toLowerCase()))
                   : activeMessages
-                ).map(msg => (
+                ).map((msg, index, array) => {
+                  const isNearBottom = index >= array.length - 2;
+                  return (
                   <div
                     key={msg.id}
                     style={{
@@ -1244,13 +1246,117 @@ export default function MessagesPage() {
                       )}
                     </div>
 
+                    {/* Anchored Options Dropdown Menu for Long-Pressed Message */}
+                    {longPressMsg?.id === msg.id && (
+                      <>
+                        <div 
+                          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLongPressMsg(null);
+                          }}
+                        />
+                        <div 
+                          className="glass animate-scale-in"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            position: "absolute",
+                            ...(isNearBottom 
+                              ? { bottom: "100%", marginBottom: "8px" } 
+                              : { top: "100%", marginTop: "8px" }),
+                            right: msg.isMe ? 0 : "auto",
+                            left: msg.isMe ? "auto" : 0,
+                            width: "210px",
+                            background: "var(--color-bg-surface)",
+                            border: "1px solid #00f2fe",
+                            borderRadius: "18px",
+                            padding: "8px",
+                            boxShadow: "0 14px 40px rgba(0,0,0,0.7), 0 0 20px rgba(0,242,254,0.3)",
+                            zIndex: 100,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "4px"
+                          }}
+                        >
+                          {/* Quick Emoji Reactions */}
+                          <div style={{ display: "flex", justifyContent: "space-around", paddingBottom: "6px", borderBottom: "1px solid var(--color-border)" }}>
+                            {EMOJI_REACTIONS_PRESETS.map(emoji => (
+                              <button
+                                key={emoji}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddReaction(msg.id, emoji);
+                                  setLongPressMsg(null);
+                                }}
+                                style={{ background: "none", border: "none", fontSize: "1.3rem", cursor: "pointer" }}
+                                className="hover:scale-125 active:scale-95"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Actions */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReplyingToMsg(msg);
+                              setInputText(`Replying to "${msg.text.slice(0, 25)}...": `);
+                              setLongPressMsg(null);
+                            }}
+                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                            className="hover-bg"
+                          >
+                            <Reply size={16} style={{ color: "#00f2fe" }} />
+                            <span>Reply</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                                navigator.clipboard.writeText(msg.text);
+                                showToast("Copied to clipboard!");
+                              }
+                              setLongPressMsg(null);
+                            }}
+                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                            className="hover-bg"
+                          >
+                            <Copy size={16} style={{ color: "var(--color-primary)" }} />
+                            <span>Copy Text</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activeConvId) {
+                                setMessagesMap(prev => ({
+                                  ...prev,
+                                  [activeConvId]: (prev[activeConvId] || []).filter(m => m.id !== msg.id)
+                                }));
+                                showToast("Message deleted");
+                              }
+                              setLongPressMsg(null);
+                            }}
+                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "#ef4444", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                            className="hover-bg"
+                          >
+                            <Trash2 size={16} />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+
                     {/* Message Timestamp */}
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", color: "var(--color-text-muted)", marginTop: "2px" }}>
                       <span>{msg.timestamp}</span>
                       {msg.isMe && <CheckCheck size={15} style={{ color: "#00f2fe" }} />}
                     </div>
                   </div>
-                ))}
+                );
+              })}
 
                 {/* Typing Indicator */}
                 {isTyping && (
