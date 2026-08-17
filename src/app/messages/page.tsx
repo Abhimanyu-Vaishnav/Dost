@@ -1062,10 +1062,14 @@ export default function MessagesPage() {
                           ? "linear-gradient(135deg, #00f2fe 0%, #3b82f6 50%, #7b2cbf 100%)" 
                           : "var(--color-bg-surface)",
                         color: msg.isMe ? "#ffffff" : "var(--color-text-main)",
-                        border: msg.isMe ? "none" : "1px solid var(--color-border)",
-                        boxShadow: msg.isMe 
-                          ? "0 4px 18px rgba(0, 242, 254, 0.25)" 
-                          : "var(--shadow-sm)",
+                        border: longPressMsg?.id === msg.id 
+                          ? "2px solid #00f2fe" 
+                          : msg.isMe ? "none" : "1px solid var(--color-border)",
+                        boxShadow: longPressMsg?.id === msg.id 
+                          ? "0 0 24px rgba(0, 242, 254, 0.7)" 
+                          : msg.isMe ? "0 4px 18px rgba(0, 242, 254, 0.25)" : "var(--shadow-sm)",
+                        transform: longPressMsg?.id === msg.id ? "scale(1.03)" : "none",
+                        zIndex: longPressMsg?.id === msg.id ? 9999 : "auto",
                         fontSize: "1rem",
                         lineHeight: "1.5",
                         fontWeight: msg.isMe ? 600 : 500,
@@ -1240,26 +1244,26 @@ export default function MessagesPage() {
           <div 
             style={{
               position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-              background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)",
+              background: "rgba(0,0,0,0.35)",
               zIndex: 9998
             }}
             onClick={() => setLongPressMsg(null)}
           />
           <div 
-            className="glass animate-slide-up"
+            className="glass animate-spring-pop"
             style={{
               position: "fixed",
-              bottom: "20px",
+              top: "50%",
               left: "50%",
-              transform: "translateX(-50%)",
+              transform: "translate(-50%, -50%)",
               width: "calc(100% - 32px)",
-              maxWidth: "420px",
+              maxWidth: "380px",
               background: "var(--color-bg-surface)",
-              border: "1px solid var(--aurora-cyan, var(--color-primary))",
+              border: "1px solid #00f2fe",
               borderRadius: "24px",
               padding: "18px",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
-              zIndex: 9999,
+              boxShadow: "0 20px 60px rgba(0,242,254,0.25), 0 10px 40px rgba(0,0,0,0.6)",
+              zIndex: 10000,
               display: "flex",
               flexDirection: "column",
               gap: "12px"
