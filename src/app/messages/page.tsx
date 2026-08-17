@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { 
   Send, Image as ImageIcon, Smile, Mic, Phone, Video, 
   Search, Plus, MoreVertical, CheckCheck, Sparkles, MessageCircle, X, ArrowLeft,
-  Square, Play, Pause, Trash2, User, Pin, BellOff, Bell, ShieldAlert, Check
+  Square, Play, Pause, Trash2, User, Pin, BellOff, Bell, ShieldAlert, Check, Copy, Reply
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import styles from "./messages.module.css";
@@ -122,6 +122,26 @@ export default function MessagesPage() {
   const [mutedConvs, setMutedConvs] = useState<string[]>([]);
   const [pinnedConvs, setPinnedConvs] = useState<string[]>([]);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Long-Press Gesture & Quick Reply States
+  const [longPressMsg, setLongPressMsg] = useState<ChatMessage | null>(null);
+  const [replyingToMsg, setReplyingToMsg] = useState<ChatMessage | null>(null);
+  const touchTimerRef = useRef<any>(null);
+
+  const handleTouchStart = (msg: ChatMessage) => {
+    touchTimerRef.current = setTimeout(() => {
+      setLongPressMsg(msg);
+      if (typeof window !== "undefined" && window.navigator && window.navigator.vibrate) {
+        window.navigator.vibrate(40);
+      }
+    }, 450);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current);
+    }
+  };
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -618,17 +638,17 @@ export default function MessagesPage() {
                         <div 
                           className="glass animate-scale-in"
                           style={{
-                            position: "absolute",
-                            top: "100%",
-                            right: 0,
-                            marginTop: "8px",
+                            position: "fixed",
+                            top: "58px",
+                            right: "16px",
                             width: "240px",
+                            maxWidth: "calc(100vw - 32px)",
                             background: "var(--color-bg-surface)",
                             border: "1px solid var(--color-border)",
                             borderRadius: "18px",
                             padding: "6px",
                             boxShadow: "0 14px 40px rgba(0,0,0,0.5)",
-                            zIndex: 100,
+                            zIndex: 9999,
                             display: "flex",
                             flexDirection: "column",
                             gap: "2px"
@@ -1024,6 +1044,16 @@ export default function MessagesPage() {
                         e.stopPropagation();
                         handleAddReaction(msg.id, "❤️");
                       }}
+                      onTouchStart={() => handleTouchStart(msg)}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchMove={handleTouchEnd}
+                      onMouseDown={() => handleTouchStart(msg)}
+                      onMouseUp={handleTouchEnd}
+                      onMouseLeave={handleTouchEnd}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setLongPressMsg(msg);
+                      }}
                       style={{
                         maxWidth: "82%",
                         padding: "12px 18px",
@@ -1202,6 +1232,118 @@ export default function MessagesPage() {
           contact={activeCall.contact}
           onEndCall={() => setActiveCall(null)}
         />
+      )}
+
+      {/* Long-Press Message Context Sheet Modal */}
+      {longPressMsg && (
+        <>
+          <div 
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)",
+              zIndex: 9998
+            }}
+            onClick={() => setLongPressMsg(null)}
+          />
+          <div 
+            className="glass animate-slide-up"
+            style={{
+              position: "fixed",
+              bottom: "20px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "calc(100% - 32px)",
+              maxWidth: "420px",
+              background: "var(--color-bg-surface)",
+              border: "1px solid var(--aurora-cyan, var(--color-primary))",
+              borderRadius: "24px",
+              padding: "18px",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+              zIndex: 9999,
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px"
+            }}
+          >
+            {/* Quick Emoji Reaction Row */}
+            <div style={{ display: "flex", justifyContent: "space-around", paddingBottom: "12px", borderBottom: "1px solid var(--color-border)" }}>
+              {EMOJI_REACTIONS_PRESETS.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => {
+                    handleAddReaction(longPressMsg.id, emoji);
+                    setLongPressMsg(null);
+                  }}
+                  style={{ background: "none", border: "none", fontSize: "1.65rem", cursor: "pointer" }}
+                  className="hover:scale-125 active:scale-90"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
+            {/* Target Message Preview */}
+            <div style={{ padding: "8px 12px", background: "var(--color-bg-base)", borderRadius: "12px", fontSize: "0.88rem", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              "{longPressMsg.text}"
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <button
+                onClick={() => {
+                  setReplyingToMsg(longPressMsg);
+                  setInputText(`Replying to "${longPressMsg.text.slice(0, 30)}...": `);
+                  setLongPressMsg(null);
+                }}
+                style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.98rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                className="hover-bg"
+              >
+                <Reply size={20} style={{ color: "#00f2fe" }} />
+                <span>Reply to Message</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (typeof navigator !== "undefined" && navigator.clipboard) {
+                    navigator.clipboard.writeText(longPressMsg.text);
+                    showToast("Message copied to clipboard!");
+                  }
+                  setLongPressMsg(null);
+                }}
+                style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.98rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                className="hover-bg"
+              >
+                <Copy size={20} style={{ color: "var(--color-primary)" }} />
+                <span>Copy Text</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (activeConvId) {
+                    setMessagesMap(prev => ({
+                      ...prev,
+                      [activeConvId]: (prev[activeConvId] || []).filter(m => m.id !== longPressMsg.id)
+                    }));
+                    showToast("Message deleted");
+                  }
+                  setLongPressMsg(null);
+                }}
+                style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", border: "none", background: "transparent", color: "#ef4444", fontSize: "0.98rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", width: "100%", textAlign: "left" }}
+                className="hover-bg"
+              >
+                <Trash2 size={20} />
+                <span>Delete Message</span>
+              </button>
+
+              <button
+                onClick={() => setLongPressMsg(null)}
+                style={{ padding: "12px", border: "1px solid var(--color-border)", background: "var(--color-bg-base)", color: "var(--color-text-muted)", fontSize: "0.95rem", fontWeight: 700, borderRadius: "14px", cursor: "pointer", marginTop: "4px" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </AppLayout>
   );
