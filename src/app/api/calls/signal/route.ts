@@ -25,22 +25,15 @@ export async function POST(req: NextRequest) {
     if (action === "REJECT" || action === "END") {
       let targetSession: CallSessionData | undefined = undefined;
 
-      const existingSessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || 
-                               (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
-      if (existingSessionId) {
-        targetSession = CALL_STATE_STORE.sessions.get(existingSessionId);
-      }
-
-      if (!targetSession) {
-        for (const sess of Array.from(CALL_STATE_STORE.sessions.values())) {
-          const isMatch = sess.callerId === currentUserId || 
-                          sess.recipientId === currentUserId ||
-                          sess.callerName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase() ||
-                          sess.recipientName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase();
-          if (isMatch) {
-            targetSession = sess;
-            break;
-          }
+      const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
+      for (const sess of allSessions) {
+        const isMatch = sess.callerId === currentUserId || 
+                        sess.recipientId === currentUserId ||
+                        sess.callerName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase() ||
+                        sess.recipientName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase();
+        if (isMatch) {
+          targetSession = sess;
+          break;
         }
       }
 
@@ -57,7 +50,6 @@ export async function POST(req: NextRequest) {
         if (targetSession.recipientId) pushSSEEventToUser(targetSession.recipientId, payload);
         if (targetSession.recipientName) pushSSEEventToUser(targetSession.recipientName, payload);
 
-        // Keep tombstone in memory for 15 seconds so polling fallback also sees ENDED/REJECTED state
         const sessId = targetSession.sessionId;
         setTimeout(() => {
           CALL_STATE_STORE.sessions.delete(sessId);
@@ -72,9 +64,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, session: null }, { status: 200 });
     }
 
-    let existingSessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || 
-                           (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
-    let session = existingSessionId ? CALL_STATE_STORE.sessions.get(existingSessionId) : undefined;
+    let session: CallSessionData | undefined = undefined;
+    const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
+    for (const sess of allSessions) {
+      if (sess.status === "ENDED" || sess.status === "REJECTED") continue;
+      const isMatch = sess.callerId === currentUserId || 
+                      sess.recipientId === currentUserId ||
+                      sess.callerName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase() ||
+                      sess.recipientName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase();
+      if (isMatch) {
+        session = sess;
+        break;
+      }
+    }
 
     // Handle New Call OFFER Signal
     if (action === "OFFER") {
@@ -123,7 +125,7 @@ export async function POST(req: NextRequest) {
       CALL_STATE_STORE.sessions.set(sessionId, newSession);
 
       [currentUserId, currentUsername, targetGuid, targetUsername, rawTarget, cleanTarget].forEach(k => {
-        if (k) CALL_STATE_STORE.userSessionMap.set(k, sessionId);
+        if (k) CALL_STATE_STORE.userSessionMap.set(k.toLowerCase(), sessionId);
       });
 
       // Push instant ringing signal to recipient SSE stream (< 10ms)
@@ -207,28 +209,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const currentUserId = String(userPayload.userId);
-    const currentUsername = typeof userPayload.username === "string" ? userPayload.username.replace("@", "") : "";
+    const currentUserId = String(userPayload.userId).toLowerCase();
+    const currentUsername = typeof userPayload.username === "string" ? userPayload.username.replace("@", "").toLowerCase() : "";
 
-    let sessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
-    let session = sessionId ? CALL_STATE_STORE.sessions.get(sessionId) || null : null;
+    let session: CallSessionData | null = null;
+    const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
 
-    if (!session) {
-      const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
-      for (const sess of allSessions) {
-        const isRecipientMatch = 
-          sess.recipientId?.toLowerCase() === currentUserId.toLowerCase() ||
-          sess.recipientName?.toLowerCase() === currentUsername.toLowerCase();
-        const isCallerMatch = 
-          sess.callerId?.toLowerCase() === currentUserId.toLowerCase() ||
-          sess.callerName?.toLowerCase() === currentUsername.toLowerCase();
+    for (const sess of allSessions) {
+      if (sess.status === "ENDED" || sess.status === "REJECTED") continue;
 
-        if (isRecipientMatch || isCallerMatch) {
-          session = sess;
-          CALL_STATE_STORE.userSessionMap.set(currentUserId, sess.sessionId);
-          if (currentUsername) CALL_STATE_STORE.userSessionMap.set(currentUsername, sess.sessionId);
-          break;
-        }
+      const cId = sess.callerId?.toLowerCase();
+      const cName = sess.callerName?.replace("@", "").toLowerCase();
+      const rId = sess.recipientId?.toLowerCase();
+      const rName = sess.recipientName?.replace("@", "").toLowerCase();
+
+      const isCaller = cId === currentUserId || cName === currentUserId || (currentUsername && (cId === currentUsername || cName === currentUsername));
+      const isRecipient = rId === currentUserId || rName === currentUserId || (currentUsername && (rId === currentUsername || rName === currentUsername));
+
+      if (isCaller || isRecipient) {
+        session = sess;
+        break;
       }
     }
 

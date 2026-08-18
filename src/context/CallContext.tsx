@@ -128,11 +128,8 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
                 return prev;
               });
             }
-          } else if (activeSession) {
-            setActiveSession(null);
-            stopAllRingtones();
-            notifiedSessionIdRef.current = null;
           }
+          // DO NOT WIPE OUT activeSession ON TRANSIENT NULL POLING RESPONSES!
         }
       } catch (e) {}
     }, 400);
