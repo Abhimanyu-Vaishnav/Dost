@@ -75,6 +75,19 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const otherPersonName = isCaller ? (session.recipientName || "Recipient") : session.callerName;
   const otherPersonAvatar = isCaller ? (session.recipientAvatar || session.callerAvatar) : session.callerAvatar;
 
+  // Global Audio Unlocker on any user tap
+  const unlockAndPlayAudio = () => {
+    try {
+      const ctx = getOrCreateAudioContext();
+      if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.muted = false;
+        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.4;
+        remoteAudioRef.current.play().catch(() => {});
+      }
+    } catch (e) {}
+  };
+
   // Manage Ringtone Sound Engine
   useEffect(() => {
     if (isRinging) {
@@ -94,7 +107,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Request Microphone Stream manually on user touch
   const handleRequestMicPermission = async () => {
-    getOrCreateAudioContext();
+    unlockAndPlayAudio();
     const stream = await requestUserMediaStream({
       video: session.callType === "video",
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
@@ -154,6 +167,23 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.4;
         remoteAudioRef.current.play().catch(() => {});
       }
+
+      // Direct Web Audio Destination Bridge (Bypasses Browser Autoplay Restrictions)
+      try {
+        const ctx = getOrCreateAudioContext();
+        if (ctx) {
+          if (ctx.state === "suspended") ctx.resume().catch(() => {});
+          const audioTrack = remoteStream.getAudioTracks()[0];
+          if (audioTrack) {
+            const audioStream = new MediaStream([audioTrack]);
+            const source = ctx.createMediaStreamSource(audioStream);
+            const gain = ctx.createGain();
+            gain.gain.value = isSpeakerOn ? 1.0 : 0.4;
+            source.connect(gain);
+            gain.connect(ctx.destination);
+          }
+        }
+      } catch (e) {}
     };
 
     // Send Local ICE Candidates
@@ -386,6 +416,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Mic Mute
   const handleToggleMute = () => {
+    unlockAndPlayAudio();
     if (localMediaStreamRef.current) {
       const audioTracks = localMediaStreamRef.current.getAudioTracks();
       audioTracks.forEach(t => {
@@ -397,6 +428,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Camera Video
   const handleToggleVideo = () => {
+    unlockAndPlayAudio();
     if (localMediaStreamRef.current) {
       const videoTracks = localMediaStreamRef.current.getVideoTracks();
       videoTracks.forEach(t => {
@@ -408,6 +440,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Speaker / Earpiece Audio Route
   const handleToggleSpeaker = () => {
+    unlockAndPlayAudio();
     const nextSpeaker = !isSpeakerOn;
     setIsSpeakerOn(nextSpeaker);
     setIsEarpieceMode(!nextSpeaker);
@@ -425,6 +458,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   return (
     <div 
+      onClick={unlockAndPlayAudio}
       style={{
         position: "fixed", inset: 0, zIndex: 99999,
         backgroundColor: isNearEarMode ? "rgba(0, 0, 0, 0.99)" : "rgba(0, 0, 0, 0.92)",
@@ -581,7 +615,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         {isRecipient && isRinging ? (
           <>
             <button
-              onClick={onAcceptCall}
+              onClick={() => {
+                unlockAndPlayAudio();
+                onAcceptCall();
+              }}
               style={{
                 width: "64px", height: "64px", borderRadius: "50%",
                 background: "#10b981", border: "none", color: "white",
