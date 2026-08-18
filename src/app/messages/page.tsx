@@ -1,20 +1,17 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { 
   Send, Image as ImageIcon, Smile, Mic, Phone, Video, 
   Search, Plus, MoreVertical, CheckCheck, Sparkles, MessageCircle, X, ArrowLeft,
   Square, Play, Pause, Trash2, User, Pin, BellOff, Bell, ShieldAlert, Check, Copy, Reply,
-  Mail, MailCheck, UserPlus
+  Mail, UserPlus
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import styles from "./messages.module.css";
-import { CallModal } from "./CallModal";
 import { uploadMediaFile } from "@/lib/upload";
 import { useCall } from "@/context/CallContext";
-import { CallOverlay } from "@/components/calls/CallOverlay";
-import { CallSessionData } from "@/lib/callEngine";
 
 interface ChatMessage {
   id: string;
@@ -28,7 +25,6 @@ interface ChatMessage {
   isMe: boolean;
   isDelivered?: boolean;
   isRead?: boolean;
-  reactions?: string[];
 }
 
 interface Conversation {
@@ -49,1810 +45,354 @@ const AVAILABLE_CONTACTS_DIRECTORY = [
     name: "Shalini Goyal",
     username: "goyalshaliniuk",
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-    isOnline: true,
-    isFollowing: true
+    isOnline: true
   },
   {
     id: "conv-dev_sound",
     name: "Devansh Nambiar",
     username: "dev_sound",
     avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
-    isOnline: true,
-    isFollowing: true
+    isOnline: true
   },
   {
     id: "conv-arjun_arch",
     name: "Arjun Singhania",
     username: "arjun_arch",
     avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150",
-    isOnline: false,
-    isFollower: true
+    isOnline: false
   },
   {
     id: "conv-simrank",
     name: "Simran Kulkarni",
     username: "simrank",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-    isOnline: true,
-    isFollowing: true
+    isOnline: true
   },
   {
     id: "conv-sumit",
     name: "Sumit",
     username: "sumit",
     avatar: "https://ui-avatars.com/api/?name=Sumit&background=00f2fe&color=ffffff&bold=true",
-    isOnline: true,
-    isFollower: true
+    isOnline: true
   }
 ];
-
-const EMOJI_REACTIONS_PRESETS = ["❤️", "🔥", "😂", "👏", "💯", "😮", "👍"];
-
-const FULL_EMOJI_GRID = [
-  "❤️", "🔥", "😂", "👏", "💯", "😮", "👍", "🙏", "✨", "🎉", "🚀", "👀",
-  "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "🥲", "☺️", "😊", "😇", "🙂",
-  "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😋", "😛", "😜", "🤪", "😎",
-  "🥳", "😏", "😒", "😞", "😔", "😟", "🥺", "😢", "😭", "😤", "😠", "🤯",
-  "💖", "💗", "💓", "💞", "💕", "❣️", "🔴", "🧡", "💛", "💚", "💙", "💜",
-  "✋", "🖐️", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉"
-];
-
-const INITIAL_CONVERSATIONS: Conversation[] = [];
-
-const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {};
-
-import { Suspense } from "react";
 
 function MessagesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const targetUserParam = searchParams?.get("user") || searchParams?.get("target");
+  const convIdParam = searchParams?.get("convId");
 
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const cached = localStorage.getItem("dost_conversations_cache");
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setConversations(parsed);
-          }
-        } catch (e) {}
-      }
-    }
-  }, []);
-  const [activeConvId, setActiveConvId] = useState<string | null>(null);
-  const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>(INITIAL_MESSAGES);
-  
-  // New Chat Modal States
-  const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const [newChatSearch, setNewChatSearch] = useState("");
-
-  // Chat Input & Popover States
-  const [inputText, setInputText] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [emojiFilter, setEmojiFilter] = useState("");
-  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
-  const [audioPlaybackSpeed, setAudioPlaybackSpeed] = useState<number>(1);
-  const typingTimeoutRef = useRef<any>(null);
-  const [activeCall, setActiveCall] = useState<{ type: "voice" | "video"; contact: any } | null>(null);
-  const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
-  const [fullEmojiPickerMsgId, setFullEmojiPickerMsgId] = useState<string | null>(null);
-
-  // 3-Dots Menu & In-Chat Search States
   const { startCall } = useCall();
 
-  const handleStartCall = (partnerId: string, callType: "voice" | "video", partnerName?: string, partnerAvatar?: string) => {
-    startCall(partnerId, callType, partnerName, partnerAvatar).catch(() => {});
-  };
-  const [showTopMenu, setShowTopMenu] = useState(false);
-  const [inChatSearch, setInChatSearch] = useState("");
-  const [showInChatSearch, setShowInChatSearch] = useState(false);
-  const [mutedConvs, setMutedConvs] = useState<string[]>([]);
-  const [pinnedConvs, setPinnedConvs] = useState<string[]>([]);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(convIdParam || null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
 
-  // Long-Press Gesture & Quick Reply States
-  const [longPressMsg, setLongPressMsg] = useState<ChatMessage | null>(null);
-  const [longPressConv, setLongPressConv] = useState<Conversation | null>(null);
-  const [unreadConvs, setUnreadConvs] = useState<string[]>([]);
-  const [replyingToMsg, setReplyingToMsg] = useState<ChatMessage | null>(null);
-  const touchTimerRef = useRef<any>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Fetch real user conversations from Prisma DB
-  const fetchUserConversations = async () => {
+  // Sync ConvId URL parameter
+  useEffect(() => {
+    if (convIdParam) {
+      setActiveConvId(convIdParam);
+    }
+  }, [convIdParam]);
+
+  // Fetch Conversations List
+  const fetchConversations = async () => {
     try {
       const res = await fetch("/api/messages/conversations");
       if (res.ok) {
         const data = await res.json();
         if (data.conversations && Array.isArray(data.conversations)) {
-          const formattedConvs: Conversation[] = data.conversations.map((c: any) => {
-            const partner = c.participants?.[0] || { name: "User", username: "user", avatar: "" };
-            const lastMsgObj = c.messages?.[0];
-            let lastMsgText = "Conversation started";
-            if (lastMsgObj) {
-              if (lastMsgObj.content) lastMsgText = lastMsgObj.content;
-              else if (lastMsgObj.messageType === "IMAGE" || lastMsgObj.fileUrl?.includes("image")) lastMsgText = "📷 Image";
-              else if (lastMsgObj.messageType === "AUDIO" || lastMsgObj.fileUrl?.includes("audio")) lastMsgText = "🎙️ Voice Note";
-            }
-            return {
-              id: c.id,
-              partnerId: partner.id || partner.username,
-              name: partner.name || partner.username || "User",
-              username: partner.username || partner.id || "",
-              avatar: partner.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(partner.name || "User")}&background=00f2fe&color=ffffff&bold=true`,
-              isOnline: true,
-              unreadCount: c.unreadCount || 0,
-              lastMessage: lastMsgText,
-              lastTime: lastMsgObj?.createdAt ? new Date(lastMsgObj.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Recently"
-            };
-          });
-          setConversations(formattedConvs);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("dost_conversations_cache", JSON.stringify(formattedConvs));
+          setConversations(data.conversations);
+          if (!activeConvId && data.conversations.length > 0 && !convIdParam) {
+            setActiveConvId(data.conversations[0].id);
           }
-          return formattedConvs;
         }
       }
-    } catch (e) {
-      console.error("Error fetching conversations:", e);
-    }
-    return [];
+    } catch (e) {}
   };
 
-  useEffect(() => {
-    fetchUserConversations();
-  }, []);
-
-  // Handle URL query ?user=username (e.g. from Profile page "Message" button click)
-  useEffect(() => {
-    if (targetUserParam) {
-      const targetClean = targetUserParam.replace("@", "");
-      fetch("/api/messages/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUserId: targetClean })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.conversationId) {
-          fetchUserConversations().then(() => {
-            handleSelectConversation(data.conversationId);
-          });
-        }
-      })
-      .catch(err => console.error("Start chat error:", err));
-    }
-  }, [targetUserParam]);
-
-  const handleStartChatWithUser = async (contact: { id: string; name: string; username: string; avatar: string; isOnline?: boolean }) => {
+  // Fetch Messages for Active Conversation
+  const fetchMessages = async (cId: string) => {
     try {
-      const res = await fetch("/api/messages/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUserId: contact.id || contact.username })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.conversationId) {
-          await fetchUserConversations();
-          handleSelectConversation(data.conversationId);
-        }
-      }
-    } catch (e) {
-      console.error("Error starting chat:", e);
-    }
-    setShowNewChatModal(false);
-  };
-
-  const handleTouchStart = (msg: ChatMessage) => {
-    touchTimerRef.current = setTimeout(() => {
-      setLongPressMsg(msg);
-      if (typeof window !== "undefined" && window.navigator && window.navigator.vibrate) {
-        window.navigator.vibrate(30);
-      }
-    }, 200);
-  };
-
-  const handleTouchStartConv = (conv: Conversation) => {
-    touchTimerRef.current = setTimeout(() => {
-      setLongPressConv(conv);
-      if (typeof window !== "undefined" && window.navigator && window.navigator.vibrate) {
-        window.navigator.vibrate(30);
-      }
-    }, 200);
-  };
-
-  const handleTouchEnd = () => {
-    if (touchTimerRef.current) {
-      clearTimeout(touchTimerRef.current);
-    }
-  };
-
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
-  };
-
-  // Clear unread count when opening chat (Auto Mark As Read)
-  const handleSelectConversation = (convId: string) => {
-    setActiveConvId(convId);
-    setUnreadConvs(prev => prev.filter(id => id !== convId));
-    setConversations(prev => prev.map(c => {
-      if (c.id === convId) {
-        return { ...c, unreadCount: 0 };
-      }
-      return c;
-    }));
-  };
-
-  useEffect(() => {
-    if (activeConvId) {
-      setUnreadConvs(prev => prev.filter(id => id !== activeConvId));
-      setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, unreadCount: 0 } : c));
-    }
-  }, [activeConvId]);
-  
-  // Media & Voice Attachment States
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
-  const [voiceRecordTime, setVoiceRecordTime] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const recordTimerRef = useRef<any>(null);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const [floatingBanner, setFloatingBanner] = useState<{ senderName: string; text: string; avatar: string; convId: string } | null>(null);
-  const knownMsgIdsRef = useRef<Set<string>>(new Set());
-
-  // Web Audio Synthesizer Tone for incoming messages
-  const playNotificationSound = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const now = ctx.currentTime;
-
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc1.type = "sine";
-      osc1.frequency.setValueAtTime(587.33, now); // D5
-      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.08); // A5
-
-      osc2.type = "triangle";
-      osc2.frequency.setValueAtTime(880, now + 0.08);
-      osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.18); // D6
-
-      gain.gain.setValueAtTime(0.25, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc1.start(now);
-      osc2.start(now + 0.06);
-      osc1.stop(now + 0.35);
-      osc2.stop(now + 0.35);
-    } catch (e) {
-      console.error("Audio chime error:", e);
-    }
-  };
-
-  // Request Push Notification permission on mount
-  useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  // Fetch messages from DB for a specific conversation
-  const fetchMessagesForConv = async (convId: string) => {
-    try {
-      const res = await fetch(`/api/messages?convId=${convId}`);
+      const res = await fetch(`/api/messages?convId=${encodeURIComponent(cId)}`);
       if (res.ok) {
         const data = await res.json();
         if (data.messages && Array.isArray(data.messages)) {
-          const partner = conversations.find(c => c.id === convId);
-
-          let hasNewIncoming = false;
-          let latestNewMsg: any = null;
-
-          data.messages.forEach((m: any) => {
-            if (!knownMsgIdsRef.current.has(m.id)) {
-              knownMsgIdsRef.current.add(m.id);
-              if (!m.isMe) {
-                hasNewIncoming = true;
-                latestNewMsg = m;
-              }
-            }
-          });
-
-          if (hasNewIncoming && latestNewMsg) {
-            playNotificationSound();
-
-            const toastData = {
-              senderName: latestNewMsg.senderName || partner?.name || "New Message",
-              text: latestNewMsg.text || (latestNewMsg.imageUrl ? "📷 Image Attached" : "🎙️ Voice Note"),
-              avatar: partner?.avatar || "https://ui-avatars.com/api/?name=User",
-              convId: convId
-            };
-            setFloatingBanner(toastData);
-            setTimeout(() => setFloatingBanner(null), 5000);
-
-            if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-              try {
-                new Notification(`Message from ${toastData.senderName}`, {
-                  body: toastData.text,
-                  icon: toastData.avatar
-                });
-              } catch (err) {}
-            }
-          }
-
-          if (convId === activeConvId) {
-            setIsPartnerTyping(Boolean(data.isPartnerTyping));
-          }
-
-          setMessagesMap(prev => ({
-            ...prev,
-            [convId]: data.messages
-          }));
+          setMessages(data.messages);
         }
+        setIsPartnerTyping(Boolean(data.isPartnerTyping));
       }
-    } catch (e) {
-      console.error("Error fetching messages:", e);
-    }
+    } catch (e) {}
   };
 
-  // Live Message Polling Stream every 2.5 seconds
   useEffect(() => {
-    if (!activeConvId) return;
-    fetchMessagesForConv(activeConvId);
+    fetchConversations();
+    const interval = setInterval(fetchConversations, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
-    const liveInterval = setInterval(() => {
-      fetchMessagesForConv(activeConvId);
-      fetchUserConversations();
-    }, 700);
-    return () => clearInterval(liveInterval);
-  }, [activeConvId]);
-
-  // Auto-select first conversation on Desktop (>650px)
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth > 650 && !activeConvId && conversations.length > 0) {
-      handleSelectConversation(conversations[0].id);
-    }
-  }, [conversations]);
-
-  const activeConv = conversations.find(c => c.id === activeConvId) || null;
-  const activeMessages = activeConvId ? (messagesMap[activeConvId] || []) : [];
-
-  // Scroll to bottom when messages update
   useEffect(() => {
     if (activeConvId) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      fetchMessages(activeConvId);
+      const interval = setInterval(() => fetchMessages(activeConvId), 1200);
+      return () => clearInterval(interval);
     }
-  }, [activeMessages, activeConvId]);
+  }, [activeConvId]);
 
-  // Handle Image Attachment Selection
-  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploadingImage(true);
-    try {
-      const url = await uploadMediaFile(file);
-      setAttachedImage(url);
-    } catch (err) {
-      console.error("Image upload error:", err);
-      setAttachedImage(URL.createObjectURL(file));
-    } finally {
-      setIsUploadingImage(false);
-    }
-  };
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isPartnerTyping]);
 
-  // Voice Note Recording
-  const startVoiceRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
+  const activeConv = conversations.find(c => c.id === activeConvId);
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        sendVoiceMessage(audioUrl);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      recorder.start();
-      setIsRecordingVoice(true);
-      setVoiceRecordTime(0);
-
-      recordTimerRef.current = setInterval(() => {
-        setVoiceRecordTime(prev => {
-          if (prev >= 30) {
-            stopVoiceRecording();
-            return 30;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    } catch (err) {
-      console.error("Mic error:", err);
-      sendVoiceMessage("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4");
-    }
-  };
-
-  const stopVoiceRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
-    setIsRecordingVoice(false);
-    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-  };
-
-  const sendVoiceMessage = async (audioUrl: string) => {
-    if (!activeConvId) return;
-    const currentId = activeConvId;
-    try {
-      const res = await fetch("/api/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ convId: currentId, text: "🎙️ Voice Note", audioUrl, messageType: "AUDIO" })
-      });
-
-      if (res.ok) {
-        fetchMessagesForConv(currentId);
-        fetchUserConversations();
-      }
-    } catch (e) {
-      console.error("Voice send error:", e);
-    }
+  const handleSelectConv = (id: string) => {
+    setActiveConvId(id);
+    router.push(`/messages?convId=${encodeURIComponent(id)}`);
   };
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if ((!inputText.trim() && !attachedImage) || !activeConvId) return;
 
-    const currentId = activeConvId;
-    const sendText = inputText.trim();
-    const sendImg = attachedImage;
+    const textToSend = inputText.trim();
+    const imageToSend = attachedImage;
 
     setInputText("");
     setAttachedImage(null);
 
-    // Optimistic UI update
-    const tempId = `temp-${Date.now()}`;
-    const newMsgObj: ChatMessage = {
-      id: tempId,
+    // Optimistic Message Append
+    const tempMsg: ChatMessage = {
+      id: `temp_${Date.now()}`,
       senderId: "me",
       senderName: "You",
-      text: sendText || (sendImg ? "📷 Image Attached" : ""),
-      imageUrl: sendImg || undefined,
+      text: textToSend || (imageToSend ? "📷 Photo" : ""),
+      imageUrl: imageToSend || undefined,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       isMe: true,
       isDelivered: true,
       isRead: false
     };
 
-    setMessagesMap(prev => ({
-      ...prev,
-      [currentId]: [...(prev[currentId] || []), newMsgObj]
-    }));
-
-    // 0ms Optimistic conversation list reordering
-    const previewText = sendText || (sendImg ? "📷 Image Attached" : "");
-    setConversations(prev => {
-      const target = prev.find(c => c.id === currentId);
-      if (!target) return prev;
-      const updatedConv = { ...target, lastMessage: previewText, lastTime: "Just now" };
-      return [updatedConv, ...prev.filter(c => c.id !== currentId)];
-    });
+    setMessages(prev => [...prev, tempMsg]);
 
     try {
-      const res = await fetch("/api/messages", {
+      await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ convId: currentId, text: sendText, imageUrl: sendImg })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.message) {
-          setMessagesMap(prev => ({
-            ...prev,
-            [currentId]: (prev[currentId] || []).map(m => m.id === tempId ? data.message : m)
-          }));
-        }
-      }
-      fetchUserConversations();
-    } catch (err) {
-      console.error("Failed to send message:", err);
-    }
-  };
-
-  const handleAddReaction = (msgId: string, emoji: string) => {
-    if (!activeConvId) return;
-    setMessagesMap(prev => {
-      const updated = {
-        ...prev,
-        [activeConvId]: (prev[activeConvId] || []).map(m => {
-          if (m.id === msgId) {
-            const currentReactions = m.reactions || [];
-            return {
-              ...m,
-              reactions: currentReactions.includes(emoji)
-                ? currentReactions.filter(r => r !== emoji)
-                : [...currentReactions, emoji]
-            };
-          }
-          return m;
+        body: JSON.stringify({
+          convId: activeConvId,
+          text: textToSend,
+          imageUrl: imageToSend
         })
-      };
-      if (typeof window !== "undefined") localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
-      return updated;
-    });
+      });
+      fetchMessages(activeConvId);
+      fetchConversations();
+    } catch (e) {}
   };
 
-  const filteredConversations = conversations.filter(c => 
+  const filteredConvs = conversations.filter(c => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     c.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <AppLayout fullWidth>
-      {/* Hidden File Input for Image Attachments */}
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleImageSelect} 
-        accept="image/*" 
-        style={{ display: "none" }} 
-      />
-
-      <div className={styles.container} onClick={() => { setActiveReactionMsgId(null); setFullEmojiPickerMsgId(null); }}>
-
-        {/* Left Sidebar Conversation List */}
+      <div className={styles.container}>
+        {/* Left Sidebar: Conversations List */}
         <div className={`${styles.sidebar} ${activeConvId ? styles.sidebarHiddenMobile : ""}`}>
-          {/* Header */}
           <div className={styles.sidebarHeader}>
-            <h2 style={{ fontSize: "1.5rem", fontWeight: 900, color: "var(--color-text-main)", margin: 0 }}>
-              Messages
+            <h2 style={{ fontSize: "1.4rem", fontWeight: 900, color: "#ffffff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+              <MessageCircle size={24} style={{ color: "#00f2fe" }} /> Messages
             </h2>
             <button 
-              onClick={() => setShowNewChatModal(!showNewChatModal)}
-              style={{
-                width: "44px", height: "44px", borderRadius: "50%",
-                background: "rgba(29, 155, 240, 0.12)", color: "var(--color-primary)",
-                border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-              }}
+              onClick={() => setShowNewChatModal(true)}
+              className={styles.actionBtn}
               title="Start New Chat"
-              className="hover:scale-105 active:scale-95"
             >
-              <Plus size={22} />
+              <Plus size={20} />
             </button>
           </div>
 
-          {/* New Chat Contacts Drawer anchored directly inside Sidebar */}
-          {showNewChatModal && (
-            <>
-              <div 
-                style={{
-                  position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                  background: "rgba(0,0,0,0.45)", zIndex: 400
-                }}
-                onClick={() => setShowNewChatModal(false)}
-              />
-              <div 
-                className="glass animate-scale-in"
-                style={{
-                  position: "absolute", top: "72px", left: "12px", right: "12px",
-                  background: "var(--color-bg-surface)",
-                  border: "1px solid #00f2fe",
-                  borderRadius: "20px",
-                  padding: "16px",
-                  boxShadow: "0 20px 60px rgba(0,242,254,0.3), 0 10px 40px rgba(0,0,0,0.8)",
-                  zIndex: 500,
-                  display: "flex", flexDirection: "column", gap: "12px"
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <UserPlus size={20} style={{ color: "#00f2fe" }} />
-                    <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0 }}>
-                      New Message
-                    </h3>
-                  </div>
-                  <button 
-                    onClick={() => setShowNewChatModal(false)}
-                    style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "4px" }}
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                {/* Search Input inside New Chat Drawer */}
-                <div style={{
-                  display: "flex", alignItems: "center", gap: "10px",
-                  background: "var(--color-bg-base)", padding: "10px 14px",
-                  borderRadius: "12px", border: "1px solid var(--color-border)"
-                }}>
-                  <Search size={16} style={{ color: "var(--color-text-muted)" }} />
-                  <input 
-                    type="text"
-                    placeholder="Search user by name or @username..."
-                    value={newChatSearch}
-                    onChange={e => setNewChatSearch(e.target.value)}
-                    style={{ background: "none", border: "none", color: "var(--color-text-main)", outline: "none", fontSize: "0.92rem", width: "100%" }}
-                  />
-                </div>
-
-                {/* Contacts Directory List (Following / Followers only) */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", maxHeight: "260px", overflowY: "auto", paddingRight: "4px" }}>
-                  {AVAILABLE_CONTACTS_DIRECTORY.filter(c => 
-                    (c.isFollowing || c.isFollower) &&
-                    (c.name.toLowerCase().includes(newChatSearch.toLowerCase()) || 
-                     c.username.toLowerCase().includes(newChatSearch.toLowerCase()))
-                  ).map(contact => (
-                    <div 
-                      key={contact.id}
-                      onClick={() => handleStartChatWithUser(contact)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: "12px",
-                        padding: "10px 12px", borderRadius: "12px", cursor: "pointer",
-                        transition: "background 0.15s ease"
-                      }}
-                      className="hover-bg"
-                    >
-                      <img src={contact.avatar} alt={contact.name} style={{ width: "38px", height: "38px", borderRadius: "50%", objectFit: "cover" }} />
-                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--color-text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{contact.name}</span>
-                          {contact.isFollowing && <span style={{ fontSize: "0.7rem", padding: "1px 6px", borderRadius: "99px", background: "rgba(0, 242, 254, 0.15)", color: "#00f2fe", fontWeight: 700 }}>Following</span>}
-                          {!contact.isFollowing && contact.isFollower && <span style={{ fontSize: "0.7rem", padding: "1px 6px", borderRadius: "99px", background: "rgba(168, 85, 247, 0.15)", color: "#a855f7", fontWeight: 700 }}>Follower</span>}
-                        </div>
-                        <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>@{contact.username}</span>
-                      </div>
-                      <span style={{ fontSize: "0.82rem", color: "#00f2fe", fontWeight: 700, flexShrink: 0 }}>Chat</span>
-                    </div>
-                  ))}
-
-                  {/* Allow starting chat with ANY typed username if not in following list */}
-                  {newChatSearch.trim().length > 0 && !AVAILABLE_CONTACTS_DIRECTORY.some(c => c.username.toLowerCase() === newChatSearch.replace("@", "").trim().toLowerCase()) && (
-                    <button
-                      onClick={() => {
-                        const cleanTag = newChatSearch.replace("@", "").trim();
-                        handleStartChatWithUser({
-                          id: `conv-${cleanTag}`,
-                          name: cleanTag.charAt(0).toUpperCase() + cleanTag.slice(1),
-                          username: cleanTag,
-                          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanTag)}&background=00f2fe&color=ffffff&bold=true`,
-                          isOnline: true
-                        });
-                      }}
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-                        padding: "10px", borderRadius: "12px", background: "rgba(0, 242, 254, 0.12)",
-                        border: "1px solid #00f2fe", color: "#00f2fe", fontWeight: 700, fontSize: "0.88rem",
-                        cursor: "pointer", marginTop: "6px"
-                      }}
-                      className="hover:scale-102 active:scale-95"
-                    >
-                      <UserPlus size={16} />
-                      <span>Start Chat with @{newChatSearch.replace("@", "").trim()}</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Search Bar */}
-          <div style={{ padding: "14px 18px" }}>
-            <div style={{
-              display: "flex", alignItems: "center", gap: "12px",
-              background: "var(--color-bg-base)", padding: "14px 18px",
-              borderRadius: "9999px", border: "1px solid var(--color-border)"
-            }}>
-              <Search size={20} style={{ color: "var(--color-text-muted)" }} />
+          <div className={styles.searchContainer}>
+            <div className={styles.searchInputWrapper}>
+              <Search size={18} style={{ color: "rgba(255,255,255,0.4)" }} />
               <input
                 type="text"
-                placeholder="Search Direct Messages..."
+                placeholder="Search DMs & contacts..."
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                style={{
-                  background: "none", border: "none", color: "var(--color-text-main)",
-                  outline: "none", fontSize: "1.05rem", width: "100%"
-                }}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ background: "none", border: "none", color: "#ffffff", outline: "none", width: "100%", fontSize: "0.9rem" }}
               />
             </div>
           </div>
 
-          {/* Conversation Items */}
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {filteredConversations.length === 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center", color: "var(--color-text-muted)" }}>
-                <MessageCircle size={48} style={{ color: "#00f2fe", marginBottom: "14px", opacity: 0.8 }} />
-                <h4 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--color-text-main)", marginBottom: "6px" }}>
-                  No messages yet
-                </h4>
-                <p style={{ fontSize: "0.9rem", maxWidth: "230px", lineHeight: "1.4" }}>
-                  Start a conversation by searching above or tapping the <strong style={{ color: "#00f2fe" }}>+</strong> button.
-                </p>
-              </div>
-            ) : (
-              [...filteredConversations]
-                .sort((a, b) => (pinnedConvs.includes(b.id) ? 1 : 0) - (pinnedConvs.includes(a.id) ? 1 : 0))
-                .map(conv => {
-                  const isActive = conv.id === activeConvId;
-                  const isPinned = pinnedConvs.includes(conv.id);
-                  const isMuted = mutedConvs.includes(conv.id);
-                  const isUnread = unreadConvs.includes(conv.id) || conv.unreadCount > 0;
-                  return (
-                  <div
-                    key={conv.id}
-                    onClick={() => handleSelectConversation(conv.id)}
-                    onTouchStart={() => handleTouchStartConv(conv)}
-                    onTouchEnd={handleTouchEnd}
-                    onMouseDown={() => handleTouchStartConv(conv)}
-                    onMouseUp={handleTouchEnd}
-                    onMouseLeave={handleTouchEnd}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setLongPressConv(conv);
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "16px",
-                      padding: "16px 20px",
-                      cursor: "pointer",
-                      backgroundColor: isActive ? "rgba(0, 242, 254, 0.08)" : "transparent",
-                      borderLeft: isActive ? "4px solid #00f2fe" : "4px solid transparent",
-                      transition: "background-color 0.15s ease",
-                      position: "relative"
-                    }}
-                    className="hover-bg"
-                  >
-                    <div style={{ position: "relative", flexShrink: 0 }}>
-                      <img
-                        src={conv.avatar}
-                        alt={conv.name}
-                        style={{ width: "52px", height: "52px", borderRadius: "50%", objectFit: "cover" }}
-                      />
-                      {conv.isOnline && (
-                        <span style={{
-                          position: "absolute", bottom: "2px", right: "2px",
-                          width: "14px", height: "14px", borderRadius: "50%",
-                          backgroundColor: "#10b981", border: "2px solid var(--color-bg-surface)"
-                        }} />
+          <div className={styles.conversationsList}>
+            {filteredConvs.map(conv => {
+              const isActive = conv.id === activeConvId;
+              return (
+                <div
+                  key={conv.id}
+                  onClick={() => handleSelectConv(conv.id)}
+                  className={`${styles.conversationItem} ${isActive ? styles.conversationItemActive : ""}`}
+                >
+                  <div className={styles.avatarWrapper}>
+                    <img
+                      src={conv.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(conv.name)}`}
+                      alt={conv.name}
+                      style={{ width: "48px", height: "48px", borderRadius: "50%", objectFit: "cover" }}
+                    />
+                    {conv.isOnline && <div className={styles.onlineBadge} />}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                      <span style={{ fontWeight: 800, color: "#ffffff", fontSize: "0.95rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {conv.name}
+                      </span>
+                      <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>
+                        {conv.lastTime}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {conv.lastMessage || "No messages yet"}
+                      </span>
+                      {conv.unreadCount > 0 && (
+                        <span style={{ background: "#00f2fe", color: "#000000", fontWeight: 900, fontSize: "0.72rem", padding: "2px 8px", borderRadius: "9999px" }}>
+                          {conv.unreadCount}
+                        </span>
                       )}
                     </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
-                          <span style={{ fontWeight: isUnread ? 900 : 700, fontSize: "1.1rem", color: "var(--color-text-main)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                            {conv.name}
-                          </span>
-                          {isPinned && <Pin size={14} style={{ color: "#f59e0b", flexShrink: 0 }} />}
-                          {isMuted && <BellOff size={14} style={{ color: "#a855f7", flexShrink: 0 }} />}
-                        </div>
-                        <span style={{ fontSize: "0.82rem", color: isUnread ? "#00f2fe" : "var(--color-text-muted)", fontWeight: isUnread ? 700 : 500, flexShrink: 0 }}>
-                          {conv.lastTime}
-                        </span>
-                      </div>
-
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{
-                          fontSize: "0.95rem", color: isUnread ? "var(--color-text-main)" : "var(--color-text-muted)",
-                          fontWeight: isUnread ? 700 : 400,
-                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
-                        }}>
-                          {conv.lastMessage}
-                        </span>
-                        {isUnread && (
-                          <span style={{
-                            background: "linear-gradient(135deg, #00f2fe, #7b2cbf)", color: "white",
-                            fontSize: "0.78rem", fontWeight: 800, padding: "2px 8px",
-                            borderRadius: "99px", flexShrink: 0
-                          }}>
-                            {conv.unreadCount > 0 ? conv.unreadCount : "NEW"}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Anchored Options Dropdown Menu for Long-Pressed Chat */}
-                    {longPressConv?.id === conv.id && (
-                      <>
-                        <div 
-                          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLongPressConv(null);
-                          }}
-                        />
-                        <div 
-                          className="glass animate-scale-in"
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            position: "absolute",
-                            top: "70%",
-                            right: "16px",
-                            width: "210px",
-                            background: "var(--color-bg-surface)",
-                            border: "1px solid #00f2fe",
-                            borderRadius: "18px",
-                            padding: "8px",
-                            boxShadow: "0 12px 36px rgba(0,0,0,0.7), 0 0 20px rgba(0,242,254,0.3)",
-                            zIndex: 100,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "2px"
-                          }}
-                        >
-                          <button
-                            onClick={() => {
-                              if (isUnread) {
-                                setUnreadConvs(unreadConvs.filter(id => id !== conv.id));
-                                setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unreadCount: 0 } : c));
-                                showToast(`Marked as Read`);
-                              } else {
-                                setUnreadConvs([...unreadConvs, conv.id]);
-                                setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unreadCount: 1 } : c));
-                                showToast(`Marked as Unread`);
-                              }
-                              setLongPressConv(null);
-                            }}
-                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                            className="hover-bg"
-                          >
-                            {isUnread ? <MailCheck size={16} style={{ color: "#10b981" }} /> : <Mail size={16} style={{ color: "#00f2fe" }} />}
-                            <span>{isUnread ? "Mark as Read" : "Mark as Unread"}</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              if (isPinned) {
-                                setPinnedConvs(pinnedConvs.filter(id => id !== conv.id));
-                                showToast(`Unpinned ${conv.name}`);
-                              } else {
-                                setPinnedConvs([...pinnedConvs, conv.id]);
-                                showToast(`Pinned ${conv.name} to top`);
-                              }
-                              setLongPressConv(null);
-                            }}
-                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                            className="hover-bg"
-                          >
-                            <Pin size={16} style={{ color: "#f59e0b" }} />
-                            <span>{isPinned ? "Unpin Conversation" : "Pin to Top"}</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              if (isMuted) {
-                                setMutedConvs(mutedConvs.filter(id => id !== conv.id));
-                                showToast(`Unmuted ${conv.name}`);
-                              } else {
-                                setMutedConvs([...mutedConvs, conv.id]);
-                                showToast(`Muted ${conv.name}`);
-                              }
-                              setLongPressConv(null);
-                            }}
-                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                            className="hover-bg"
-                          >
-                            {isMuted ? <Bell size={16} style={{ color: "#10b981" }} /> : <BellOff size={16} style={{ color: "#a855f7" }} />}
-                            <span>{isMuted ? "Unmute Notifications" : "Mute Notifications"}</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              if (confirm(`Delete conversation with ${conv.name}?`)) {
-                                setConversations(conversations.filter(c => c.id !== conv.id));
-                                if (activeConvId === conv.id) setActiveConvId(null);
-                                showToast("Conversation deleted");
-                              }
-                              setLongPressConv(null);
-                            }}
-                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "#ef4444", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                            className="hover-bg"
-                          >
-                            <Trash2 size={16} />
-                            <span>Delete Conversation</span>
-                          </button>
-                        </div>
-                      </>
-                    )}
                   </div>
-                );
-              })
-            )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Right Active Chat Window */}
-        <div className={`${styles.chatWindow} ${!activeConvId ? styles.chatWindowHiddenMobile : ""}`}>
-          {(activeConvId && activeConv) ? (
+        {/* Right Area: Active Chat Window */}
+        <div className={`${styles.chatWindow} ${!activeConvId ? styles.chatHiddenMobile : ""}`}>
+          {activeConv ? (
             <>
-              {/* Chat Window Top Bar (Super Compact Modern Height) */}
+              {/* Active Chat Top Header */}
               <div className={styles.chatHeader}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  {/* Back Arrow for Mobile Screen */}
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   <button 
                     onClick={() => setActiveConvId(null)}
-                    className={styles.backBtn}
-                    title="Back to conversations"
-                    style={{ padding: "4px", borderRadius: "50%", background: "none", border: "none" }}
+                    className={styles.actionBtn}
+                    style={{ display: "flex" }}
                   >
                     <ArrowLeft size={20} />
                   </button>
-
-                  <img
-                    src={activeConv.avatar}
-                    alt={activeConv.name}
-                    style={{ width: "38px", height: "38px", borderRadius: "50%", objectFit: "cover" }}
-                  />
+                  <div className={styles.avatarWrapper}>
+                    <img
+                      src={activeConv.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeConv.name)}`}
+                      alt={activeConv.name}
+                      style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }}
+                    />
+                    {activeConv.isOnline && <div className={styles.onlineBadge} />}
+                  </div>
                   <div>
-                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0, lineHeight: 1.2 }}>
+                    <h3 style={{ fontSize: "1.1rem", fontWeight: 900, color: "#ffffff", margin: 0 }}>
                       {activeConv.name}
                     </h3>
-                    {isPartnerTyping ? (
-                      <span style={{ fontSize: "0.78rem", color: "var(--color-primary)", fontWeight: 700, display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span>typing</span>
-                        <span style={{ display: "inline-flex", gap: "2px" }}>
-                          <span style={{ animation: "typingDots 1.2s infinite 0s", width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)" }} />
-                          <span style={{ animation: "typingDots 1.2s infinite 0.2s", width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)" }} />
-                          <span style={{ animation: "typingDots 1.2s infinite 0.4s", width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)" }} />
-                        </span>
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: "0.78rem", color: activeConv.isOnline ? "#10b981" : "var(--color-text-muted)", fontWeight: 600 }}>
-                        {activeConv.isOnline ? "Active now" : "Offline"}
-                      </span>
-                    )}
+                    <span style={{ fontSize: "0.78rem", color: activeConv.isOnline ? "#10b981" : "rgba(255,255,255,0.4)", fontWeight: 700 }}>
+                      {activeConv.isOnline ? "Online • Active Now" : `@${activeConv.username}`}
+                    </span>
                   </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <button 
-                    onClick={() => handleStartCall(activeConv.partnerId || activeConv.username || activeConv.id, "voice", activeConv.name, activeConv.avatar)}
-                    style={{ background: "rgba(29, 155, 240, 0.12)", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
-                    className="hover:scale-105 active:scale-95"
+                {/* Instant Voice & Video Call Action Buttons */}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <button
+                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.name, "voice", activeConv.name, activeConv.avatar)}
+                    className={styles.actionBtn}
                     title="Start Voice Call"
+                    style={{ background: "rgba(0, 242, 254, 0.15)", border: "1px solid rgba(0, 242, 254, 0.3)", color: "#00f2fe" }}
                   >
-                    <Phone size={17} />
+                    <Phone size={20} />
                   </button>
-                  <button 
-                    onClick={() => handleStartCall(activeConv.partnerId || activeConv.username || activeConv.id, "video", activeConv.name, activeConv.avatar)}
-                    style={{ background: "rgba(168, 85, 247, 0.12)", border: "none", color: "#a855f7", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
-                    className="hover:scale-105 active:scale-95"
+                  <button
+                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.name, "video", activeConv.name, activeConv.avatar)}
+                    className={styles.actionBtn}
                     title="Start Video Call"
+                    style={{ background: "rgba(168, 85, 247, 0.15)", border: "1px solid rgba(168, 85, 247, 0.3)", color: "#a855f7" }}
                   >
-                    <Video size={17} />
+                    <Video size={20} />
                   </button>
-                  <div style={{ position: "relative" }}>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowTopMenu(!showTopMenu);
-                      }}
-                      style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "8px" }} 
-                      className="hover-bg-circle"
-                      title="More Options"
-                    >
-                      <MoreVertical size={22} />
-                    </button>
-
-                    {/* 3-Dots Advanced Options Dropdown Menu */}
-                    {showTopMenu && (
-                      <>
-                        <div 
-                          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
-                          onClick={() => setShowTopMenu(false)}
-                        />
-                        <div 
-                          className="glass animate-scale-in"
-                          style={{
-                            position: "absolute",
-                            top: "100%",
-                            right: "4px",
-                            width: "220px",
-                            maxWidth: "calc(100% - 8px)",
-                            background: "var(--color-bg-surface)",
-                            border: "1px solid var(--color-border)",
-                            borderRadius: "18px",
-                            padding: "6px",
-                            boxShadow: "0 14px 40px rgba(0,0,0,0.5)",
-                            zIndex: 100,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "2px"
-                          }}
-                        >
-                          {/* 1. View Profile */}
-                          <button
-                            onClick={() => {
-                              setShowTopMenu(false);
-                              router.push(`/profile/${activeConv.username || activeConv.id}`);
-                            }}
-                            style={{
-                              display: "flex", alignItems: "center", gap: "12px",
-                              padding: "10px 14px", border: "none", background: "transparent",
-                              color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 600,
-                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
-                            }}
-                            className="hover-bg"
-                          >
-                            <User size={18} style={{ color: "#00f2fe" }} />
-                            <span>View Profile</span>
-                          </button>
-
-                          {/* 2. Search in Conversation */}
-                          <button
-                            onClick={() => {
-                              setShowTopMenu(false);
-                              setShowInChatSearch(!showInChatSearch);
-                            }}
-                            style={{
-                              display: "flex", alignItems: "center", gap: "12px",
-                              padding: "10px 14px", border: "none", background: "transparent",
-                              color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 600,
-                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
-                            }}
-                            className="hover-bg"
-                          >
-                            <Search size={18} style={{ color: "var(--color-primary)" }} />
-                            <span>Search in Chat</span>
-                          </button>
-
-                          {/* 3. Pin / Unpin Conversation */}
-                          <button
-                            onClick={() => {
-                              setShowTopMenu(false);
-                              const isPinned = pinnedConvs.includes(activeConv.id);
-                              if (isPinned) {
-                                setPinnedConvs(pinnedConvs.filter(id => id !== activeConv.id));
-                                showToast(`Unpinned conversation with ${activeConv.name}`);
-                              } else {
-                                setPinnedConvs([...pinnedConvs, activeConv.id]);
-                                showToast(`Pinned conversation with ${activeConv.name}`);
-                              }
-                            }}
-                            style={{
-                              display: "flex", alignItems: "center", gap: "12px",
-                              padding: "10px 14px", border: "none", background: "transparent",
-                              color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 600,
-                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
-                            }}
-                            className="hover-bg"
-                          >
-                            <Pin size={18} style={{ color: "#f59e0b" }} />
-                            <span>{pinnedConvs.includes(activeConv.id) ? "Unpin Conversation" : "Pin to Top"}</span>
-                          </button>
-
-                          {/* 4. Mute / Unmute Notifications */}
-                          <button
-                            onClick={() => {
-                              setShowTopMenu(false);
-                              const isMuted = mutedConvs.includes(activeConv.id);
-                              if (isMuted) {
-                                setMutedConvs(mutedConvs.filter(id => id !== activeConv.id));
-                                showToast(`Unmuted notifications for ${activeConv.name}`);
-                              } else {
-                                setMutedConvs([...mutedConvs, activeConv.id]);
-                                showToast(`Muted notifications for ${activeConv.name}`);
-                              }
-                            }}
-                            style={{
-                              display: "flex", alignItems: "center", gap: "12px",
-                              padding: "10px 14px", border: "none", background: "transparent",
-                              color: "var(--color-text-main)", fontSize: "0.92rem", fontWeight: 600,
-                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
-                            }}
-                            className="hover-bg"
-                          >
-                            {mutedConvs.includes(activeConv.id) ? (
-                              <Bell size={18} style={{ color: "#10b981" }} />
-                            ) : (
-                              <BellOff size={18} style={{ color: "#a855f7" }} />
-                            )}
-                            <span>{mutedConvs.includes(activeConv.id) ? "Unmute Notifications" : "Mute Notifications"}</span>
-                          </button>
-
-                          <div style={{ height: "1px", background: "var(--color-border)", margin: "4px 0" }} />
-
-                          {/* 5. Clear Chat History */}
-                          <button
-                            onClick={() => {
-                              setShowTopMenu(false);
-                              if (confirm(`Are you sure you want to clear chat history with ${activeConv.name}?`)) {
-                                setMessagesMap(prev => ({
-                                  ...prev,
-                                  [activeConv.id]: []
-                                }));
-                                showToast("Chat history cleared");
-                              }
-                            }}
-                            style={{
-                              display: "flex", alignItems: "center", gap: "12px",
-                              padding: "10px 14px", border: "none", background: "transparent",
-                              color: "#ef4444", fontSize: "0.92rem", fontWeight: 600,
-                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
-                            }}
-                            className="hover-bg"
-                          >
-                            <Trash2 size={18} />
-                            <span>Clear History</span>
-                          </button>
-
-                          {/* 6. Block & Report */}
-                          <button
-                            onClick={() => {
-                              setShowTopMenu(false);
-                              showToast(`Blocked & reported ${activeConv.name}`);
-                              setActiveConvId(null);
-                            }}
-                            style={{
-                              display: "flex", alignItems: "center", gap: "12px",
-                              padding: "10px 14px", border: "none", background: "transparent",
-                              color: "#ef4444", fontSize: "0.92rem", fontWeight: 600,
-                              borderRadius: "12px", cursor: "pointer", width: "100%", textAlign: "left"
-                            }}
-                            className="hover-bg"
-                          >
-                            <ShieldAlert size={18} />
-                            <span>Block &amp; Report</span>
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
                 </div>
               </div>
 
-              {/* In-Chat Search Bar Drawer (When triggered from 3-Dots menu) */}
-              {showInChatSearch && (
-                <div 
-                  className="animate-slide-up"
-                  style={{
-                    padding: "8px 16px",
-                    background: "var(--color-bg-surface)",
-                    borderBottom: "1px solid var(--color-border)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px"
-                  }}
-                >
-                  <Search size={18} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
-                  <input
-                    type="text"
-                    autoFocus
-                    placeholder={`Search messages in chat with ${activeConv.name}...`}
-                    value={inChatSearch}
-                    onChange={(e) => setInChatSearch(e.target.value)}
-                    style={{
-                      flex: 1,
-                      background: "none",
-                      border: "none",
-                      outline: "none",
-                      color: "var(--color-text-main)",
-                      fontSize: "0.92rem",
-                      fontWeight: 600
-                    }}
-                  />
-                  {inChatSearch && (
-                    <button
-                      onClick={() => setInChatSearch("")}
-                      style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "4px" }}
-                    >
-                      <X size={16} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setShowInChatSearch(false);
-                      setInChatSearch("");
-                    }}
-                    style={{ background: "none", border: "none", color: "var(--color-primary)", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer" }}
-                  >
-                    Close
-                  </button>
-                </div>
-              )}
-
-              {/* Chat Messages Feed */}
-              <div style={{
-                flex: 1,
-                overflowY: "auto",
-                padding: "24px 20px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "20px",
-                position: "relative"
-              }}>
-                {/* Floating Toast Notification Banner */}
-                {toastMsg && (
-                  <div 
-                    className="glass animate-slide-up"
-                    style={{
-                      position: "sticky",
-                      top: "10px",
-                      alignSelf: "center",
-                      background: "var(--color-bg-surface)",
-                      border: "1px solid var(--aurora-cyan, var(--color-primary))",
-                      borderRadius: "99px",
-                      padding: "8px 18px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      color: "var(--color-text-main)",
-                      fontSize: "0.88rem",
-                      fontWeight: 700,
-                      boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                      zIndex: 80
-                    }}
-                  >
-                    <Check size={16} style={{ color: "#10b981" }} />
-                    <span>{toastMsg}</span>
-                  </div>
-                )}
-
-                {(inChatSearch.trim() 
-                  ? activeMessages.filter(m => m.text.toLowerCase().includes(inChatSearch.toLowerCase()))
-                  : activeMessages
-                ).map((msg, index, array) => {
-                  const isNearBottom = index >= array.length - 2;
-                  const isNearTop = index <= 1;
-                  return (
-                  <div
-                    key={msg.id}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: msg.isMe ? "flex-end" : "flex-start",
-                      gap: "6px",
-                      position: "relative"
-                    }}
-                  >
-                    {/* Floating Reaction Popover Pill when message is clicked */}
-                    {activeReactionMsgId === msg.id && (
-                      <div 
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          position: "absolute",
-                          ...(isNearTop ? { top: "calc(100% + 6px)" } : { top: "-50px" }),
-                          right: msg.isMe ? "0" : "auto",
-                          left: msg.isMe ? "auto" : "0",
-                          background: "var(--color-bg-surface)",
-                          border: "1px solid var(--color-primary, #1d9bf0)",
-                          borderRadius: "9999px",
-                          padding: "6px 14px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                          boxShadow: "0 12px 36px rgba(0, 0, 0, 0.6)",
-                          zIndex: 100
-                        }}
-                        className="animate-scale-in"
-                      >
-                        {EMOJI_REACTIONS_PRESETS.map((emoji) => (
-                          <button
-                            key={emoji}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddReaction(msg.id, emoji);
-                              setActiveReactionMsgId(null);
-                            }}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              fontSize: "1.45rem",
-                              cursor: "pointer",
-                              transition: "transform 0.15s ease",
-                              padding: "2px"
-                            }}
-                            className="hover:scale-125 active:scale-90"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-
-                        {/* More Emoji Grid Trigger Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFullEmojiPickerMsgId(msg.id);
-                            setActiveReactionMsgId(null);
-                          }}
-                          style={{
-                            width: "34px",
-                            height: "34px",
-                            borderRadius: "50%",
-                            background: "rgba(29, 155, 240, 0.2)",
-                            color: "var(--color-primary, #1d9bf0)",
-                            border: "none",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            cursor: "pointer"
-                          }}
-                          className="hover:scale-110"
-                          title="More Emojis"
-                        >
-                          <Plus size={20} />
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Full Categorized Emoji Picker Box Drawer */}
-                    {fullEmojiPickerMsgId === msg.id && (
-                      <div 
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          position: "absolute",
-                          top: "-260px",
-                          right: msg.isMe ? "0" : "auto",
-                          left: msg.isMe ? "auto" : "0",
-                          width: "300px",
-                          height: "240px",
-                          background: "var(--color-bg-surface)",
-                          border: "1px solid var(--color-primary, #1d9bf0)",
-                          borderRadius: "20px",
-                          padding: "14px",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "10px",
-                          boxShadow: "0 16px 40px rgba(0, 0, 0, 0.7)",
-                          zIndex: 30
-                        }}
-                        className="animate-scale-in"
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--color-text-main)" }}>React with Emoji</span>
-                          <button 
-                            onClick={() => setFullEmojiPickerMsgId(null)}
-                            style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer" }}
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-
-                        {/* Emoji Grid */}
-                        <div style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(6, 1fr)",
-                          gap: "8px",
-                          overflowY: "auto",
-                          flex: 1,
-                          paddingRight: "4px"
-                        }}>
-                          {FULL_EMOJI_GRID.map((emoji, idx) => (
-                            <button
-                              key={idx}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddReaction(msg.id, emoji);
-                                setFullEmojiPickerMsgId(null);
-                              }}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                fontSize: "1.4rem",
-                                cursor: "pointer",
-                                padding: "4px",
-                                borderRadius: "8px",
-                                transition: "transform 0.15s ease"
-                              }}
-                              className="hover:scale-125 hover:bg-white/10 active:scale-95"
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Scaled Aurora Chat Bubble Component */}
-                    <div 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id);
-                      }}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        handleAddReaction(msg.id, "❤️");
-                      }}
-                      onTouchStart={() => handleTouchStart(msg)}
-                      onTouchEnd={handleTouchEnd}
-                      onTouchMove={handleTouchEnd}
-                      onMouseDown={() => handleTouchStart(msg)}
-                      onMouseUp={handleTouchEnd}
-                      onMouseLeave={handleTouchEnd}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setLongPressMsg(msg);
-                      }}
-                      style={{
-                        maxWidth: "82%",
-                        padding: "12px 18px",
-                        borderRadius: msg.isMe ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
-                        background: msg.isMe 
-                          ? "linear-gradient(135deg, #00f2fe 0%, #3b82f6 50%, #7b2cbf 100%)" 
-                          : "var(--color-bg-surface)",
-                        color: msg.isMe ? "#ffffff" : "var(--color-text-main)",
-                        border: longPressMsg?.id === msg.id 
-                          ? "2px solid #00f2fe" 
-                          : msg.isMe ? "none" : "1px solid var(--color-border)",
-                        boxShadow: longPressMsg?.id === msg.id 
-                          ? "0 0 24px rgba(0, 242, 254, 0.7)" 
-                          : msg.isMe ? "0 4px 18px rgba(0, 242, 254, 0.25)" : "var(--shadow-sm)",
-                        transform: longPressMsg?.id === msg.id ? "scale(1.03)" : "none",
-                        zIndex: longPressMsg?.id === msg.id ? 9999 : "auto",
-                        fontSize: "1rem",
-                        lineHeight: "1.5",
-                        fontWeight: msg.isMe ? 600 : 500,
-                        position: "relative",
-                        cursor: "pointer",
-                        userSelect: "none"
-                      }}
-                      className="hover:opacity-95 transition-all"
-                    >
-                      {/* Attached Image inside Bubble */}
+              {/* Chat Messages Scrolling Body */}
+              <div className={styles.messagesArea}>
+                {messages.map(msg => (
+                  <div key={msg.id} className={msg.isMe ? styles.sentMessage : styles.receivedMessage}>
+                    <div className={msg.isMe ? styles.sentBubble : styles.receivedBubble}>
+                      {msg.text}
                       {msg.imageUrl && (
-                        <div style={{ marginBottom: "8px", borderRadius: "14px", overflow: "hidden" }}>
-                          <img src={msg.imageUrl} alt="Attachment" style={{ maxWidth: "100%", maxHeight: "280px", display: "block", objectFit: "cover" }} />
-                        </div>
-                      )}
-
-                      {/* Voice Note Audio Waveform Equalizer Visualizer */}
-                      {msg.audioUrl ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "4px 0" }}>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const audio = new Audio(msg.audioUrl);
-                              audio.play().catch(() => {});
-                            }}
-                            style={{
-                              background: msg.isMe ? "rgba(255,255,255,0.25)" : "var(--color-primary)",
-                              border: "none", color: "white", borderRadius: "50%",
-                              width: "34px", height: "34px", display: "flex",
-                              alignItems: "center", justifyContent: "center", cursor: "pointer",
-                              flexShrink: 0
-                            }}
-                            className="hover:scale-105 active:scale-95"
-                            title="Play Voice Note"
-                          >
-                            <Play size={16} fill="white" />
-                          </button>
-                          <div style={{ display: "flex", alignItems: "center", gap: "3px", height: "24px" }}>
-                            {[12, 18, 8, 22, 14, 20, 10, 24, 16, 8, 18, 12, 22, 14, 9, 16].map((h, i) => (
-                              <span
-                                key={i}
-                                className="animate-sound-wave"
-                                style={{
-                                  width: "3px",
-                                  height: `${h}px`,
-                                  borderRadius: "2px",
-                                  background: msg.isMe ? "rgba(255,255,255,0.9)" : "var(--color-primary)",
-                                  animationDelay: `${i * 0.08}s`
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        msg.text
-                      )}
-
-                      {/* Reaction Badges */}
-                      {msg.reactions && msg.reactions.length > 0 && (
-                        <div style={{
-                          position: "absolute",
-                          bottom: "-12px",
-                          right: msg.isMe ? "auto" : "12px",
-                          left: msg.isMe ? "12px" : "auto",
-                          background: "var(--color-bg-surface)",
-                          border: "1px solid var(--color-border)",
-                          borderRadius: "99px",
-                          padding: "2px 8px",
-                          fontSize: "0.85rem",
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
-                        }}>
-                          {msg.reactions.join(" ")}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Anchored Options Dropdown Menu for Long-Pressed Message */}
-                    {longPressMsg?.id === msg.id && (
-                      <>
-                        <div 
-                          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLongPressMsg(null);
-                          }}
+                        <img 
+                          src={msg.imageUrl} 
+                          alt="Attached media" 
+                          style={{ width: "100%", maxWidth: "260px", borderRadius: "14px", marginTop: "8px", objectFit: "cover" }} 
                         />
-                        <div 
-                          className="glass animate-scale-in"
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            position: "absolute",
-                            ...(isNearBottom 
-                              ? { bottom: "100%", marginBottom: "8px" } 
-                              : { top: "100%", marginTop: "8px" }),
-                            right: msg.isMe ? 0 : "auto",
-                            left: msg.isMe ? "auto" : 0,
-                            width: "210px",
-                            background: "var(--color-bg-surface)",
-                            border: "1px solid #00f2fe",
-                            borderRadius: "18px",
-                            padding: "8px",
-                            boxShadow: "0 14px 40px rgba(0,0,0,0.7), 0 0 20px rgba(0,242,254,0.3)",
-                            zIndex: 100,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "4px"
-                          }}
-                        >
-                          {/* Quick Emoji Reactions */}
-                          <div style={{ display: "flex", justifyContent: "space-around", paddingBottom: "6px", borderBottom: "1px solid var(--color-border)" }}>
-                            {EMOJI_REACTIONS_PRESETS.map(emoji => (
-                              <button
-                                key={emoji}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAddReaction(msg.id, emoji);
-                                  setLongPressMsg(null);
-                                }}
-                                style={{ background: "none", border: "none", fontSize: "1.3rem", cursor: "pointer" }}
-                                className="hover:scale-125 active:scale-95"
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Actions */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setReplyingToMsg(msg);
-                              setInputText(`Replying to "${msg.text.slice(0, 25)}...": `);
-                              setLongPressMsg(null);
-                            }}
-                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                            className="hover-bg"
-                          >
-                            <Reply size={16} style={{ color: "#00f2fe" }} />
-                            <span>Reply</span>
-                          </button>
-
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (typeof navigator !== "undefined" && navigator.clipboard) {
-                                navigator.clipboard.writeText(msg.text);
-                                showToast("Copied to clipboard!");
-                              }
-                              setLongPressMsg(null);
-                            }}
-                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "var(--color-text-main)", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                            className="hover-bg"
-                          >
-                            <Copy size={16} style={{ color: "var(--color-primary)" }} />
-                            <span>Copy Text</span>
-                          </button>
-
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (activeConvId) {
-                                setMessagesMap(prev => ({
-                                  ...prev,
-                                  [activeConvId]: (prev[activeConvId] || []).filter(m => m.id !== msg.id)
-                                }));
-                                showToast("Message deleted");
-                              }
-                              setLongPressMsg(null);
-                            }}
-                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", border: "none", background: "transparent", color: "#ef4444", fontSize: "0.88rem", fontWeight: 700, borderRadius: "10px", cursor: "pointer", width: "100%", textAlign: "left" }}
-                            className="hover-bg"
-                          >
-                            <Trash2 size={16} />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Message Timestamp */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", color: "var(--color-text-muted)", marginTop: "2px" }}>
-                      {msg.isMe && (
-                        msg.isRead ? (
-                          <CheckCheck size={15} style={{ color: "#00f2fe" }} />
-                        ) : msg.isDelivered ? (
-                          <CheckCheck size={15} style={{ color: "var(--color-text-muted)" }} />
-                        ) : (
-                          <Check size={15} style={{ color: "var(--color-text-muted)" }} />
-                        )
                       )}
                     </div>
+                    <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", marginTop: "4px", padding: "0 6px", fontWeight: 600 }}>
+                      {msg.timestamp}
+                    </span>
                   </div>
-                );
-              })}
+                ))}
 
-                {/* Partner Typing Indicator Bubble */}
                 {isPartnerTyping && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", alignSelf: "flex-start", marginTop: "6px" }} className="animate-slide-up">
-                    <img
-                      src={activeConv.avatar}
-                      alt={activeConv.name}
-                      style={{ width: "30px", height: "30px", borderRadius: "50%", objectFit: "cover" }}
-                    />
-                    <div style={{
-                      background: "var(--color-bg-surface)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: "18px 18px 18px 4px",
-                      padding: "8px 14px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "5px"
-                    }}>
-                      <span style={{ animation: "typingDots 1.2s infinite 0s", width: "6px", height: "6px", borderRadius: "50%", background: "var(--color-primary)" }} />
-                      <span style={{ animation: "typingDots 1.2s infinite 0.2s", width: "6px", height: "6px", borderRadius: "50%", background: "var(--color-primary)" }} />
-                      <span style={{ animation: "typingDots 1.2s infinite 0.4s", width: "6px", height: "6px", borderRadius: "50%", background: "var(--color-primary)" }} />
+                  <div className={styles.receivedMessage}>
+                    <div className={styles.receivedBubble} style={{ display: "flex", alignItems: "center", gap: "6px", fontStyle: "italic" }}>
+                      <Sparkles size={16} className="animate-spin" style={{ color: "#00f2fe" }} />
+                      <span>Typing a message...</span>
                     </div>
                   </div>
                 )}
+
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Attached Media Preview Box */}
-              {attachedImage && (
-                <div style={{ padding: "12px 22px", background: "var(--color-bg-surface)", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: "14px" }}>
-                  <div style={{ position: "relative" }}>
-                    <img src={attachedImage} alt="Attachment Preview" style={{ width: "64px", height: "64px", borderRadius: "14px", objectFit: "cover" }} />
-                    <button 
-                      type="button" 
-                      onClick={() => setAttachedImage(null)}
-                      style={{ position: "absolute", top: "-8px", right: "-8px", background: "#ef4444", color: "white", borderRadius: "50%", border: "none", width: "22px", height: "22px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                  <span style={{ fontSize: "0.95rem", color: "var(--color-text-muted)", fontWeight: 600 }}>Photo attached</span>
-                </div>
-              )}
-
-              {/* Sleek Bottom Chat Input Form */}
-              <form
-                onSubmit={handleSendMessage}
-                className={styles.inputForm}
-              >
-                <button 
-                  type="button" 
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{ width: "42px", height: "42px", borderRadius: "50%", background: "rgba(0, 242, 254, 0.12)", border: "none", color: "var(--aurora-cyan)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
-                  className="hover:scale-105"
-                  title="Attach Photo"
-                >
-                  <ImageIcon size={20} />
-                </button>
-
-                <button 
-                  type="button" 
-                  onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
-                  style={{ width: "42px", height: "42px", borderRadius: "50%", background: isRecordingVoice ? "rgba(239, 68, 68, 0.15)" : "rgba(123, 44, 191, 0.15)", border: "none", color: isRecordingVoice ? "#ef4444" : "#a855f7", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} 
-                  className="hover:scale-105"
-                  title={isRecordingVoice ? "Stop Recording" : "Record Voice Note"}
-                >
-                  {isRecordingVoice ? <Square size={18} className="animate-pulse" /> : <Mic size={20} />}
-                </button>
-
-                {isRecordingVoice ? (
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "8px", background: "rgba(239, 68, 68, 0.12)", padding: "10px 16px", borderRadius: "9999px", color: "#ef4444", fontSize: "0.92rem", fontWeight: 700 }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444" }} className="animate-ping" />
-                    <span>Recording Voice Note: 00:{voiceRecordTime < 10 ? `0${voiceRecordTime}` : voiceRecordTime}</span>
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    placeholder={`Message ${activeConv.name}...`}
-                    value={inputText}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setInputText(val);
-                      if (activeConvId) {
-                        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                        fetch("/api/messages/typing", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ conversationId: activeConvId, isTyping: val.trim().length > 0 })
-                        }).catch(() => {});
-
-                        typingTimeoutRef.current = setTimeout(() => {
-                          fetch("/api/messages/typing", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ conversationId: activeConvId, isTyping: false })
-                          }).catch(() => {});
-                        }, 3000);
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "11px 18px",
-                      borderRadius: "9999px",
-                      border: "1px solid var(--color-border)",
-                      background: "var(--color-bg-base)",
-                      color: "var(--color-text-main)",
-                      fontSize: "0.98rem",
-                      outline: "none",
-                      minWidth: 0
-                    }}
-                  />
-                )}
-
-                <button
-                  type="submit"
-                  disabled={!inputText.trim() && !attachedImage}
-                  style={{
-                    width: "42px", height: "42px", borderRadius: "50%",
-                    background: (inputText.trim() || attachedImage) ? "linear-gradient(135deg, #00f2fe, #7b2cbf)" : "var(--color-border)",
-                    color: "white", border: "none", cursor: (inputText.trim() || attachedImage) ? "pointer" : "default",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    transition: "all 0.15s ease",
-                    boxShadow: (inputText.trim() || attachedImage) ? "0 4px 14px rgba(0, 242, 254, 0.4)" : "none",
-                    flexShrink: 0
-                  }}
-                >
-                  <Send size={18} />
+              {/* Input Footer */}
+              <form onSubmit={handleSendMessage} className={styles.inputForm}>
+                <input
+                  type="text"
+                  placeholder={`Message ${activeConv.name}...`}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  className={styles.messageInput}
+                />
+                <button type="submit" className={styles.sendBtn} title="Send Message">
+                  <Send size={20} />
                 </button>
               </form>
             </>
           ) : (
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              height: "100%", padding: "40px", textAlign: "center", color: "var(--color-text-muted)"
-            }}>
-              <MessageCircle size={58} style={{ color: "var(--color-primary)", marginBottom: "16px" }} />
-              <h3 style={{ fontSize: "1.45rem", fontWeight: 900, color: "var(--color-text-main)", marginBottom: "8px" }}>
-                Select a conversation
-              </h3>
-              <p style={{ fontSize: "1.05rem", maxWidth: "360px" }}>
-                Choose from your existing messages or start a new conversation.
-              </p>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.4)", gap: "16px" }}>
+              <MessageCircle size={64} style={{ color: "rgba(0,242,254,0.3)" }} />
+              <h3 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#ffffff", margin: 0 }}>Select a Conversation</h3>
+              <p style={{ fontSize: "0.9rem", margin: 0 }}>Choose a friend from the left list to start messaging or HD calling!</p>
             </div>
           )}
         </div>
       </div>
-
-
     </AppLayout>
   );
 }
 
 export default function MessagesPage() {
   return (
-    <Suspense fallback={<div style={{ padding: "20px", color: "var(--color-text-main)" }}>Loading messages...</div>}>
+    <Suspense fallback={<div style={{ padding: "40px", color: "white", textAlign: "center" }}>Loading DOST Messages...</div>}>
       <MessagesContent />
     </Suspense>
   );
