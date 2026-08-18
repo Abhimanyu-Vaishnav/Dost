@@ -24,7 +24,7 @@ const globalForCalls = globalThis as unknown as {
   callSessionsMap?: Map<string, CallSessionData>;
   userSessionMap?: Map<string, string>;
   sseControllers?: Map<string, ReadableStreamDefaultController>;
-  globalAudioElement?: HTMLAudioElement | null;
+  webAudioSourceNode?: MediaStreamAudioSourceNode | null;
 };
 
 export const CALL_STATE_STORE = {
@@ -76,18 +76,20 @@ export function getOrCreateAudioContext(): AudioContext | null {
   }
 }
 
-// Play Remote Audio Stream via DOM Audio Element & Web Audio Pipeline
+// Play Remote Audio Stream via DOM Audio Element & Dual Web Audio Destination Pipeline
 export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = true) {
   console.log("[AudioEngine] Remote stream received. Audio tracks count:", stream.getAudioTracks().length);
   
   if (typeof window === "undefined") return;
 
   try {
+    // 1. Force enable all audio tracks
     stream.getAudioTracks().forEach((track, idx) => {
       track.enabled = true;
-      console.log(`[AudioEngine] Track #${idx} - readyState: ${track.readyState}, enabled: ${track.enabled}, muted: ${track.muted}, id: ${track.id}`);
+      console.log(`[AudioEngine] Remote Track #${idx} - readyState: ${track.readyState}, enabled: ${track.enabled}, muted: ${track.muted}, id: ${track.id}`);
     });
 
+    // 2. DOM HTML Audio Element
     let audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
     if (!audioEl) {
       audioEl = document.createElement("audio");
@@ -95,24 +97,21 @@ export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = 
       audioEl.autoplay = true;
       (audioEl as any).playsInline = true;
       audioEl.style.position = "fixed";
-      audioEl.style.bottom = "0px";
-      audioEl.style.right = "0px";
-      audioEl.style.width = "1px";
-      audioEl.style.height = "1px";
-      audioEl.style.opacity = "0.001";
-      audioEl.style.pointerEvents = "none";
+      audioEl.style.bottom = "10px";
+      audioEl.style.right = "10px";
+      audioEl.style.width = "20px";
+      audioEl.style.height = "20px";
+      audioEl.style.zIndex = "999999";
+      audioEl.style.opacity = "0.01";
       document.body.appendChild(audioEl);
     }
 
     audioEl.muted = false;
-    audioEl.volume = isSpeaker ? 1.0 : 0.15;
+    audioEl.volume = isSpeaker ? 1.0 : 0.2;
 
-    // Prevent "interrupted by a new load request" error by ONLY setting srcObject if different!
     if (audioEl.srcObject !== stream) {
       audioEl.srcObject = stream;
     }
-
-    console.log(`[AudioEngine] Audio Element readyState: ${audioEl.readyState}, paused: ${audioEl.paused}`);
 
     const playPromise = audioEl.play();
     if (playPromise !== undefined) {
@@ -125,9 +124,22 @@ export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = 
         });
     }
 
+    // 3. Web Audio API Direct Destination Node Routing (Bypasses mobile browser silent switches & element blocks)
     const ctx = getOrCreateAudioContext();
-    if (ctx && ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
+    if (ctx) {
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+      try {
+        if (!globalForCalls.webAudioSourceNode) {
+          const source = ctx.createMediaStreamSource(stream);
+          source.connect(ctx.destination);
+          globalForCalls.webAudioSourceNode = source;
+          console.log("[AudioEngine] SUCCESS: Connected remote stream directly to Web Audio ctx.destination!");
+        }
+      } catch (e) {
+        console.warn("[AudioEngine] WebAudio source node creation note:", e);
+      }
     }
   } catch (e) {
     console.error("[AudioEngine] ERROR in playRemoteAudioStream:", e);
@@ -217,26 +229,18 @@ export function startOutgoingRingbackSound() {
   try {
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
 
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
+    const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
-    osc1.type = "sine";
-    osc2.type = "sine";
-    osc1.frequency.setValueAtTime(440, ctx.currentTime);
-    osc2.frequency.setValueAtTime(480, ctx.currentTime);
-
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(425, ctx.currentTime);
     gain.gain.setValueAtTime(0.2, ctx.currentTime);
 
-    osc1.connect(gain);
-    osc2.connect(gain);
+    osc.connect(gain);
     gain.connect(ctx.destination);
 
-    osc1.start();
-    osc2.start();
-
-    activeToneOsc1 = osc1;
-    activeToneOsc2 = osc2;
+    osc.start();
+    activeToneOsc1 = osc;
     activeGainNode = gain;
   } catch (e) {}
 }
@@ -256,7 +260,10 @@ export function stopAllRingtones() {
 export function triggerDeviceVibration() {
   try {
     if (typeof window !== "undefined" && navigator.vibrate) {
-      navigator.vibrate([400, 200, 400, 200, 800]);
+      navigator.vibrate([400, 200, 400, 200, 600]);
+      vibrationInterval = setInterval(() => {
+        if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 600]);
+      }, 3000);
     }
   } catch (e) {}
 }
@@ -264,9 +271,9 @@ export function triggerDeviceVibration() {
 export function triggerSystemNotification(callerName: string, callType: string) {
   try {
     if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-      new Notification(`Incoming DOST ${callType === "video" ? "Video" : "Voice"} Call`, {
-        body: `${callerName} is calling you on DOST!`,
-        icon: "/icon.svg",
+      new Notification(`Incoming ${callType === "video" ? "Video" : "Voice"} Call`, {
+        body: `${callerName} is calling you on DOST...`,
+        icon: "/favicon.ico",
         tag: "dost-incoming-call"
       });
     }
