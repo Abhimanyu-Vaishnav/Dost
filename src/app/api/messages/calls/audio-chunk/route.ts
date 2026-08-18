@@ -3,6 +3,7 @@ import { verifyToken } from "@/lib/auth";
 
 interface AudioChunk {
   senderId: string;
+  senderName: string;
   blobBase64: string;
   timestamp: number;
 }
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     const senderId = String(userPayload.userId);
+    const senderName = typeof userPayload.username === "string" ? userPayload.username.replace("@", "") : "";
     const body = await req.json();
     const { sessionId, blobBase64 } = body;
 
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest) {
     const chunks = AUDIO_CHUNK_BUFFER.get(sessionId)!;
     chunks.push({
       senderId,
+      senderName,
       blobBase64,
       timestamp: Date.now()
     });
@@ -64,6 +67,7 @@ export async function GET(req: NextRequest) {
     }
 
     const currentUserId = String(userPayload.userId);
+    const currentUsername = typeof userPayload.username === "string" ? userPayload.username.replace("@", "").toLowerCase() : "";
     const { searchParams } = new URL(req.url);
     const sessionId = searchParams.get("sessionId");
 
@@ -72,13 +76,21 @@ export async function GET(req: NextRequest) {
     }
 
     const allChunks = AUDIO_CHUNK_BUFFER.get(sessionId)!;
-    // Get chunks sent by PEER (not self)
-    const peerChunks = allChunks.filter(c => c.senderId !== currentUserId && Date.now() - c.timestamp < 5000);
+    // Get chunks sent by PEER (filter out self GUID and self username strictly)
+    const peerChunks = allChunks.filter(c => {
+      const cName = c.senderName?.replace("@", "").toLowerCase();
+      const isSelf = c.senderId === currentUserId || cName === currentUsername;
+      const isRecent = Date.now() - c.timestamp < 5000;
+      return !isSelf && isRecent;
+    });
 
     // Drain retrieved chunks
     AUDIO_CHUNK_BUFFER.set(
       sessionId,
-      allChunks.filter(c => c.senderId === currentUserId || Date.now() - c.timestamp >= 5000)
+      allChunks.filter(c => {
+        const cName = c.senderName?.replace("@", "").toLowerCase();
+        return c.senderId === currentUserId || cName === currentUsername || Date.now() - c.timestamp >= 5000;
+      })
     );
 
     return NextResponse.json({ chunks: peerChunks }, { status: 200 });

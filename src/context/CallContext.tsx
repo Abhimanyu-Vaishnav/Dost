@@ -28,6 +28,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
   const [myUserId, setMyUserId] = useState<string | undefined>(currentUserId);
   const callStartedTimeRef = useRef<number>(0);
   const notifiedSessionIdRef = useRef<string | null>(null);
+  const endedSessionIdsRef = useRef<Set<string>>(new Set());
 
   // Auto fetch user profile if currentUserId prop was omitted
   useEffect(() => {
@@ -45,7 +46,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     }
   }, [currentUserId]);
 
-  // Poll call signaling status at 100ms ultra-high speed for instant sub-100ms call delivery
+  // Poll call signaling status at 100ms ultra-high speed
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -55,7 +56,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
           const sess: CallSessionData | null = data.session || null;
 
           if (sess) {
-            if (sess.status === "REJECTED" || sess.status === "ENDED") {
+            if (endedSessionIdsRef.current.has(sess.sessionId) || sess.status === "REJECTED" || sess.status === "ENDED") {
               setActiveSession(null);
               stopAllRingtones();
               notifiedSessionIdRef.current = null;
@@ -146,6 +147,9 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
 
   const endCall = async () => {
     try {
+      if (activeSession) {
+        endedSessionIdsRef.current.add(activeSession.sessionId);
+      }
       stopAllRingtones();
       setActiveSession(null);
       callStartedTimeRef.current = 0;

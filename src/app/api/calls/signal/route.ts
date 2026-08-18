@@ -21,6 +21,47 @@ export async function POST(req: NextRequest) {
 
     if (!action) return NextResponse.json({ error: "Missing action" }, { status: 400 });
 
+    // Handle END or REJECT Action with Universal Search & Purge
+    if (action === "REJECT" || action === "END") {
+      let targetSession: CallSessionData | undefined = undefined;
+
+      const existingSessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || 
+                               (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
+      if (existingSessionId) {
+        targetSession = CALL_STATE_STORE.sessions.get(existingSessionId);
+      }
+
+      if (!targetSession) {
+        for (const sess of Array.from(CALL_STATE_STORE.sessions.values())) {
+          const isMatch = sess.callerId === currentUserId || 
+                          sess.recipientId === currentUserId ||
+                          sess.callerName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase() ||
+                          sess.recipientName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase();
+          if (isMatch) {
+            targetSession = sess;
+            break;
+          }
+        }
+      }
+
+      if (targetSession) {
+        targetSession.status = action === "REJECT" ? "REJECTED" : "ENDED";
+        targetSession.updatedAt = Date.now();
+
+        // Purge session from all maps
+        Array.from(CALL_STATE_STORE.userSessionMap.entries()).forEach(([k, v]) => {
+          if (v === targetSession!.sessionId) {
+            CALL_STATE_STORE.userSessionMap.delete(k);
+          }
+        });
+        CALL_STATE_STORE.sessions.delete(targetSession.sessionId);
+
+        return NextResponse.json({ success: true, session: targetSession }, { status: 200 });
+      }
+
+      return NextResponse.json({ success: true, session: null }, { status: 200 });
+    }
+
     let existingSessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || 
                            (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
     let session = existingSessionId ? CALL_STATE_STORE.sessions.get(existingSessionId) : undefined;
@@ -68,7 +109,6 @@ export async function POST(req: NextRequest) {
 
       CALL_STATE_STORE.sessions.set(sessionId, newSession);
 
-      // Map ALL potential keys (GUID, username with/without @, raw target string) to session
       [currentUserId, currentUsername, targetGuid, targetUsername, rawTarget, cleanTarget].forEach(k => {
         if (k) CALL_STATE_STORE.userSessionMap.set(k, sessionId);
       });
@@ -105,18 +145,6 @@ export async function POST(req: NextRequest) {
         session.recipientCandidates.push(candidate);
       }
       session.updatedAt = Date.now();
-      return NextResponse.json({ success: true, session }, { status: 200 });
-    }
-
-    if ((action === "REJECT" || action === "END") && session) {
-      session.status = action === "REJECT" ? "REJECTED" : "ENDED";
-      session.updatedAt = Date.now();
-
-      [session.callerId, session.recipientId, session.callerName, session.recipientName].forEach(k => {
-        if (k) CALL_STATE_STORE.userSessionMap.delete(k);
-      });
-      CALL_STATE_STORE.sessions.delete(session.sessionId);
-
       return NextResponse.json({ success: true, session }, { status: 200 });
     }
 
