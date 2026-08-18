@@ -40,6 +40,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const localMediaStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const processedIceCandidatesRef = useRef<Set<string>>(new Set());
+  const sdpAnswerSentRef = useRef<boolean>(false);
 
   // Clean Partner Name & Avatar Resolution
   const rawOtherName = isCaller ? (session.recipientName || session.recipientId) : (session.callerName || session.callerId);
@@ -145,7 +146,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return () => stopAllRingtones();
   }, [isRinging, isCaller]);
 
-  // CORE WEBRTC ENGINE (WITH FREE TURN RELAY FOR 5G/MOBILE CGNAT TRAVERSAL)
+  // CORE WEBRTC ENGINE
   useEffect(() => {
     // If recipient is in RINGING state, DO NOT start media or auto-accept!
     if (isRecipient && isRinging) return;
@@ -161,7 +162,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         { urls: "stun:stun2.l.google.com:19302" },
         { urls: "stun:stun3.l.google.com:19302" },
         { urls: "stun:stun4.l.google.com:19302" },
-        // FREE PUBLIC TURN RELAYS FOR 5G/MOBILE CGNAT TRAVERSAL
         {
           urls: "turn:openrelay.metered.ca:80",
           username: "openrelayproject",
@@ -299,6 +299,20 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             }).catch(() => {});
           }
         }
+
+        // Recipient SDP Answer if connected
+        if (!isCaller && session.sdpOffer && !sdpAnswerSentRef.current && (pc as any).signalingState !== "closed") {
+          console.log("[CallOverlay] Recipient creating SDP Answer...");
+          sdpAnswerSentRef.current = true;
+          await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
+          const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
+          await pc.setLocalDescription(answer);
+          fetch("/api/calls/signal", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
+          }).catch(() => {});
+        }
       } catch (e) {
         console.error("[CallOverlay] Start media error:", e);
       }
@@ -340,8 +354,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       if (!pc || (pc as any).signalingState === "closed") return;
       try {
         // Recipient sets remote SDP offer and creates SDP answer after Accepting call
-        if (!isCaller && (session.status === "CONNECTED" || session.sdpOffer) && session.sdpOffer && !pc.remoteDescription) {
+        if (!isCaller && session.sdpOffer && !pc.remoteDescription && !sdpAnswerSentRef.current) {
           console.log("[CallOverlay] Recipient setting remote SDP Offer and creating Answer...");
+          sdpAnswerSentRef.current = true;
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
           if ((pc as any).signalingState !== "closed") {
             const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
@@ -358,7 +373,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
         // Caller receives SDP answer from recipient and connects instantly (< 10ms)
         if (isCaller && session.sdpAnswer && (pc.signalingState === "have-local-offer" || !pc.remoteDescription)) {
-          console.log("[CallOverlay] Caller setting remote SDP Answer from recipient...");
+          console.log("[CallOverlay] Caller setting remote SDP Answer from recipient... Transitioning to STABLE!");
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
         }
 
