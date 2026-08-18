@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/calls/signal - State Query Endpoint
+// GET /api/calls/signal - State Query Endpoint (Returns ENDED/REJECTED sessions too so clients see termination status!)
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -216,8 +216,6 @@ export async function GET(req: NextRequest) {
     const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
 
     for (const sess of allSessions) {
-      if (sess.status === "ENDED" || sess.status === "REJECTED") continue;
-
       const cId = sess.callerId?.toLowerCase();
       const cName = sess.callerName?.replace("@", "").toLowerCase();
       const rId = sess.recipientId?.toLowerCase();
