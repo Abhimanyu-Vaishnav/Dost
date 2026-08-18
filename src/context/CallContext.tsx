@@ -61,13 +61,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               stopAllRingtones();
               notifiedSessionIdRef.current = null;
             } else {
-              setActiveSession(prev => {
-                // Keep connected status optimistic state
-                if (prev && prev.status === "CONNECTED" && sess.status === "RINGING") {
-                  return { ...sess, status: "CONNECTED" };
-                }
-                return sess;
-              });
+              setActiveSession(sess);
 
               // Trigger WhatsApp-style device vibration & system notification for recipient
               const isRecipient = sess.status === "RINGING" && myUserId && (
