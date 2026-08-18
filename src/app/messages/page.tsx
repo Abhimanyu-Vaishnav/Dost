@@ -104,7 +104,18 @@ function MessagesContent() {
   const searchParams = useSearchParams();
   const targetUserParam = searchParams?.get("user") || searchParams?.get("target");
 
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("dost_conversations_cache");
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch (e) {}
+      }
+    }
+    return INITIAL_CONVERSATIONS;
+  });
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>(INITIAL_MESSAGES);
   
@@ -136,56 +147,87 @@ function MessagesContent() {
   const [replyingToMsg, setReplyingToMsg] = useState<ChatMessage | null>(null);
   const touchTimerRef = useRef<any>(null);
 
+  // Fetch real user conversations from Prisma DB
+  const fetchUserConversations = async () => {
+    try {
+      const res = await fetch("/api/messages/conversations");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.conversations && Array.isArray(data.conversations)) {
+          const formattedConvs: Conversation[] = data.conversations.map((c: any) => {
+            const partner = c.participants?.[0] || { name: "User", username: "user", avatar: "" };
+            const lastMsgObj = c.messages?.[0];
+            let lastMsgText = "Conversation started";
+            if (lastMsgObj) {
+              if (lastMsgObj.content) lastMsgText = lastMsgObj.content;
+              else if (lastMsgObj.messageType === "IMAGE" || lastMsgObj.fileUrl?.includes("image")) lastMsgText = "📷 Image";
+              else if (lastMsgObj.messageType === "AUDIO" || lastMsgObj.fileUrl?.includes("audio")) lastMsgText = "🎙️ Voice Note";
+            }
+            return {
+              id: c.id,
+              name: partner.name || partner.username || "User",
+              username: partner.username || partner.id || "",
+              avatar: partner.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(partner.name || "User")}&background=00f2fe&color=ffffff&bold=true`,
+              isOnline: true,
+              unreadCount: c.unreadCount || 0,
+              lastMessage: lastMsgText,
+              lastTime: lastMsgObj?.createdAt ? new Date(lastMsgObj.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Recently"
+            };
+          });
+          setConversations(formattedConvs);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("dost_conversations_cache", JSON.stringify(formattedConvs));
+          }
+          return formattedConvs;
+        }
+      }
+    } catch (e) {
+      console.error("Error fetching conversations:", e);
+    }
+    return [];
+  };
+
+  useEffect(() => {
+    fetchUserConversations();
+  }, []);
+
   // Handle URL query ?user=username (e.g. from Profile page "Message" button click)
   useEffect(() => {
     if (targetUserParam) {
-      const targetClean = targetUserParam.replace("@", "").toLowerCase();
-      const urlName = searchParams?.get("name") || (targetClean.charAt(0).toUpperCase() + targetClean.slice(1));
-      const urlAvatar = searchParams?.get("avatar") || `https://ui-avatars.com/api/?name=${encodeURIComponent(urlName)}&background=00f2fe&color=ffffff&bold=true`;
-
-      const existing = conversations.find(c => 
-        c.username.toLowerCase() === targetClean || 
-        c.id === targetUserParam || 
-        c.name.toLowerCase() === targetClean
-      );
-
-      if (existing) {
-        handleSelectConversation(existing.id);
-      } else {
-        const contactMatch = AVAILABLE_CONTACTS_DIRECTORY.find(c => c.username.toLowerCase() === targetClean);
-        const newConv: Conversation = {
-          id: contactMatch ? contactMatch.id : `conv-${targetClean}`,
-          name: contactMatch ? contactMatch.name : urlName,
-          username: contactMatch ? contactMatch.username : targetClean,
-          avatar: contactMatch ? contactMatch.avatar : urlAvatar,
-          isOnline: true,
-          unreadCount: 0,
-          lastMessage: "Conversation started",
-          lastTime: "Just now"
-        };
-        setConversations(prev => [newConv, ...prev.filter(c => c.id !== newConv.id)]);
-        handleSelectConversation(newConv.id);
-      }
+      const targetClean = targetUserParam.replace("@", "");
+      fetch("/api/messages/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: targetClean })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.conversationId) {
+          fetchUserConversations().then(() => {
+            handleSelectConversation(data.conversationId);
+          });
+        }
+      })
+      .catch(err => console.error("Start chat error:", err));
     }
-  }, [targetUserParam, searchParams]);
+  }, [targetUserParam]);
 
-  const handleStartChatWithUser = (contact: { id: string; name: string; username: string; avatar: string; isOnline?: boolean }) => {
-    const existing = conversations.find(c => c.id === contact.id || c.username.toLowerCase() === contact.username.toLowerCase());
-    if (existing) {
-      handleSelectConversation(existing.id);
-    } else {
-      const newConv: Conversation = {
-        id: contact.id,
-        name: contact.name,
-        username: contact.username,
-        avatar: contact.avatar,
-        isOnline: contact.isOnline ?? true,
-        unreadCount: 0,
-        lastMessage: "Conversation started",
-        lastTime: "Just now"
-      };
-      setConversations(prev => [newConv, ...prev]);
-      handleSelectConversation(newConv.id);
+  const handleStartChatWithUser = async (contact: { id: string; name: string; username: string; avatar: string; isOnline?: boolean }) => {
+    try {
+      const res = await fetch("/api/messages/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: contact.id || contact.username })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.conversationId) {
+          await fetchUserConversations();
+          handleSelectConversation(data.conversationId);
+        }
+      }
+    } catch (e) {
+      console.error("Error starting chat:", e);
     }
     setShowNewChatModal(false);
   };
@@ -251,55 +293,116 @@ function MessagesContent() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load persistent messages & reactions from localStorage
+  const [floatingBanner, setFloatingBanner] = useState<{ senderName: string; text: string; avatar: string; convId: string } | null>(null);
+  const knownMsgIdsRef = useRef<Set<string>>(new Set());
+
+  // Web Audio Synthesizer Tone for incoming messages
+  const playNotificationSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(587.33, now); // D5
+      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.08); // A5
+
+      osc2.type = "triangle";
+      osc2.frequency.setValueAtTime(880, now + 0.08);
+      osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.18); // D6
+
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now + 0.06);
+      osc1.stop(now + 0.35);
+      osc2.stop(now + 0.35);
+    } catch (e) {
+      console.error("Audio chime error:", e);
+    }
+  };
+
+  // Request Push Notification permission on mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("dost_chat_messages_map");
-      if (saved) {
-        try {
-          setMessagesMap(JSON.parse(saved));
-        } catch (e) {}
-      }
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
     }
   }, []);
+
+  // Fetch messages from DB for a specific conversation
+  const fetchMessagesForConv = async (convId: string) => {
+    try {
+      const res = await fetch(`/api/messages?convId=${convId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.messages && Array.isArray(data.messages)) {
+          const partner = conversations.find(c => c.id === convId);
+
+          let hasNewIncoming = false;
+          let latestNewMsg: any = null;
+
+          data.messages.forEach((m: any) => {
+            if (!knownMsgIdsRef.current.has(m.id)) {
+              knownMsgIdsRef.current.add(m.id);
+              if (!m.isMe) {
+                hasNewIncoming = true;
+                latestNewMsg = m;
+              }
+            }
+          });
+
+          if (hasNewIncoming && latestNewMsg) {
+            playNotificationSound();
+
+            const toastData = {
+              senderName: latestNewMsg.senderName || partner?.name || "New Message",
+              text: latestNewMsg.text || (latestNewMsg.imageUrl ? "📷 Image Attached" : "🎙️ Voice Note"),
+              avatar: partner?.avatar || "https://ui-avatars.com/api/?name=User",
+              convId: convId
+            };
+            setFloatingBanner(toastData);
+            setTimeout(() => setFloatingBanner(null), 5000);
+
+            if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+              try {
+                new Notification(`Message from ${toastData.senderName}`, {
+                  body: toastData.text,
+                  icon: toastData.avatar
+                });
+              } catch (err) {}
+            }
+          }
+
+          setMessagesMap(prev => ({
+            ...prev,
+            [convId]: data.messages
+          }));
+        }
+      }
+    } catch (e) {
+      console.error("Error fetching messages:", e);
+    }
+  };
 
   // Live Message Polling Stream every 2.5 seconds
   useEffect(() => {
     if (!activeConvId) return;
-    const validId: string = activeConvId;
+    fetchMessagesForConv(activeConvId);
 
-    async function syncLiveMessages() {
-      try {
-        const res = await fetch(`/api/messages?convId=${validId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.messages && data.messages.length > 0) {
-            setMessagesMap(prev => {
-              const currentMsgs: ChatMessage[] = prev[validId] || [];
-              const existingIds = new Set(currentMsgs.map((m: ChatMessage) => m.id));
-              const brandNew = data.messages.filter((m: any) => {
-                if (existingIds.has(m.id)) return false;
-                const isDuplicateMe = currentMsgs.some(c => c.isMe && c.text === m.text);
-                return !isDuplicateMe;
-              });
-              if (brandNew.length > 0) {
-                const updated = {
-                  ...prev,
-                  [validId]: [...currentMsgs, ...brandNew]
-                };
-                if (typeof window !== "undefined") {
-                  localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
-                }
-                return updated;
-              }
-              return prev;
-            });
-          }
-        }
-      } catch (e) {}
-    }
-
-    const liveInterval = setInterval(syncLiveMessages, 2500);
+    const liveInterval = setInterval(() => {
+      fetchMessagesForConv(activeConvId);
+      fetchUserConversations();
+    }, 2500);
     return () => clearInterval(liveInterval);
   }, [activeConvId]);
 
@@ -309,12 +412,6 @@ function MessagesContent() {
       handleSelectConversation(conversations[0].id);
     }
   }, [conversations]);
-
-  useEffect(() => {
-    if (activeConvId) {
-      setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, unreadCount: 0 } : c));
-    }
-  }, [activeConvId]);
 
   const activeConv = conversations.find(c => c.id === activeConvId) || null;
   const activeMessages = activeConvId ? (messagesMap[activeConvId] || []) : [];
@@ -388,86 +485,75 @@ function MessagesContent() {
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
   };
 
-  const sendVoiceMessage = (audioUrl: string) => {
+  const sendVoiceMessage = async (audioUrl: string) => {
     if (!activeConvId) return;
     const currentId = activeConvId;
-    const voiceMsg: ChatMessage = {
-      id: `msg-voice-${Date.now()}`,
-      senderId: "me",
-      senderName: "You",
-      text: "🎙️ Voice Note (00:15)",
-      audioUrl: audioUrl,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      isMe: true,
-      isDelivered: true,
-      isRead: false
-    };
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ convId: currentId, text: "🎙️ Voice Note", audioUrl, messageType: "AUDIO" })
+      });
 
-    setMessagesMap(prev => {
-      const updated = {
-        ...prev,
-        [currentId]: [...(prev[currentId] || []), voiceMsg]
-      };
-      if (typeof window !== "undefined") localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
-      return updated;
-    });
-
-    setConversations(prev => prev.map(c => {
-      if (c.id === currentId) {
-        return { ...c, lastMessage: "🎙️ Voice Note", lastTime: "Just now", unreadCount: 0 };
+      if (res.ok) {
+        fetchMessagesForConv(currentId);
+        fetchUserConversations();
       }
-      return c;
-    }));
+    } catch (e) {
+      console.error("Voice send error:", e);
+    }
   };
 
-  const handleSendMessage = (e?: React.FormEvent) => {
+  const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if ((!inputText.trim() && !attachedImage) || !activeConvId) return;
 
     const currentId = activeConvId;
-    const newMsgText = inputText.trim() || (attachedImage ? "📷 Image Attached" : "");
-    const newMsgImg = attachedImage || undefined;
+    const sendText = inputText.trim();
+    const sendImg = attachedImage;
 
-    const newMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
+    setInputText("");
+    setAttachedImage(null);
+
+    // Optimistic UI update
+    const tempId = `temp-${Date.now()}`;
+    const newMsgObj: ChatMessage = {
+      id: tempId,
       senderId: "me",
       senderName: "You",
-      text: newMsgText,
-      imageUrl: newMsgImg,
+      text: sendText || (sendImg ? "📷 Image Attached" : ""),
+      imageUrl: sendImg || undefined,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       isMe: true,
       isDelivered: true,
       isRead: false
     };
 
-    setInputText("");
-    setAttachedImage(null);
-
-    setMessagesMap(prev => {
-      const currentList = prev[currentId] || [];
-      if (currentList.some(m => m.id === newMsg.id || (m.isMe && m.text === newMsg.text && m.timestamp === newMsg.timestamp))) {
-        return prev;
-      }
-      const updated = {
-        ...prev,
-        [currentId]: [...currentList, newMsg]
-      };
-      if (typeof window !== "undefined") localStorage.setItem("dost_chat_messages_map", JSON.stringify(updated));
-      return updated;
-    });
-
-    setConversations(prev => prev.map(c => {
-      if (c.id === currentId) {
-        return { ...c, lastMessage: newMsgText, lastTime: "Just now", unreadCount: 0 };
-      }
-      return c;
+    setMessagesMap(prev => ({
+      ...prev,
+      [currentId]: [...(prev[currentId] || []), newMsgObj]
     }));
 
-    fetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: newMsg.id, convId: currentId, text: newMsg.text, imageUrl: newMsg.imageUrl })
-    }).catch(() => {});
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ convId: currentId, text: sendText, imageUrl: sendImg })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.message) {
+          setMessagesMap(prev => ({
+            ...prev,
+            [currentId]: (prev[currentId] || []).map(m => m.id === tempId ? data.message : m)
+          }));
+        }
+      }
+      fetchUserConversations();
+    } catch (err) {
+      console.error("Failed to send message:", err);
+    }
   };
 
   const handleAddReaction = (msgId: string, emoji: string) => {
@@ -510,16 +596,46 @@ function MessagesContent() {
       />
 
       <div className={styles.container} onClick={() => { setActiveReactionMsgId(null); setFullEmojiPickerMsgId(null); }}>
+        {/* Floating Toast Notification Banner for incoming messages */}
+        {floatingBanner && (
+          <div 
+            className="animate-slide-down"
+            style={{
+              position: "fixed", top: "20px", right: "20px", zIndex: 9999,
+              background: "rgba(15, 23, 42, 0.92)", backdropFilter: "blur(20px)",
+              border: "1px solid rgba(0, 242, 254, 0.5)", borderRadius: "16px",
+              padding: "12px 18px", boxShadow: "0 10px 40px rgba(0,242,254,0.3), 0 4px 20px rgba(0,0,0,0.8)",
+              display: "flex", alignItems: "center", gap: "14px", cursor: "pointer",
+              maxWidth: "340px"
+            }}
+            onClick={() => {
+              handleSelectConversation(floatingBanner.convId);
+              setFloatingBanner(null);
+            }}
+          >
+            <img src={floatingBanner.avatar} alt="" style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover", border: "2px solid #00f2fe" }} />
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "white" }}>{floatingBanner.senderName}</span>
+                <span style={{ fontSize: "0.7rem", background: "linear-gradient(135deg, #00f2fe, #7b2cbf)", color: "white", padding: "1px 6px", borderRadius: "99px", fontWeight: 700 }}>NEW</span>
+              </div>
+              <span style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {floatingBanner.text}
+              </span>
+            </div>
+            <button 
+              onClick={(e) => { e.stopPropagation(); setFloatingBanner(null); }}
+              style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer" }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
         {/* Left Sidebar Conversation List */}
         <div className={`${styles.sidebar} ${activeConvId ? styles.sidebarHiddenMobile : ""}`}>
           {/* Header */}
-          <div style={{
-            padding: "20px 24px",
-            borderBottom: "1px solid var(--color-border)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between"
-          }}>
+          <div className={styles.sidebarHeader}>
             <h2 style={{ fontSize: "1.5rem", fontWeight: 900, color: "var(--color-text-main)", margin: 0 }}>
               Messages
             </h2>
@@ -882,15 +998,7 @@ function MessagesContent() {
           {(activeConvId && activeConv) ? (
             <>
               {/* Chat Window Top Bar (Super Compact Modern Height) */}
-              <div style={{
-                padding: "8px 14px",
-                borderBottom: "1px solid var(--color-border)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                background: "var(--color-bg-surface)",
-                zIndex: 50
-              }}>
+              <div className={styles.chatHeader}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   {/* Back Arrow for Mobile Screen */}
                   <button 
@@ -911,9 +1019,20 @@ function MessagesContent() {
                     <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0, lineHeight: 1.2 }}>
                       {activeConv.name}
                     </h3>
-                    <span style={{ fontSize: "0.78rem", color: activeConv.isOnline ? "#10b981" : "var(--color-text-muted)", fontWeight: 600 }}>
-                      {activeConv.isOnline ? "Active now" : "Offline"}
-                    </span>
+                    {inputText.trim().length > 0 ? (
+                      <span style={{ fontSize: "0.78rem", color: "var(--color-primary)", fontWeight: 700, display: "flex", alignItems: "center", gap: "4px" }}>
+                        <span>typing</span>
+                        <span style={{ display: "inline-flex", gap: "2px" }}>
+                          <span style={{ animation: "typingDots 1.2s infinite 0s", width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)" }} />
+                          <span style={{ animation: "typingDots 1.2s infinite 0.2s", width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)" }} />
+                          <span style={{ animation: "typingDots 1.2s infinite 0.4s", width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)" }} />
+                        </span>
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: "0.78rem", color: activeConv.isOnline ? "#10b981" : "var(--color-text-muted)", fontWeight: 600 }}>
+                        {activeConv.isOnline ? "Active now" : "Offline"}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -1408,8 +1527,46 @@ function MessagesContent() {
                         </div>
                       )}
 
-                      {/* Text */}
-                      {msg.text}
+                      {/* Voice Note Audio Waveform Equalizer Visualizer */}
+                      {msg.audioUrl ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "4px 0" }}>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const audio = new Audio(msg.audioUrl);
+                              audio.play().catch(() => {});
+                            }}
+                            style={{
+                              background: msg.isMe ? "rgba(255,255,255,0.25)" : "var(--color-primary)",
+                              border: "none", color: "white", borderRadius: "50%",
+                              width: "34px", height: "34px", display: "flex",
+                              alignItems: "center", justifyContent: "center", cursor: "pointer",
+                              flexShrink: 0
+                            }}
+                            className="hover:scale-105 active:scale-95"
+                            title="Play Voice Note"
+                          >
+                            <Play size={16} fill="white" />
+                          </button>
+                          <div style={{ display: "flex", alignItems: "center", gap: "3px", height: "24px" }}>
+                            {[12, 18, 8, 22, 14, 20, 10, 24, 16, 8, 18, 12, 22, 14, 9, 16].map((h, i) => (
+                              <span
+                                key={i}
+                                className="animate-sound-wave"
+                                style={{
+                                  width: "3px",
+                                  height: `${h}px`,
+                                  borderRadius: "2px",
+                                  background: msg.isMe ? "rgba(255,255,255,0.9)" : "var(--color-primary)",
+                                  animationDelay: `${i * 0.08}s`
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        msg.text
+                      )}
 
                       {/* Reaction Badges */}
                       {msg.reactions && msg.reactions.length > 0 && (

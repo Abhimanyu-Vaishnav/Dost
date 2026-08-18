@@ -23,14 +23,12 @@ export function ThemeModal({ onClose }: { onClose: () => void }) {
   ];
 
   const accentColors = [
-    { hex: "#1d9bf0", name: "Blue" },
-    { hex: "#ffd400", name: "Yellow" },
-    { hex: "#f91880", name: "Pink" },
-    { hex: "#7856ff", name: "Purple" },
-    { hex: "#ff7a00", name: "Orange" },
-    { hex: "#00ba7c", name: "Green" },
-    { hex: "#00c6ff", name: "Cyan" },
-    { hex: "#ef4444", name: "Red" },
+    { hex: "#00f2fe", name: "Electric Cyan" },
+    { hex: "#a855f7", name: "Neon Violet" },
+    { hex: "#10b981", name: "Emerald Green" },
+    { hex: "#ff007f", name: "Sunset Pink" },
+    { hex: "#1d9bf0", name: "Sky Blue" },
+    { hex: "#ffd400", name: "Vibrant Yellow" },
   ];
 
   const fontFamilies: { id: FontFamily; name: string; sample: string; fontFamily: string }[] = [

@@ -26,6 +26,7 @@ interface XInteractionBarProps {
 }
 
 export const XInteractionBar: React.FC<XInteractionBarProps> = ({
+  postId,
   interactions: initialInteractions,
   onReplyClick,
   onQuoteClick,
@@ -54,7 +55,7 @@ export const XInteractionBar: React.FC<XInteractionBarProps> = ({
     }, 900);
   };
 
-  const handleLike = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleLike = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     const newLiked = !interactions.isLiked;
     const newCount = interactions.likes + (newLiked ? 1 : -1);
@@ -69,6 +70,29 @@ export const XInteractionBar: React.FC<XInteractionBarProps> = ({
       handleParticleBurst('like', e);
     } else {
       handleParticleBurst('unlike', e);
+    }
+
+    try {
+      const res = await fetch(`/api/posts/${postId}/like`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.count === "number") {
+          setInteractions((prev) => ({
+            ...prev,
+            isLiked: data.isLiked,
+            likes: data.count,
+          }));
+          if (onLikeChange) onLikeChange(data.isLiked, data.count);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to persist like:", err);
+      setInteractions((prev) => ({
+        ...prev,
+        isLiked: !newLiked,
+        likes: interactions.likes,
+      }));
     }
 
     if (onLikeChange) onLikeChange(newLiked, newCount);

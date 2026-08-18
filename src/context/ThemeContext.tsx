@@ -53,6 +53,9 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
   const applyAccentColor = (color: string) => {
     document.documentElement.style.setProperty("--color-primary", color);
+    document.documentElement.style.setProperty("--color-primary-light", color);
+    document.documentElement.style.setProperty("--aurora-cyan", color);
+    document.documentElement.style.setProperty("--glow-primary", `0 0 24px ${color}66`);
     document.documentElement.style.setProperty("--color-primary-rgb", hexToRgb(color));
   };
 

@@ -82,16 +82,14 @@ export default async function FeedPage(props: { searchParams: Promise<{ tab?: st
           author: { select: { id: true, name: true, avatar: true, username: true } }
         }
       },
-      likes: true,
+      likes: {
+        where: { userId: user.userId as string }
+      },
       bookmarkedBy: {
         where: { userId: user.userId as string }
       },
-      comments: {
-        include: { 
-          user: { select: { id: true, name: true, avatar: true, username: true } },
-          likes: true
-        },
-        orderBy: { createdAt: "asc" }
+      _count: {
+        select: { comments: true, likes: true, reposts: true }
       },
       repost: {
         include: {

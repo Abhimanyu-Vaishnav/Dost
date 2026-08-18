@@ -18,7 +18,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Target User ID is required" }, { status: 400 });
     }
 
-    if (user.userId === targetUserId) {
+    // Resolve target user by ID or Username
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: targetUserId },
+          { username: targetUserId }
+        ]
+      }
+    });
+
+    if (!targetUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (user.userId === targetUser.id) {
       return NextResponse.json({ error: "Cannot start a conversation with yourself" }, { status: 400 });
     }
 
@@ -27,7 +41,7 @@ export async function POST(request: Request) {
       where: {
         AND: [
           { participants: { some: { id: user.userId as string } } },
-          { participants: { some: { id: targetUserId } } }
+          { participants: { some: { id: targetUser.id } } }
         ]
       }
     });
@@ -42,7 +56,7 @@ export async function POST(request: Request) {
         participants: {
           connect: [
             { id: user.userId as string },
-            { id: targetUserId }
+            { id: targetUser.id }
           ]
         }
       }

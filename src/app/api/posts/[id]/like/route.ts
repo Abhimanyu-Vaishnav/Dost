@@ -18,15 +18,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       where: { userId_postId: { userId, postId } },
     });
 
+    let isLiked = false;
+
     if (existingLike) {
       await prisma.like.delete({
         where: { userId_postId: { userId, postId } },
       });
-      return NextResponse.json({ message: "Post unliked" }, { status: 200 });
+      isLiked = false;
     } else {
-      const like = await prisma.like.create({
+      await prisma.like.create({
         data: { userId, postId },
       });
+      isLiked = true;
 
       // Create notification
       const post = await prisma.post.findUnique({
@@ -44,9 +47,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }
         });
       }
-
-      return NextResponse.json({ message: "Post liked" }, { status: 200 });
     }
+
+    const count = await prisma.like.count({ where: { postId } });
+    return NextResponse.json({ success: true, isLiked, count, message: isLiked ? "Post liked" : "Post unliked" }, { status: 200 });
   } catch (error) {
     console.error("Like error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

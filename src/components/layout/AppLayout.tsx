@@ -14,6 +14,10 @@ import { CreateStoryModal } from "@/features/stories/components/CreateStoryModal
 import { ThemeModal } from "@/components/layout/ThemeModal";
 import { useTheme } from "@/context/ThemeContext";
 
+let GLOBAL_USER_CACHE: any = null;
+let GLOBAL_UNREAD_NOTIF_CACHE: number = 0;
+let GLOBAL_UNREAD_MSG_CACHE: number = 0;
+
 export function AppLayout({ children, rightSidebar, fullWidth = false }: { children: React.ReactNode, rightSidebar?: React.ReactNode, fullWidth?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -26,9 +30,9 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
     isVerified?: boolean;
     followersCount?: number;
     followingCount?: number;
-  } | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
+  } | null>(() => GLOBAL_USER_CACHE);
+  const [unreadCount, setUnreadCount] = useState(() => GLOBAL_UNREAD_NOTIF_CACHE);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(() => GLOBAL_UNREAD_MSG_CACHE);
   const [latestUnreadMsgId, setLatestUnreadMsgId] = useState<string | null>(null);
   const [activeToast, setActiveToast] = useState<{ senderName: string; content: string; conversationId: string; id: string } | null>(null);
   const [securityToast, setSecurityToast] = useState<string | null>(null);
@@ -62,7 +66,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         const profileRes = await fetch("/api/users/profile");
         if (profileRes.ok) {
           const data = await profileRes.json();
-          setUser({ 
+          const userData = { 
             userId: data.user.id, 
             name: data.user.name, 
             username: data.user.username,
@@ -70,7 +74,9 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             isVerified: data.user.isVerified || data.user.accountType === "PREMIUM" || data.user.accountType === "VERIFIED" || false,
             followersCount: data.user._count?.followers || 0,
             followingCount: data.user._count?.following || 0,
-          });
+          };
+          setUser(userData);
+          GLOBAL_USER_CACHE = userData;
 
           if (data.user.dob && !localStorage.getItem("dost_font_size")) {
             setFontFromDob(data.user.dob);
@@ -81,6 +87,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         if (notifyRes.ok) {
           const data = await notifyRes.json();
           setUnreadCount(data.count);
+          GLOBAL_UNREAD_NOTIF_CACHE = data.count;
         }
 
         // Ping to update lastSeen
@@ -101,6 +108,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         if (res.ok) {
           const data = await res.json();
           setUnreadMessagesCount(data.count);
+          GLOBAL_UNREAD_MSG_CACHE = data.count;
 
           if (data.latestUnread) {
             const { id, senderName, content, conversationId } = data.latestUnread;
@@ -312,37 +320,37 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
 
             {/* Mobile Drawer Options List (Our App Data) */}
             <div className={styles.drawerMenuList}>
-              <Link href={user?.userId ? `/profile/${user.userId}` : "/profile"} prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href={user?.userId ? `/profile/${user.userId}` : "/profile"} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <User size={22} /> <span>Profile</span>
               </Link>
-              <Link href="/trending" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/trending" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <Flame size={22} style={{ color: "#ff6b00" }} /> <span>Trending &amp; News</span>
               </Link>
-              <Link href="/search?tab=people" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/search?tab=people" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <UserPlus size={22} style={{ color: "var(--color-primary)" }} /> <span>Who to Follow</span>
               </Link>
-              <Link href="/premium" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/premium" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <CheckCircle2 size={22} /> <span>Premium</span>
               </Link>
-              <Link href="/bookmarks" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/bookmarks" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <Bookmark size={22} /> <span>Bookmarks</span>
               </Link>
-              <Link href="/lists" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/lists" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <List size={22} /> <span>Lists</span>
               </Link>
-              <Link href="/communities" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/communities" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <Users size={22} /> <span>Communities</span>
               </Link>
-              <Link href="/analytics" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/analytics" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <BarChart3 size={22} /> <span>Analytics</span>
               </Link>
               <button className={styles.drawerMenuItem} onClick={() => { setShowThemeModal(true); setShowSideDrawer(false); }}>
                 <Palette size={22} /> <span>Display & Font</span>
               </button>
-              <Link href="/settings" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/settings" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <SettingsIcon size={22} /> <span>Settings and privacy</span>
               </Link>
-              <Link href="/help" prefetch={true} className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
+              <Link href="/help" className={styles.drawerMenuItem} onClick={() => setShowSideDrawer(false)}>
                 <HelpCircle size={22} /> <span>Help Center</span>
               </Link>
               <button className={styles.drawerMenuItem} style={{ color: "#ff4d4d", marginTop: "8px" }} onClick={() => { handleLogout(); setShowSideDrawer(false); }}>
@@ -401,7 +409,6 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
                 <Link 
                   key={item.id} 
                   href={item.href} 
-                  prefetch={true}
                   className={`${styles.navItem} ${!isMobileBottomItem ? styles.desktopOnly : ""} ${active ? styles.navItemActive : ""}`}
                   onClick={(e) => {
                     if (item.id === "home" && (pathname === "/feed" || pathname === "/")) {
@@ -539,7 +546,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
       <main 
         className={styles.mainContent} 
         style={
-          pathname === "/shorts" 
+          pathname === "/shorts" || pathname?.startsWith("/messages")
             ? { flex: 1, minWidth: 0, width: "auto", borderRight: "none", overflow: "hidden", padding: 0 } 
             : fullWidth 
             ? { flex: 1, minWidth: 0, width: "auto", borderRight: "none", overflowY: "auto" } 

@@ -21,7 +21,7 @@ export async function GET() {
       include: {
         participants: {
           where: { id: { not: user.userId as string } },
-          select: { id: true, name: true, avatar: true }
+          select: { id: true, name: true, username: true, avatar: true }
         },
         messages: {
           orderBy: { createdAt: "desc" },

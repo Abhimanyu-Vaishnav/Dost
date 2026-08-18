@@ -196,7 +196,35 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ posts }, { status: 200 });
+    const formattedPosts = posts.map((p: any) => {
+      const isLiked = Array.isArray(p.likes) && p.likes.length > 0;
+      const isReposted = Array.isArray(p.reposts) && p.reposts.length > 0;
+      const isBookmarked = Array.isArray(p.bookmarkedBy) && p.bookmarkedBy.length > 0;
+      const likesCount = p._count?.likes ?? 0;
+      const repostsCount = p._count?.reposts ?? 0;
+      const commentsCount = p._count?.comments ?? 0;
+
+      return {
+        ...p,
+        isLiked,
+        isReposted,
+        isBookmarked,
+        likesCount,
+        repostsCount,
+        commentsCount,
+        interactions: {
+          isLiked,
+          likes: likesCount,
+          isReposted,
+          reposts: repostsCount,
+          isBookmarked,
+          bookmarks: p._count?.bookmarkedBy ?? 0,
+          replies: commentsCount
+        }
+      };
+    });
+
+    return NextResponse.json({ posts: formattedPosts }, { status: 200 });
   } catch (error) {
     console.error("Fetch posts error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
