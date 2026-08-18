@@ -43,7 +43,7 @@ export function getOrCreateAudioContext(): AudioContext | null {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return null;
     if (!activeAudioContext || activeAudioContext.state === "closed") {
-      activeAudioContext = new AudioCtx();
+      activeAudioContext = new AudioCtx({ sampleRate: 48000 });
     }
     if (activeAudioContext.state === "suspended") {
       activeAudioContext.resume().catch(() => {});
@@ -54,96 +54,112 @@ export function getOrCreateAudioContext(): AudioContext | null {
   }
 }
 
-// Play Outgoing Ringback Tone ("tuuuun... tuuuun...") for Caller
+// Claim System Audio Session (Pauses background Spotify, YouTube, Videos, etc.)
+export function claimSystemAudioSession(callerName: string, callType: string) {
+  try {
+    if (typeof window !== "undefined" && "mediaSession" in navigator) {
+      navigator.mediaSession.playbackState = "playing";
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: `📞 ${callType.toUpperCase()} Call with ${callerName}`,
+        artist: "DOST Call Engine",
+        album: "HD Encrypted Voice"
+      });
+    }
+  } catch (e) {}
+}
+
+export function releaseSystemAudioSession() {
+  try {
+    if (typeof window !== "undefined" && "mediaSession" in navigator) {
+      navigator.mediaSession.playbackState = "none";
+      navigator.mediaSession.metadata = null;
+    }
+  } catch (e) {}
+}
+
+// Start continuous dual-frequency US Ringback Tone loop
 export function startOutgoingRingbackSound() {
   stopAllRingtones();
-  if (typeof window === "undefined") return;
+  const ctx = getOrCreateAudioContext();
+  if (!ctx) return;
 
   try {
-    const ctx = getOrCreateAudioContext();
-    if (!ctx) return;
-
     const osc1 = ctx.createOscillator();
     const osc2 = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const gainNode = ctx.createGain();
 
     osc1.type = "sine";
     osc2.type = "sine";
     osc1.frequency.setValueAtTime(440, ctx.currentTime);
     osc2.frequency.setValueAtTime(480, ctx.currentTime);
 
-    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gainNode.gain.setValueAtTime(0.12, ctx.currentTime);
 
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(ctx.destination);
+    osc1.connect(gainNode);
+    osc2.connect(gainNode);
+    gainNode.connect(ctx.destination);
 
     osc1.start();
     osc2.start();
 
     activeToneOsc1 = osc1;
     activeToneOsc2 = osc2;
-    activeGainNode = gain;
+    activeGainNode = gainNode;
   } catch (e) {}
 }
 
-// Play Incoming Caller Tune ("trrrring... trrrring...") & Trigger Device Vibration
+// Start continuous high-pitched FaceTime/WhatsApp-style Incoming Caller Tune sound loop
 export function startIncomingCallerTuneSound() {
   stopAllRingtones();
-  if (typeof window === "undefined") return;
+  const ctx = getOrCreateAudioContext();
+  if (!ctx) return;
 
   try {
-    const ctx = getOrCreateAudioContext();
-    if (!ctx) return;
-
     const osc1 = ctx.createOscillator();
     const osc2 = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const gainNode = ctx.createGain();
 
     osc1.type = "sine";
-    osc2.type = "triangle";
+    osc2.type = "sine";
+    osc1.frequency.setValueAtTime(853, ctx.currentTime);
+    osc2.frequency.setValueAtTime(960, ctx.currentTime);
 
-    osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-    osc2.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+    gainNode.gain.setValueAtTime(0.18, ctx.currentTime);
 
-    gain.gain.setValueAtTime(0.18, ctx.currentTime);
-
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(ctx.destination);
+    osc1.connect(gainNode);
+    osc2.connect(gainNode);
+    gainNode.connect(ctx.destination);
 
     osc1.start();
     osc2.start();
 
     activeToneOsc1 = osc1;
     activeToneOsc2 = osc2;
-    activeGainNode = gain;
-
-    triggerDeviceVibration();
+    activeGainNode = gainNode;
   } catch (e) {}
 }
 
-// Trigger WhatsApp-Style Device Vibration
+// WhatsApp-Style Haptic Pattern Device Vibration
 export function triggerDeviceVibration() {
-  if (typeof window === "undefined" || !("vibrate" in navigator)) return;
-
-  const doVibrate = () => {
-    try {
-      navigator.vibrate([600, 300, 600, 300, 600]);
-    } catch (e) {}
-  };
-
-  doVibrate();
-  if (!vibrationInterval) {
-    vibrationInterval = setInterval(doVibrate, 2500);
-  }
+  try {
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate([600, 300, 600, 300, 600, 300]);
+      if (!vibrationInterval) {
+        vibrationInterval = setInterval(() => {
+          if (typeof window !== "undefined" && "vibrate" in navigator) {
+            navigator.vibrate([600, 300, 600, 300, 600, 300]);
+          }
+        }, 3000);
+      }
+    }
+  } catch (e) {}
 }
 
-// Trigger Browser Native System Notification
-export function triggerSystemNotification(callerName: string, callType: string = "voice") {
-  if (typeof window === "undefined" || !("Notification" in window)) return;
-
+// Trigger Native Browser System Notification
+export function triggerSystemNotification(callerName: string, callType: string) {
   try {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+
     if (Notification.permission === "granted") {
       new Notification(`📞 Incoming ${callType === "voice" ? "Voice" : "Video"} Call`, {
         body: `${callerName} is calling you live. Tap to answer!`,
@@ -164,7 +180,7 @@ export function triggerSystemNotification(callerName: string, callType: string =
   } catch (e) {}
 }
 
-// Stop All Ringtone Sounds & Vibration
+// Stop All Ringtone Sounds, MediaSession & Vibration
 export function stopAllRingtones() {
   try {
     if (activeToneOsc1) {
@@ -188,5 +204,6 @@ export function stopAllRingtones() {
     if (typeof window !== "undefined" && "vibrate" in navigator) {
       navigator.vibrate(0);
     }
+    releaseSystemAudioSession();
   } catch (e) {}
 }

@@ -7,7 +7,8 @@ import {
 } from "lucide-react";
 import { 
   CallSessionData, startOutgoingRingbackSound, 
-  startIncomingCallerTuneSound, stopAllRingtones, getOrCreateAudioContext 
+  startIncomingCallerTuneSound, stopAllRingtones, getOrCreateAudioContext,
+  claimSystemAudioSession, releaseSystemAudioSession
 } from "@/lib/callEngine";
 
 interface CallOverlayProps {
@@ -17,7 +18,7 @@ interface CallOverlayProps {
   onAcceptCall: () => void;
 }
 
-// Universal getUserMedia helper supporting legacy mobile WebViews & HTTP IP origins
+// Universal getUserMedia helper supporting legacy mobile WebViews & HTTP IP origins with 48kHz HD Audio Constraints
 async function requestUserMediaStream(constraints: MediaStreamConstraints): Promise<MediaStream | null> {
   try {
     if (typeof window === "undefined") return null;
@@ -75,6 +76,14 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const otherPersonName = isCaller ? (session.recipientName || "Recipient") : session.callerName;
   const otherPersonAvatar = isCaller ? (session.recipientAvatar || session.callerAvatar) : session.callerAvatar;
 
+  // Claim System Audio Session (Pauses background Spotify / YouTube & assigns priority to DOST Call)
+  useEffect(() => {
+    claimSystemAudioSession(otherPersonName, session.callType);
+    return () => {
+      releaseSystemAudioSession();
+    };
+  }, [otherPersonName, session.callType]);
+
   // Global Audio Unlocker on any user tap
   const unlockAndPlayAudio = () => {
     try {
@@ -82,7 +91,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
       if (remoteAudioRef.current) {
         remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.4;
+        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.3;
         remoteAudioRef.current.play().catch(() => {});
       }
     } catch (e) {}
@@ -110,7 +119,13 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     unlockAndPlayAudio();
     const stream = await requestUserMediaStream({
       video: session.callType === "video",
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 48000,
+        channelCount: 2
+      }
     }) || await requestUserMediaStream({ audio: true });
 
     if (stream) {
@@ -164,11 +179,14 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = remoteStream;
         remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.4;
+        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.3;
+        if ((remoteAudioRef.current as any).setSinkId) {
+          (remoteAudioRef.current as any).setSinkId(isSpeakerOn ? "default" : "").catch(() => {});
+        }
         remoteAudioRef.current.play().catch(() => {});
       }
 
-      // Direct Web Audio Destination Bridge (Bypasses Browser Autoplay Restrictions)
+      // Direct Web Audio Destination Bridge (Boosts volume 2.5x for Loudspeaker output)
       try {
         const ctx = getOrCreateAudioContext();
         if (ctx) {
@@ -178,7 +196,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             const audioStream = new MediaStream([audioTrack]);
             const source = ctx.createMediaStreamSource(audioStream);
             const gain = ctx.createGain();
-            gain.gain.value = isSpeakerOn ? 1.0 : 0.4;
+            gain.gain.value = isSpeakerOn ? 2.5 : 0.5; // 2.5x volume boost for Loudspeaker
             source.connect(gain);
             gain.connect(ctx.destination);
           }
@@ -201,7 +219,13 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       try {
         const stream = await requestUserMediaStream({
           video: session.callType === "video",
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000,
+            channelCount: 2
+          }
         }) || await requestUserMediaStream({ audio: true });
 
         if (!stream) {
@@ -256,7 +280,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             else if (MediaRecorder.isTypeSupported("audio/aac")) mime = "audio/aac";
 
             if (mime) {
-              mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+              mediaRecorder = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 128000 });
 
               mediaRecorder.ondataavailable = async (e) => {
                 if (e.data && e.data.size > 0 && isConnected) {
@@ -311,7 +335,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             for (const chunk of data.chunks) {
               if (chunk.blobBase64) {
                 const audio = new Audio(`data:audio/webm;base64,${chunk.blobBase64}`);
-                audio.volume = isSpeakerOn ? 1.0 : 0.4;
+                audio.volume = isSpeakerOn ? 1.0 : 0.3;
                 audio.play().catch(() => {
                   // Web Audio Context decodeAudioData fallback
                   try {
@@ -325,7 +349,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                           const src = ctx.createBufferSource();
                           src.buffer = audioBuffer;
                           const gain = ctx.createGain();
-                          gain.gain.value = isSpeakerOn ? 1.0 : 0.4;
+                          gain.gain.value = isSpeakerOn ? 2.5 : 0.5;
                           src.connect(gain);
                           gain.connect(ctx.destination);
                           src.start(0);
@@ -447,6 +471,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     if (remoteAudioRef.current) {
       remoteAudioRef.current.volume = nextSpeaker ? 1.0 : 0.3;
+      if ((remoteAudioRef.current as any).setSinkId) {
+        (remoteAudioRef.current as any).setSinkId(nextSpeaker ? "default" : "").catch(() => {});
+      }
     }
   };
 
@@ -534,7 +561,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           borderRadius: "9999px", color: "white", fontSize: "0.85rem", fontWeight: 800,
           border: "1px solid rgba(255, 255, 255, 0.2)", backdropFilter: "blur(12px)"
         }}>
-          <Shield size={16} style={{ color: "#10b981" }} /> End-to-End Encrypted {session.callType === "voice" ? "Voice" : "Video"} Call
+          <Shield size={16} style={{ color: "#10b981" }} /> End-to-End Encrypted HD {session.callType === "voice" ? "Voice" : "Video"} Call
         </div>
 
         <h2 style={{ fontSize: "2.2rem", fontWeight: 900, color: "#ffffff", margin: "14px 0 2px 0", textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
@@ -672,7 +699,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                 cursor: "pointer", transition: "all 0.2s ease"
               }}
               className="hover:scale-105 active:scale-95"
-              title={isSpeakerOn ? "Speaker ON" : "Earpiece Mode"}
+              title={isSpeakerOn ? "Speaker ON (Loudspeaker)" : "Earpiece Mode"}
             >
               {isSpeakerOn ? <Volume2 size={22} /> : <Headphones size={22} />}
             </button>
