@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   Phone, PhoneOff, Mic, MicOff, Volume2, Video, VideoOff, 
-  Shield, PhoneCall, Headphones, Minimize2, Maximize2, RefreshCw, VolumeX
+  Shield, PhoneCall, Headphones, Minimize2, Maximize2, RefreshCw
 } from "lucide-react";
 import { 
   CallSessionData, startOutgoingRingbackSound, 
@@ -71,7 +71,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }
   };
 
-  // FORCE PLAY AUDIO DEBUG BUTTON HANDLER
+  // FORCE PLAY AUDIO DIAGNOSTIC BUTTON HANDLER
   const handleForcePlayAudio = () => {
     console.log("[FORCE PLAY AUDIO] Diagnostic Button Pressed!");
     const pc = peerConnectionRef.current;
@@ -125,7 +125,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       console.log("[CallOverlay] Binding remoteStream to Audio Engine. Audio tracks count:", remoteStream.getAudioTracks().length);
       playRemoteAudioStream(remoteStream, isSpeakerOn);
 
-      if (remoteAudioRef.current) {
+      if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== remoteStream) {
         remoteAudioRef.current.srcObject = remoteStream;
         remoteAudioRef.current.muted = false;
         remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.15;
@@ -145,12 +145,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return () => stopAllRingtones();
   }, [isRinging, isCaller]);
 
-  // CORE WEBRTC ENGINE (STABLE LIFECYCLE: DECOUPLED FROM UI RE-RENDERS!)
+  // CORE WEBRTC ENGINE (WITH FREE TURN RELAY FOR 5G/MOBILE CGNAT TRAVERSAL)
   useEffect(() => {
     // If recipient is in RINGING state, DO NOT start media or auto-accept!
     if (isRecipient && isRinging) return;
 
-    console.log("[CallOverlay] Initializing STABLE WebRTC Peer Connection...");
+    console.log("[CallOverlay] Initializing STABLE WebRTC Peer Connection with TURN Relays...");
     let localStream: MediaStream | null = null;
     let animFrame: number;
 
@@ -159,8 +159,26 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
-        { urls: "stun:stun3.l.google.com:19302" }
-      ]
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" },
+        // FREE PUBLIC TURN RELAYS FOR 5G/MOBILE CGNAT TRAVERSAL
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443?transport=tcp",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        }
+      ],
+      iceCandidatePoolSize: 10
     };
 
     const pc = new RTCPeerConnection(configuration);
@@ -182,7 +200,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
       playRemoteAudioStream(stream, isSpeakerOn);
 
-      if (remoteAudioRef.current) {
+      if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== stream) {
         remoteAudioRef.current.srcObject = stream;
         remoteAudioRef.current.muted = false;
         remoteAudioRef.current.play().catch(() => {});
@@ -196,7 +214,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     // Send Local ICE Candidates
     pc.onicecandidate = (event) => {
       if (event.candidate && (pc as any).signalingState !== "closed") {
-        console.log("[CallOverlay] ICE Candidate generated, sending to peer...");
+        console.log("[CallOverlay] ICE Candidate generated, sending to peer:", event.candidate.type || "candidate");
         fetch("/api/calls/signal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -310,7 +328,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
       try { pc.close(); } catch (e) {}
     };
-  }, [session.sessionId, isRecipient, isRinging]); // DECOUPLED! Runs once per call session!
+  }, [session.sessionId, isRecipient, isRinging]);
 
   // Two-Way Instant Signaling Exchange (SDP Answer & Candidates)
   useEffect(() => {
@@ -542,7 +560,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           )}
         </span>
 
-        {/* MANDATORY DIAGNOSTIC "FORCE PLAY AUDIO" DEBUG BUTTON */}
+        {/* DIAGNOSTIC "FORCE PLAY AUDIO" DEBUG BUTTON */}
         <button
           onClick={handleForcePlayAudio}
           style={{

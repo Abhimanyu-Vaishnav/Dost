@@ -106,7 +106,11 @@ export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = 
 
     audioEl.muted = false;
     audioEl.volume = isSpeaker ? 1.0 : 0.15;
-    audioEl.srcObject = stream;
+
+    // Prevent "interrupted by a new load request" error by ONLY setting srcObject if different!
+    if (audioEl.srcObject !== stream) {
+      audioEl.srcObject = stream;
+    }
 
     console.log(`[AudioEngine] Audio Element readyState: ${audioEl.readyState}, paused: ${audioEl.paused}`);
 
