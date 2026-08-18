@@ -18,7 +18,8 @@ interface CallOverlayProps {
 }
 
 export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }: CallOverlayProps) {
-  const isCaller = !currentUserId || currentUserId === session.callerId || currentUserId === session.callerName || session.callerId === "me" || session.callerName === "Calling...";
+  const isRecipient = Boolean(currentUserId && (currentUserId === session.recipientId || currentUserId === session.recipientName));
+  const isCaller = session.callerId === "me" || session.callerName === "me" || (!isRecipient && (currentUserId ? (currentUserId === session.callerId || currentUserId === session.callerName) : true));
   const isRinging = session.status === "RINGING";
   const isConnected = session.status === "CONNECTED";
 

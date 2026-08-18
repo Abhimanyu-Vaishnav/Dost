@@ -143,26 +143,8 @@ function MessagesContent() {
 
   // 3-Dots Menu & In-Chat Search States
   const { startCall } = useCall();
-  const [localActiveCall, setLocalActiveCall] = useState<CallSessionData | null>(null);
 
-  const handleStartCall = async (partnerId: string, callType: "voice" | "video", partnerName?: string, partnerAvatar?: string) => {
-    const displayName = partnerName || partnerId;
-    const displayAvatar = partnerAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=a855f7&color=ffffff`;
-
-    const sess: CallSessionData = {
-      sessionId: `call_${Date.now()}`,
-      callerId: "me",
-      callerName: "me",
-      callerAvatar: "https://ui-avatars.com/api/?name=User&background=00f2fe&color=ffffff",
-      recipientId: partnerId,
-      recipientName: displayName,
-      recipientAvatar: displayAvatar,
-      callType,
-      status: "RINGING",
-      updatedAt: Date.now()
-    };
-
-    setLocalActiveCall(sess);
+  const handleStartCall = (partnerId: string, callType: "voice" | "video", partnerName?: string, partnerAvatar?: string) => {
     startCall(partnerId, callType, partnerName, partnerAvatar).catch(() => {});
   };
   const [showTopMenu, setShowTopMenu] = useState(false);
@@ -1863,15 +1845,7 @@ function MessagesContent() {
         </div>
       </div>
 
-      {/* Voice or Video Call Modal Overlay Fallback */}
-      {localActiveCall && (
-        <CallOverlay
-          session={localActiveCall}
-          currentUserId="me"
-          onEndCall={() => setLocalActiveCall(null)}
-          onAcceptCall={async () => setLocalActiveCall(null)}
-        />
-      )}
+
     </AppLayout>
   );
 }
