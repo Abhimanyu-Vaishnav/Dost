@@ -75,10 +75,12 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               }
             }
           } else {
-            // When server returns session: null, instantly close call screen on both ends!
-            setActiveSession(null);
-            stopAllRingtones();
-            notifiedSessionIdRef.current = null;
+            // Wipes out session only after 3s grace period to prevent race conditions during call setup
+            if (Date.now() - callStartedTimeRef.current > 3000) {
+              setActiveSession(null);
+              stopAllRingtones();
+              notifiedSessionIdRef.current = null;
+            }
           }
         }
       } catch (e) {}

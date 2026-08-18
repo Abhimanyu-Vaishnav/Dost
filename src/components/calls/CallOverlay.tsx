@@ -305,8 +305,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       const pc = peerConnectionRef.current;
       if (!pc) return;
       try {
-        // Recipient handles SDP Offer
-        if (!isCaller && session.sdpOffer && !pc.remoteDescription) {
+        // Recipient handles SDP Offer ONLY after explicitly accepting call (status === CONNECTED)
+        if (!isCaller && session.status === "CONNECTED" && session.sdpOffer && !pc.remoteDescription) {
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
