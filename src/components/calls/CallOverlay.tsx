@@ -41,6 +41,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const processedIceCandidatesRef = useRef<Set<string>>(new Set());
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const initializedHandshakeRef = useRef<boolean>(false);
 
   // Clean Partner Name & Avatar Resolution
   const rawOtherName = isCaller ? (session.recipientName || session.recipientId) : (session.callerName || session.callerId);
@@ -146,12 +147,48 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return () => stopAllRingtones();
   }, [isRinging, isCaller]);
 
-  // CORE WEBRTC ENGINE INITIALIZATION (STABLE LIFECYCLE + RELIABLE ICE QUEUE)
+  // Helper to add candidate safely (only after remote description is set)
+  const addCandidateSafely = async (cand: RTCIceCandidateInit) => {
+    const pc = peerConnectionRef.current;
+    if (!pc || (pc as any).signalingState === "closed") return;
+    
+    if (pc.remoteDescription && pc.remoteDescription.type) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(cand));
+        console.log("[WebRTC Candidates] Added ICE Candidate successfully!");
+      } catch (e) {
+        console.warn("[WebRTC Candidates] Candidate add error:", e);
+      }
+    } else {
+      console.log("[WebRTC Candidates] Queuing candidate until RemoteDescription is set...");
+      pendingIceCandidatesRef.current.push(cand);
+    }
+  };
+
+  const flushPendingIceCandidates = async () => {
+    const pc = peerConnectionRef.current;
+    if (!pc || !pc.remoteDescription || (pc as any).signalingState === "closed") return;
+    
+    console.log(`[WebRTC Candidates] Flushing ${pendingIceCandidatesRef.current.length} queued ICE candidates...`);
+    while (pendingIceCandidatesRef.current.length > 0) {
+      const cand = pendingIceCandidatesRef.current.shift();
+      if (cand) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+          console.log("[WebRTC Candidates] Flushed candidate added successfully!");
+        } catch (e) {}
+      }
+    }
+  };
+
+  // CORE WEBRTC ENGINE INITIALIZATION (STRICT SEQUENTIAL ORDER: MEDIA FIRST, SDP SECOND)
   useEffect(() => {
     // If recipient is in RINGING state, DO NOT start media or auto-accept!
     if (isRecipient && isRinging) return;
+    if (initializedHandshakeRef.current) return;
 
-    console.log("[CallOverlay] Initializing STABLE WebRTC Peer Connection with TURN Relays...");
+    initializedHandshakeRef.current = true;
+    console.log("[CallOverlay] Initializing WebRTC Engine (Media First -> SDP Second)...");
     let localStream: MediaStream | null = null;
     let animFrame: number;
 
@@ -223,11 +260,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
     };
 
-    async function startMedia() {
+    async function initPipeline() {
       try {
         if ((pc as any).signalingState === "closed") return;
 
-        console.log("[CallOverlay] Requesting getUserMedia...");
+        // STEP 1: CAPTURE LOCAL MEDIA FIRST (MANDATORY BEFORE ANY SDP CREATION)
+        console.log("[CallOverlay] STEP 1: Requesting getUserMedia...");
         const constraints: MediaStreamConstraints = {
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 },
           video: session.callType === "video" ? {
@@ -244,11 +282,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
         if (!stream || (pc as any).signalingState === "closed") return;
 
-        console.log("[CallOverlay] Local media stream captured successfully. Audio tracks:", stream.getAudioTracks().length);
+        console.log("[CallOverlay] STEP 2: Adding local tracks to PC...");
         localStream = stream;
         localMediaStreamRef.current = stream;
 
-        // Add Tracks to WebRTC Peer Connection
         stream.getTracks().forEach(track => {
           track.enabled = true;
           if ((pc as any).signalingState !== "closed") {
@@ -286,25 +323,36 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         } catch (e) {}
 
-        // Caller SDP Offer
-        if (isCaller && (pc as any).signalingState !== "closed") {
-          console.log("[CallOverlay] Creating SDP Offer...");
+        // STEP 3: SDP HANDSHAKE AFTER TRACKS ARE ADDED
+        if (isCaller) {
+          console.log("[CallOverlay] STEP 3 (Caller): Creating SDP Offer with local tracks attached...");
           const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
-          if ((pc as any).signalingState !== "closed") {
-            await pc.setLocalDescription(offer);
-            fetch("/api/calls/signal", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "SDP_OFFER", sdp: offer })
-            }).catch(() => {});
-          }
+          await pc.setLocalDescription(offer);
+          await fetch("/api/calls/signal", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "SDP_OFFER", sdp: offer })
+          });
+          console.log("[CallOverlay] SDP Offer sent successfully to signaling server!");
+        } else if (session.sdpOffer) {
+          console.log("[CallOverlay] STEP 3 (Recipient): Setting remote SDP Offer & Creating Answer with local tracks attached...");
+          await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
+          await flushPendingIceCandidates();
+          const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
+          await pc.setLocalDescription(answer);
+          await fetch("/api/calls/signal", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
+          });
+          console.log("[CallOverlay] SDP Answer sent successfully to signaling server!");
         }
       } catch (e) {
-        console.error("[CallOverlay] Start media error:", e);
+        console.error("[CallOverlay] Init pipeline error:", e);
       }
     }
 
-    startMedia();
+    initPipeline();
 
     // CLEANUP ON UNMOUNT ONLY
     return () => {
@@ -328,43 +376,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
       try { pc.close(); } catch (e) {}
     };
-  }, [session.sessionId, isRecipient, isRinging]);
+  }, [session.sessionId, isRecipient, isRinging, isCaller]);
 
-  // Helper to add candidate safely (only after remote description is set)
-  const addCandidateSafely = async (cand: RTCIceCandidateInit) => {
-    const pc = peerConnectionRef.current;
-    if (!pc || (pc as any).signalingState === "closed") return;
-    
-    if (pc.remoteDescription && pc.remoteDescription.type) {
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(cand));
-        console.log("[WebRTC Candidates] Added ICE Candidate successfully!");
-      } catch (e) {
-        console.warn("[WebRTC Candidates] Candidate add error:", e);
-      }
-    } else {
-      console.log("[WebRTC Candidates] Queuing candidate until RemoteDescription is set...");
-      pendingIceCandidatesRef.current.push(cand);
-    }
-  };
-
-  const flushPendingIceCandidates = async () => {
-    const pc = peerConnectionRef.current;
-    if (!pc || !pc.remoteDescription || (pc as any).signalingState === "closed") return;
-    
-    console.log(`[WebRTC Candidates] Flushing ${pendingIceCandidatesRef.current.length} queued ICE candidates...`);
-    while (pendingIceCandidatesRef.current.length > 0) {
-      const cand = pendingIceCandidatesRef.current.shift();
-      if (cand) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(cand));
-          console.log("[WebRTC Candidates] Flushed candidate added successfully!");
-        } catch (e) {}
-      }
-    }
-  };
-
-  // DEDICATED TWO-WAY SIGNALING EXCHANGE LISTENER (STRICT WEBRTC ORDER ENFORCEMENT)
+  // CONTINUOUS SIGNALING EXCHANGE LISTENER (FOR LATE-ARRIVING sdpOffer OR sdpAnswer)
   useEffect(() => {
     const pc = peerConnectionRef.current;
     if (!pc || (pc as any).signalingState === "closed") return;
@@ -374,35 +388,30 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       if (!pc || (pc as any).signalingState === "closed") return;
 
       try {
-        // 1. Recipient receives SDP Offer from Caller -> sets remote description & creates SDP Answer
-        if (!isCaller && session.sdpOffer && (pc.signalingState === "stable" || pc.signalingState === "have-local-offer") && !pc.remoteDescription) {
-          console.log("[WebRTC Handshake] Recipient received sdpOffer! Setting Remote Description & Creating Answer...");
+        // Recipient receives late sdpOffer -> sets remote description & creates SDP Answer
+        if (!isCaller && session.sdpOffer && !pc.remoteDescription && pc.signalingState !== "closed") {
+          console.log("[WebRTC Handshake] Late sdpOffer received! Setting Remote Description & Creating Answer...");
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
           await flushPendingIceCandidates();
-
-          if ((pc as any).signalingState !== "closed") {
-            const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
-            if ((pc as any).signalingState !== "closed") {
-              await pc.setLocalDescription(answer);
-              await fetch("/api/calls/signal", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
-              });
-              console.log("[WebRTC Handshake] Recipient sent SDP Answer to Caller!");
-            }
-          }
+          const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
+          await pc.setLocalDescription(answer);
+          await fetch("/api/calls/signal", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
+          });
+          console.log("[WebRTC Handshake] SDP Answer sent successfully!");
         }
 
-        // 2. Caller receives SDP Answer from Recipient -> transitions to STABLE & flushes ICE candidates
+        // Caller receives sdpAnswer -> transitions to STABLE & flushes candidates
         if (isCaller && session.sdpAnswer && pc.signalingState === "have-local-offer") {
           console.log("[WebRTC Handshake] Caller received sdpAnswer! Setting Remote Description -> Transitioning to STABLE!");
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
           await flushPendingIceCandidates();
-          console.log("[WebRTC Handshake] Caller PC Signaling State is now:", pc.signalingState);
+          console.log("[WebRTC Handshake] SUCCESS: Caller PC Signaling State is now:", pc.signalingState);
         }
 
-        // 3. Process ICE Candidates safely (queued if remoteDescription is not set yet)
+        // Process Candidates
         const candidates = !isCaller ? session.callerCandidates : session.recipientCandidates;
         if (candidates && candidates.length > 0 && (pc as any).signalingState !== "closed") {
           for (const cand of candidates) {
