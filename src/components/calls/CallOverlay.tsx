@@ -49,7 +49,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     };
   }, [otherPersonName, session.callType]);
 
-  // User Tap Audio Unlocker (Bypasses iOS/Android Autoplay Restriction)
+  // User Tap Audio Unlocker (Unlocks Web Audio Context & Audio Element permanently)
   const unlockAudio = async () => {
     try {
       const ctx = getOrCreateAudioContext();
@@ -177,7 +177,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         } catch (e) {}
 
-        // HTTP Audio Chunk Recorder (1-second full valid WebM/MP4 slices)
+        // HTTP Audio Chunk Recorder (800ms full valid WebM/MP4 slices)
         try {
           let mime = "audio/webm";
           if (typeof MediaRecorder !== "undefined") {
@@ -201,7 +201,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                 reader.readAsDataURL(e.data);
               }
             };
-            mediaRecorder.start(1000);
+            mediaRecorder.start(800);
           }
         } catch (e) {}
 
@@ -224,7 +224,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     startMedia();
 
-    // HTTP Audio Chunk Player (Polls 1-second audio slices if WebRTC is blocked)
+    // Web Audio Buffer Decoder Player (Decodes & plays binary audio slices via unlocked Web Audio Context)
     pollInterval = setInterval(async () => {
       if (!isConnected) return;
       try {
@@ -234,15 +234,40 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           if (data.chunks && Array.isArray(data.chunks)) {
             for (const chunk of data.chunks) {
               if (chunk.blobBase64) {
-                const audio = new Audio(`data:${chunk.mime || "audio/webm"};base64,${chunk.blobBase64}`);
-                audio.volume = isSpeakerOn ? 1.0 : 0.2;
-                audio.play().catch(() => {});
+                try {
+                  const binaryStr = atob(chunk.blobBase64);
+                  const len = binaryStr.length;
+                  const bytes = new Uint8Array(len);
+                  for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryStr.charCodeAt(i);
+                  }
+
+                  const ctx = getOrCreateAudioContext();
+                  if (ctx) {
+                    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+                    ctx.decodeAudioData(
+                      bytes.buffer.slice(0),
+                      (audioBuffer) => {
+                        const src = ctx.createBufferSource();
+                        src.buffer = audioBuffer;
+
+                        const gainNode = ctx.createGain();
+                        gainNode.gain.value = isSpeakerOn ? 3.0 : 0.4;
+
+                        src.connect(gainNode);
+                        gainNode.connect(ctx.destination);
+                        src.start(0);
+                      },
+                      () => {}
+                    );
+                  }
+                } catch (e) {}
               }
             }
           }
         }
       } catch (e) {}
-    }, 1000);
+    }, 600);
 
     return () => {
       if (animFrame) cancelAnimationFrame(animFrame);
@@ -255,7 +280,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
       try { pc.close(); } catch (e) {}
     };
-  }, [session.callType, isCaller, isConnected]);
+  }, [session.callType, isCaller, isConnected, isSpeakerOn]);
 
   // Handle Signaling Exchange (Recipient SDP Answer & ICE Candidates)
   useEffect(() => {
