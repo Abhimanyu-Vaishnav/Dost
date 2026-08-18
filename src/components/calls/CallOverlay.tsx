@@ -403,8 +403,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           console.log("[WebRTC Handshake] SDP Answer sent successfully!");
         }
 
-        // Caller receives sdpAnswer -> transitions to STABLE & flushes candidates
-        if (isCaller && session.sdpAnswer && pc.signalingState === "have-local-offer") {
+        // Caller receives sdpAnswer -> sets remote description (regardless of exact signalingState as long as remoteDescription is missing)
+        if (isCaller && session.sdpAnswer && !pc.remoteDescription) {
           console.log("[WebRTC Handshake] Caller received sdpAnswer! Setting Remote Description -> Transitioning to STABLE!");
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
           await flushPendingIceCandidates();
