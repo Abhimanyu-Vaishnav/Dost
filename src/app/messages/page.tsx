@@ -13,6 +13,8 @@ import styles from "./messages.module.css";
 import { CallModal } from "./CallModal";
 import { uploadMediaFile } from "@/lib/upload";
 import { useCall } from "@/context/CallContext";
+import { CallOverlay } from "@/components/calls/CallOverlay";
+import { CallSessionData } from "@/lib/callEngine";
 
 interface ChatMessage {
   id: string;
@@ -141,6 +143,28 @@ function MessagesContent() {
 
   // 3-Dots Menu & In-Chat Search States
   const { startCall } = useCall();
+  const [localActiveCall, setLocalActiveCall] = useState<CallSessionData | null>(null);
+
+  const handleStartCall = async (partnerId: string, callType: "voice" | "video", partnerName?: string, partnerAvatar?: string) => {
+    const displayName = partnerName || partnerId;
+    const displayAvatar = partnerAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=a855f7&color=ffffff`;
+
+    const sess: CallSessionData = {
+      sessionId: `call_${Date.now()}`,
+      callerId: "me",
+      callerName: "me",
+      callerAvatar: "https://ui-avatars.com/api/?name=User&background=00f2fe&color=ffffff",
+      recipientId: partnerId,
+      recipientName: displayName,
+      recipientAvatar: displayAvatar,
+      callType,
+      status: "RINGING",
+      updatedAt: Date.now()
+    };
+
+    setLocalActiveCall(sess);
+    startCall(partnerId, callType, partnerName, partnerAvatar).catch(() => {});
+  };
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [inChatSearch, setInChatSearch] = useState("");
   const [showInChatSearch, setShowInChatSearch] = useState(false);
@@ -1025,7 +1049,7 @@ function MessagesContent() {
 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <button 
-                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.id, "voice", activeConv.name, activeConv.avatar)}
+                    onClick={() => handleStartCall(activeConv.partnerId || activeConv.username || activeConv.id, "voice", activeConv.name, activeConv.avatar)}
                     style={{ background: "rgba(29, 155, 240, 0.12)", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Voice Call"
@@ -1033,7 +1057,7 @@ function MessagesContent() {
                     <Phone size={17} />
                   </button>
                   <button 
-                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.id, "video", activeConv.name, activeConv.avatar)}
+                    onClick={() => handleStartCall(activeConv.partnerId || activeConv.username || activeConv.id, "video", activeConv.name, activeConv.avatar)}
                     style={{ background: "rgba(168, 85, 247, 0.12)", border: "none", color: "#a855f7", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Video Call"
@@ -1839,12 +1863,13 @@ function MessagesContent() {
         </div>
       </div>
 
-      {/* Voice or Video Call Modal Overlay */}
-      {activeCall && (
-        <CallModal
-          type={activeCall.type}
-          contact={activeCall.contact}
-          onEndCall={() => setActiveCall(null)}
+      {/* Voice or Video Call Modal Overlay Fallback */}
+      {localActiveCall && (
+        <CallOverlay
+          session={localActiveCall}
+          currentUserId="me"
+          onEndCall={() => setLocalActiveCall(null)}
+          onAcceptCall={async () => setLocalActiveCall(null)}
         />
       )}
     </AppLayout>

@@ -30,15 +30,21 @@ let activeAudioContext: AudioContext | null = null;
 let outgoingInterval: any = null;
 let incomingInterval: any = null;
 
-export function getOrCreateAudioContext(): AudioContext {
-  if (!activeAudioContext || activeAudioContext.state === "closed") {
+export function getOrCreateAudioContext(): AudioContext | null {
+  try {
+    if (typeof window === "undefined") return null;
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    activeAudioContext = new AudioCtx();
+    if (!AudioCtx) return null;
+    if (!activeAudioContext || activeAudioContext.state === "closed") {
+      activeAudioContext = new AudioCtx();
+    }
+    if (activeAudioContext.state === "suspended") {
+      activeAudioContext.resume().catch(() => {});
+    }
+    return activeAudioContext;
+  } catch (e) {
+    return null;
   }
-  if (activeAudioContext.state === "suspended") {
-    activeAudioContext.resume().catch(() => {});
-  }
-  return activeAudioContext;
 }
 
 // Play Outgoing Ringback Tone ("tuuuun... tuuuun...") for Caller
@@ -49,6 +55,7 @@ export function startOutgoingRingbackSound() {
   const playTone = () => {
     try {
       const ctx = getOrCreateAudioContext();
+      if (!ctx) return;
       const now = ctx.currentTime;
 
       const osc1 = ctx.createOscillator();
@@ -87,6 +94,7 @@ export function startIncomingCallerTuneSound() {
   const playChime = () => {
     try {
       const ctx = getOrCreateAudioContext();
+      if (!ctx) return;
       const now = ctx.currentTime;
 
       const osc1 = ctx.createOscillator();

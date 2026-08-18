@@ -129,21 +129,23 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         // Live mic equalizer wave frequency analyser
         try {
           const ctx = getOrCreateAudioContext();
-          const source = ctx.createMediaStreamSource(stream);
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 64;
-          source.connect(analyser);
+          if (ctx) {
+            const source = ctx.createMediaStreamSource(stream);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 64;
+            source.connect(analyser);
 
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
-          const updateVolume = () => {
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-            const avg = sum / dataArray.length;
-            setVoiceVolume(Math.min(100, Math.round((avg / 128) * 100)));
-            animFrame = requestAnimationFrame(updateVolume);
-          };
-          updateVolume();
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            const updateVolume = () => {
+              analyser.getByteFrequencyData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+              const avg = sum / dataArray.length;
+              setVoiceVolume(Math.min(100, Math.round((avg / 128) * 100)));
+              animFrame = requestAnimationFrame(updateVolume);
+            };
+            updateVolume();
+          }
         } catch (e) {}
 
         // If caller: Send WebRTC SDP Offer
