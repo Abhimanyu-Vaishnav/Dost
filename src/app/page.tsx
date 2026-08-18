@@ -53,7 +53,10 @@ export default function Home() {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true"
+        },
         body: JSON.stringify({ email: demoUser, password: "password123" })
       });
       const data = await res.json();
@@ -81,7 +84,10 @@ export default function Home() {
 
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true"
+        },
         body: JSON.stringify(payload)
       });
 

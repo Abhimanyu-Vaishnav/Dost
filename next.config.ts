@@ -8,7 +8,11 @@ const nextConfig: NextConfig = {
     "192.168.1.1",
     "10.83.89.169",
     "localhost:3000",
-    "0.0.0.0:3000"
+    "0.0.0.0:3000",
+    "warm-suns-warn.loca.lt",
+    "*.loca.lt",
+    "*.ngrok-free.app",
+    "*.localtunnel.me"
   ],
 };
 

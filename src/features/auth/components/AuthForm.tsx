@@ -32,7 +32,10 @@ export function AuthForm({ mode }: AuthFormProps) {
 
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true"
+        },
         body: JSON.stringify(payload),
       });
 
