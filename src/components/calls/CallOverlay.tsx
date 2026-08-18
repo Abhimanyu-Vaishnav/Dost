@@ -91,9 +91,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
       if (remoteAudioRef.current) {
         remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.3;
+        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
 
-        // Force Loudspeaker device routing
         if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
           try {
             const devices = await navigator.mediaDevices.enumerateDevices();
@@ -197,9 +196,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = remoteStream;
         remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.3;
+        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
         
-        // Enumerate devices for bottom main loudspeaker hardware routing
         if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
           navigator.mediaDevices.enumerateDevices().then(devices => {
             const speakerDev = devices.find(d => 
@@ -218,7 +216,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         remoteAudioRef.current.play().catch(() => {});
       }
 
-      // Direct Web Audio Loudspeaker EQ Resonance Bridge (Pumps 2000Hz +8dB voice boost out of bottom phone speaker)
+      // Direct Web Audio Clean Gain Destination Bridge (Bypasses Browser Muting Restrictions)
       try {
         const ctx = getOrCreateAudioContext();
         if (ctx) {
@@ -227,18 +225,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           if (audioTrack) {
             const audioStream = new MediaStream([audioTrack]);
             const source = ctx.createMediaStreamSource(audioStream);
-
-            const eqFilter = ctx.createBiquadFilter();
-            eqFilter.type = "peaking";
-            eqFilter.frequency.value = 2000; // Voice frequency for main bottom speaker
-            eqFilter.Q.value = 1.0;
-            eqFilter.gain.value = isSpeakerOn ? 8.0 : 0.0;
-
             const gainNode = ctx.createGain();
-            gainNode.gain.value = isSpeakerOn ? 3.5 : 0.4; // 3.5x Volume Boost
+            gainNode.gain.value = isSpeakerOn ? 2.5 : 0.3; // 2.5x volume for Loudspeaker, 0.3x for Earpiece
 
-            source.connect(eqFilter);
-            eqFilter.connect(gainNode);
+            source.connect(gainNode);
             gainNode.connect(ctx.destination);
           }
         }
@@ -311,7 +301,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         } catch (e) {}
 
-        // Cross-Platform MediaRecorder Audio Chunk Relay Fallback (300ms Opus slices for Android Chrome & iOS Safari)
+        // Cross-Platform MediaRecorder Audio Chunk Relay Fallback
         try {
           let mime = "";
           if (typeof MediaRecorder !== "undefined") {
@@ -376,7 +366,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             for (const chunk of data.chunks) {
               if (chunk.blobBase64) {
                 const audio = new Audio(`data:audio/webm;base64,${chunk.blobBase64}`);
-                audio.volume = isSpeakerOn ? 1.0 : 0.3;
+                audio.volume = isSpeakerOn ? 1.0 : 0.2;
                 audio.play().catch(() => {
                   // Web Audio Context decodeAudioData fallback
                   try {
@@ -390,16 +380,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                           const src = ctx.createBufferSource();
                           src.buffer = audioBuffer;
 
-                          const eqFilter = ctx.createBiquadFilter();
-                          eqFilter.type = "peaking";
-                          eqFilter.frequency.value = 2000;
-                          eqFilter.gain.value = isSpeakerOn ? 8.0 : 0.0;
-
                           const gain = ctx.createGain();
-                          gain.gain.value = isSpeakerOn ? 3.5 : 0.5;
+                          gain.gain.value = isSpeakerOn ? 2.5 : 0.3;
 
-                          src.connect(eqFilter);
-                          eqFilter.connect(gain);
+                          src.connect(gain);
                           gain.connect(ctx.destination);
                           src.start(0);
                         })
@@ -519,7 +503,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     setIsEarpieceMode(!nextSpeaker);
 
     if (remoteAudioRef.current) {
-      remoteAudioRef.current.volume = nextSpeaker ? 1.0 : 0.3;
+      remoteAudioRef.current.volume = nextSpeaker ? 1.0 : 0.2;
       if ((remoteAudioRef.current as any).setSinkId) {
         (remoteAudioRef.current as any).setSinkId(nextSpeaker ? "default" : "").catch(() => {});
       }
