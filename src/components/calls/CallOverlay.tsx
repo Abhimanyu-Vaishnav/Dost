@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   Phone, PhoneOff, Mic, MicOff, Volume2, Video, VideoOff, 
-  Shield, PhoneCall, Smartphone, Headphones, Play
+  Shield, PhoneCall, Smartphone, Headphones, Play, Minimize2, Maximize2
 } from "lucide-react";
 import { 
   CallSessionData, startOutgoingRingbackSound, 
@@ -31,6 +31,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const [voiceVolume, setVoiceVolume] = useState<number>(0);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
+  const [isMinimized, setIsMinimized] = useState<boolean>(false);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -294,7 +295,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                         src.buffer = audioBuffer;
 
                         const gainNode = ctx.createGain();
-                        gainNode.gain.value = isSpeakerOn ? 6.0 : 0.2; // 6x Volume for Loudspeaker
+                        gainNode.gain.value = isSpeakerOn ? 6.0 : 0.2;
 
                         src.connect(gainNode);
                         gainNode.connect(ctx.destination);
@@ -410,6 +411,54 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Minimized Picture-in-Picture Floating Bar (Allows user to navigate app while call remains 100% active in background!)
+  if (isMinimized) {
+    return (
+      <div 
+        style={{
+          position: "fixed", top: "16px", right: "16px", zIndex: 99999,
+          background: "rgba(10, 10, 12, 0.95)", border: "2px solid #00f2fe",
+          borderRadius: "9999px", padding: "8px 20px", display: "flex",
+          alignItems: "center", gap: "12px", boxShadow: "0 10px 30px rgba(0, 242, 254, 0.4)",
+          backdropFilter: "blur(16px)", cursor: "pointer", color: "white"
+        }}
+        onClick={() => setIsMinimized(false)}
+        className="animate-pulse"
+      >
+        <audio ref={remoteAudioRef} autoPlay playsInline style={{ width: 0, height: 0, opacity: 0 }} />
+        <img
+          src={otherPersonAvatar}
+          alt={otherPersonName}
+          style={{ width: "32px", height: "32px", borderRadius: "50%", objectFit: "cover", border: "2px solid #00f2fe" }}
+        />
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#ffffff" }}>{otherPersonName}</span>
+          <span style={{ fontSize: "0.75rem", color: "#00f2fe", fontWeight: 700 }}>
+            {isConnected ? `Connected • ${formatTimer(callDuration)}` : "Calling..."}
+          </span>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsMinimized(false);
+          }}
+          style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "white", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+        >
+          <Maximize2 size={16} />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEndCall();
+          }}
+          style={{ background: "#ef4444", border: "none", color: "white", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+        >
+          <PhoneOff size={16} />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div 
       onClick={applySpeakerRouting}
@@ -422,7 +471,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }}
       className="animate-fade-in"
     >
-      {/* Hidden Native Audio Element (Unwanted Bar Removed) */}
+      {/* Hidden Native Audio Element */}
       <audio 
         ref={remoteAudioRef} 
         autoPlay 
@@ -461,8 +510,22 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         }} 
       />
 
-      {/* Top Bar Header with Exact Full Partner Name */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", zIndex: 2 }}>
+      {/* Top Bar Header with Minimize PiP Button */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", zIndex: 2, width: "100%", maxWidth: "420px", position: "relative" }}>
+        <button
+          onClick={() => setIsMinimized(true)}
+          style={{
+            position: "absolute", right: 0, top: 0,
+            background: "rgba(255, 255, 255, 0.15)", border: "1px solid rgba(255, 255, 255, 0.25)",
+            color: "white", borderRadius: "50%", width: "42px", height: "42px",
+            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            backdropFilter: "blur(12px)"
+          }}
+          title="Minimize Call to Floating Pill"
+        >
+          <Minimize2 size={20} />
+        </button>
+
         <div style={{
           display: "flex", alignItems: "center", gap: "6px",
           background: "rgba(255, 255, 255, 0.12)", padding: "6px 18px",
