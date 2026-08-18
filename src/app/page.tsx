@@ -45,8 +45,12 @@ export default function Home() {
   // Sample Poll Option Selected State for interactive preview
   const [pollVotedOption, setPollVotedOption] = useState<number | null>(0);
 
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAuthSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!email || !password) {
+      setError("Please enter your Email or Username and Password");
+      return;
+    }
     setIsLoading(true);
     setError("");
 
@@ -77,7 +81,7 @@ export default function Home() {
 
       window.location.href = "/feed";
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Authentication error");
     } finally {
       setIsLoading(false);
     }
@@ -419,7 +423,7 @@ export default function Home() {
                 </div>
               )}
 
-              <form onSubmit={handleAuthSubmit} className={styles.formElement}>
+              <div className={styles.formElement}>
                 {authMode === "register" && (
                   <div className={styles.inputField}>
                     <label htmlFor="name">Full Name</label>
@@ -450,6 +454,7 @@ export default function Home() {
                       placeholder={authMode === "login" ? "e.g. sumit or sumit@gmail.com" : "name@example.com"}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAuthSubmit(); }}
                       required
                       className={styles.textInput}
                     />
@@ -466,13 +471,19 @@ export default function Home() {
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAuthSubmit(); }}
                       required
                       className={styles.textInput}
                     />
                   </div>
                 </div>
 
-                <button type="submit" disabled={isLoading} className={styles.submitBtn}>
+                <button 
+                  type="button" 
+                  onClick={() => handleAuthSubmit()} 
+                  disabled={isLoading} 
+                  className={styles.submitBtn}
+                >
                   {isLoading ? (
                     <Loader2 className={styles.spinner} size={20} />
                   ) : (
@@ -514,7 +525,7 @@ export default function Home() {
                     </p>
                   )}
                 </div>
-              </form>
+              </div>
             </div>
           </div>
         </div>

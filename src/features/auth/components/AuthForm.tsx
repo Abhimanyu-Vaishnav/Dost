@@ -17,8 +17,12 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!email || !password) {
+      setError("Please enter your Email or Username and Password");
+      return;
+    }
     setIsLoading(true);
     setError("");
 
@@ -52,7 +56,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
       window.location.href = "/feed";
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Authentication error");
     } finally {
       setIsLoading(false);
     }
@@ -60,7 +64,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   return (
     <div className={styles.container}>
-      <form onSubmit={handleSubmit} className={`glass ${styles.formCard}`}>
+      <div className={`glass ${styles.formCard}`}>
         <h2 className={`text-h2 ${styles.title}`}>
           {mode === "login" ? "Welcome Back" : "Join DOST"}
         </h2>
@@ -92,6 +96,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             placeholder={mode === "login" ? "e.g. sumit or sumit@gmail.com" : "name@example.com"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
             required
           />
         </div>
@@ -104,11 +109,12 @@ export function AuthForm({ mode }: AuthFormProps) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
             required
           />
         </div>
 
-        <button type="submit" className={styles.button} disabled={isLoading}>
+        <button type="button" onClick={() => handleSubmit()} className={styles.button} disabled={isLoading}>
           {isLoading ? "Please wait..." : mode === "login" ? "Log In" : "Sign Up"}
         </button>
 
@@ -121,7 +127,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             Already have an account? Log in
           </Link>
         )}
-      </form>
+      </div>
     </div>
   );
 }
