@@ -46,8 +46,6 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [incomingCallSession, setIncomingCallSession] = useState<CallSession | null>(null);
-  const [activeAcceptedCallSession, setActiveAcceptedCallSession] = useState<CallSession | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -142,66 +140,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
     return () => clearInterval(interval);
   }, [pathname]);
 
-  // Poll for incoming call signaling offers (250ms high-speed stream)
-  useEffect(() => {
-    const signalInterval = setInterval(async () => {
-      try {
-        const res = await fetch("/api/messages/calls/signal");
-        if (res.ok) {
-          const data = await res.json();
-          const session: CallSession | null = data.session || null;
 
-          if (session) {
-            const myId = user?.userId || user?.username;
-            const isCaller = myId && (session.callerId === myId || session.callerName === user?.username);
-
-            if (session.status === "RINGING") {
-              if (!isCaller) {
-                setIncomingCallSession(session);
-              }
-            } else if (session.status === "CONNECTED") {
-              setIncomingCallSession(null);
-              if (!isCaller) {
-                setActiveAcceptedCallSession(session);
-              }
-            } else if (session.status === "REJECTED" || session.status === "ENDED") {
-              setIncomingCallSession(null);
-              setActiveAcceptedCallSession(null);
-            }
-          } else {
-            setIncomingCallSession(null);
-            setActiveAcceptedCallSession(null);
-          }
-        }
-      } catch (e) {}
-    }, 250);
-
-    return () => clearInterval(signalInterval);
-  }, [user]);
-
-  const handleAcceptCall = async () => {
-    if (!incomingCallSession) return;
-    const sess = incomingCallSession;
-    setIncomingCallSession(null);
-    setActiveAcceptedCallSession(sess);
-
-    await fetch("/api/messages/calls/signal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "ANSWER" })
-    }).catch(() => {});
-  };
-
-  const handleDeclineCall = async () => {
-    if (!incomingCallSession) return;
-    setIncomingCallSession(null);
-
-    await fetch("/api/messages/calls/signal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "REJECT" })
-    }).catch(() => {});
-  };
 
   const handleLogout = async () => {
     try {
@@ -763,29 +702,6 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         </div>
       )}
 
-      {/* Incoming Call Ringing Overlay Modal */}
-      {incomingCallSession && (
-        <IncomingCallModal
-          session={incomingCallSession}
-          onAccept={handleAcceptCall}
-          onDecline={handleDeclineCall}
-        />
-      )}
-
-      {/* Recipient Accepted Active Call Modal */}
-      {activeAcceptedCallSession && (
-        <CallModal
-          type={activeAcceptedCallSession.callType}
-          contact={{
-            id: activeAcceptedCallSession.callerId,
-            name: activeAcceptedCallSession.callerName,
-            avatar: activeAcceptedCallSession.callerAvatar,
-            username: activeAcceptedCallSession.callerName
-          }}
-          onEndCall={() => setActiveAcceptedCallSession(null)}
-          isIncomingAccepted={true}
-        />
-      )}
       </div>
     </CallProvider>
   );
