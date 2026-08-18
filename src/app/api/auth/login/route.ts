@@ -15,15 +15,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const cleanIdentifier = email.toLowerCase().trim().replace(/^@/, "");
 
-    // Find user by normalized email
-    const user = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+    // Find user by normalized email OR username
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: cleanIdentifier },
+          { username: cleanIdentifier }
+        ]
+      },
     });
 
     if (!user) {
-      console.log(`[LOGIN FAILED] User not found for email: ${normalizedEmail}`);
+      console.log(`[LOGIN FAILED] User not found for identifier: ${cleanIdentifier}`);
       return NextResponse.json(
         { error: "Invalid credentials (User not found)" },
         { status: 401 }
@@ -39,7 +44,7 @@ export async function POST(request: Request) {
     }
 
     if (!isPasswordValid) {
-      console.log(`[LOGIN FAILED] Invalid password for email: ${normalizedEmail}`);
+      console.log(`[LOGIN FAILED] Invalid password for identifier: ${cleanIdentifier}`);
       return NextResponse.json(
         { error: "Invalid credentials (Incorrect password)" },
         { status: 401 }

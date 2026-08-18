@@ -83,11 +83,14 @@ export function AuthForm({ mode }: AuthFormProps) {
         )}
 
         <div className={styles.inputGroup}>
-          <label className={styles.label} htmlFor="email">Email Address</label>
+          <label className={styles.label} htmlFor="email">
+            {mode === "login" ? "Email or Username" : "Email Address"}
+          </label>
           <input
             className={styles.input}
             id="email"
-            type="email"
+            type={mode === "login" ? "text" : "email"}
+            placeholder={mode === "login" ? "e.g. sumit or sumit@gmail.com" : "name@example.com"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
