@@ -316,13 +316,13 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     const configuration: RTCConfiguration = {
       iceServers: [
         { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302", "stun:stun3.l.google.com:19302", "stun:stun4.l.google.com:19302"] },
-        { urls: "stun:global.stun.twilio.com:3478" },
-        { urls: "stun:stun.services.mozilla.com" },
-        { urls: "stun:stun.nextcloud.com:443" },
+        { urls: ["stun:stun.cloudflare.com:3478", "stun:global.stun.twilio.com:3478", "stun:stun.services.mozilla.com"] },
         {
           urls: [
+            "turn:openrelay.metered.ca:80",
             "turn:openrelay.metered.ca:80?transport=udp",
             "turn:openrelay.metered.ca:80?transport=tcp",
+            "turn:openrelay.metered.ca:443",
             "turn:openrelay.metered.ca:443?transport=tcp",
             "turns:openrelay.metered.ca:443?transport=tcp"
           ],
@@ -583,10 +583,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         }
 
-        // Process Candidates from both candidate pools safely
-        const allCandidates = [...(session.callerCandidates || []), ...(session.recipientCandidates || [])];
-        if (allCandidates.length > 0 && (pc as any).signalingState !== "closed") {
-          for (const cand of allCandidates) {
+        // CALLER ONLY ADDS RECIPIENT CANDIDATES; RECIPIENT ONLY ADDS CALLER CANDIDATES!
+        const amITheCaller = (pc?.localDescription?.type === "offer") || isCaller;
+        const targetCandidates = amITheCaller ? session.recipientCandidates : session.callerCandidates;
+
+        if (targetCandidates && targetCandidates.length > 0 && (pc as any).signalingState !== "closed") {
+          for (const cand of targetCandidates) {
             const candStr = JSON.stringify(cand);
             if (!processedIceCandidatesRef.current.has(candStr)) {
               processedIceCandidatesRef.current.add(candStr);
