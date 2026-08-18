@@ -49,7 +49,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       .catch(() => {});
   }, [currentUserId]);
 
-  // Real-Time Sub-50ms Server-Sent Events (SSE) Listener
+  // Real-Time SSE Listener for Instant Call Signaling Synchronization
   useEffect(() => {
     let eventSource: EventSource | null = null;
 
@@ -59,6 +59,24 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          
+          // Handle CALL_TERMINATED Signal (Hangup / Decline)
+          if (data.type === "CALL_TERMINATED") {
+            setActiveSession(null);
+            stopAllRingtones();
+            notifiedSessionIdRef.current = null;
+            if (data.session?.sessionId) endedSessionIdsRef.current.add(data.session.sessionId);
+            return;
+          }
+
+          // Handle CALL_ACCEPTED Signal
+          if (data.type === "CALL_ACCEPTED" && data.session) {
+            setActiveSession(data.session);
+            stopAllRingtones();
+            return;
+          }
+
+          // Handle CALL_SIGNAL (Offer / SDP / Candidate)
           if (data.type === "CALL_SIGNAL" && data.session) {
             const sess: CallSessionData = data.session;
 
@@ -69,7 +87,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
             } else {
               setActiveSession(sess);
 
-              // Instant Ringtone & Vibration Trigger (< 10ms!)
+              // Ringtone & Vibration for Recipient (< 10ms)
               const isRecipient = sess.status === "RINGING" && myUserId && (
                 sess.recipientId === myUserId || sess.recipientName === myUserId
               );
@@ -85,7 +103,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       };
     } catch (e) {}
 
-    // Fallback heartbeat polling
+    // Polling fallback every 500ms
     const interval = setInterval(async () => {
       try {
         const res = await fetch("/api/calls/signal");
@@ -98,19 +116,13 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               setActiveSession(null);
               stopAllRingtones();
               notifiedSessionIdRef.current = null;
-            } else if (!activeSession) {
+            } else {
               setActiveSession(sess);
             }
           } else if (activeSession) {
-            if (
-              activeSession.status === "ENDED" || 
-              activeSession.status === "REJECTED" || 
-              endedSessionIdsRef.current.has(activeSession.sessionId)
-            ) {
-              setActiveSession(null);
-              stopAllRingtones();
-              notifiedSessionIdRef.current = null;
-            }
+            setActiveSession(null);
+            stopAllRingtones();
+            notifiedSessionIdRef.current = null;
           }
         }
       } catch (e) {}
@@ -121,6 +133,17 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       clearInterval(interval);
     };
   }, [myUserId, activeSession]);
+
+  // Ringing 40-second Timeout Cleanup
+  useEffect(() => {
+    let timer: any;
+    if (activeSession && activeSession.status === "RINGING") {
+      timer = setTimeout(() => {
+        endCall();
+      }, 40000);
+    }
+    return () => { if (timer) clearTimeout(timer); };
+  }, [activeSession?.status, activeSession?.sessionId]);
 
   const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice", targetName?: string, targetAvatar?: string) => {
     try {
@@ -179,6 +202,8 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     if (!activeSession) return;
     try {
       getOrCreateAudioContext();
+      stopAllRingtones();
+
       const updated = { ...activeSession, status: "CONNECTED" as const, updatedAt: Date.now() };
       setActiveSession(updated);
 

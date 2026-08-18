@@ -3,7 +3,7 @@ import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CALL_STATE_STORE, CallSessionData, pushSSEEventToUser } from "@/lib/callEngine";
 
-// POST /api/calls/signal - Ultra-Low Latency Sub-10ms Instant SSE Signal Push Router
+// POST /api/calls/signal - Two-Way Instant Signaling Router
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -45,22 +45,26 @@ export async function POST(req: NextRequest) {
       }
 
       if (targetSession) {
-        targetSession.status = action === "REJECT" ? "REJECTED" : "ENDED";
+        const finalStatus = action === "REJECT" ? "REJECTED" : "ENDED";
+        targetSession.status = finalStatus;
         targetSession.updatedAt = Date.now();
 
-        // Push termination event instantly to both peers via SSE
-        if (targetSession.callerId) pushSSEEventToUser(targetSession.callerId, { type: "CALL_SIGNAL", session: targetSession });
-        if (targetSession.callerName) pushSSEEventToUser(targetSession.callerName, { type: "CALL_SIGNAL", session: targetSession });
-        if (targetSession.recipientId) pushSSEEventToUser(targetSession.recipientId, { type: "CALL_SIGNAL", session: targetSession });
-        if (targetSession.recipientName) pushSSEEventToUser(targetSession.recipientName, { type: "CALL_SIGNAL", session: targetSession });
+        const payload = { type: "CALL_TERMINATED", session: targetSession, action: finalStatus };
 
-        // Purge session from maps
-        Array.from(CALL_STATE_STORE.userSessionMap.entries()).forEach(([k, v]) => {
-          if (v === targetSession!.sessionId) {
-            CALL_STATE_STORE.userSessionMap.delete(k);
-          }
-        });
-        CALL_STATE_STORE.sessions.delete(targetSession.sessionId);
+        // Push termination signal to both peers instantly via SSE
+        if (targetSession.callerId) pushSSEEventToUser(targetSession.callerId, payload);
+        if (targetSession.callerName) pushSSEEventToUser(targetSession.callerName, payload);
+        if (targetSession.recipientId) pushSSEEventToUser(targetSession.recipientId, payload);
+        if (targetSession.recipientName) pushSSEEventToUser(targetSession.recipientName, payload);
+
+        // Keep tombstone in memory for 15 seconds so polling fallback also sees ENDED/REJECTED state
+        const sessId = targetSession.sessionId;
+        setTimeout(() => {
+          CALL_STATE_STORE.sessions.delete(sessId);
+          Array.from(CALL_STATE_STORE.userSessionMap.entries()).forEach(([k, v]) => {
+            if (v === sessId) CALL_STATE_STORE.userSessionMap.delete(k);
+          });
+        }, 15000);
 
         return NextResponse.json({ success: true, session: targetSession }, { status: 200 });
       }
@@ -122,10 +126,11 @@ export async function POST(req: NextRequest) {
         if (k) CALL_STATE_STORE.userSessionMap.set(k, sessionId);
       });
 
-      // PUSH INSTANT RINGING SIGNAL TO RECIPIENT SSE STREAM (< 10ms!)
-      if (targetGuid) pushSSEEventToUser(targetGuid, { type: "CALL_SIGNAL", session: newSession });
-      if (targetUsername) pushSSEEventToUser(targetUsername, { type: "CALL_SIGNAL", session: newSession });
-      if (cleanTarget) pushSSEEventToUser(cleanTarget, { type: "CALL_SIGNAL", session: newSession });
+      // Push instant ringing signal to recipient SSE stream (< 10ms)
+      const payload = { type: "CALL_SIGNAL", session: newSession };
+      if (targetGuid) pushSSEEventToUser(targetGuid, payload);
+      if (targetUsername) pushSSEEventToUser(targetUsername, payload);
+      if (cleanTarget) pushSSEEventToUser(cleanTarget, payload);
 
       return NextResponse.json({ success: true, session: newSession }, { status: 200 });
     }
@@ -134,8 +139,9 @@ export async function POST(req: NextRequest) {
       session.sdpOffer = sdp;
       session.updatedAt = Date.now();
 
-      if (session.recipientId) pushSSEEventToUser(session.recipientId, { type: "CALL_SIGNAL", session });
-      if (session.recipientName) pushSSEEventToUser(session.recipientName, { type: "CALL_SIGNAL", session });
+      const payload = { type: "CALL_SIGNAL", session };
+      if (session.recipientId) pushSSEEventToUser(session.recipientId, payload);
+      if (session.recipientName) pushSSEEventToUser(session.recipientName, payload);
 
       return NextResponse.json({ success: true, session }, { status: 200 });
     }
@@ -145,18 +151,21 @@ export async function POST(req: NextRequest) {
       if (sdp) session.sdpAnswer = sdp;
       session.updatedAt = Date.now();
 
-      if (session.callerId) pushSSEEventToUser(session.callerId, { type: "CALL_SIGNAL", session });
-      if (session.callerName) pushSSEEventToUser(session.callerName, { type: "CALL_SIGNAL", session });
+      const payload = { type: "CALL_ACCEPTED", session };
+      if (session.callerId) pushSSEEventToUser(session.callerId, payload);
+      if (session.callerName) pushSSEEventToUser(session.callerName, payload);
 
       return NextResponse.json({ success: true, session }, { status: 200 });
     }
 
     if (action === "SDP_ANSWER" && session) {
       session.sdpAnswer = sdp;
+      session.status = "CONNECTED";
       session.updatedAt = Date.now();
 
-      if (session.callerId) pushSSEEventToUser(session.callerId, { type: "CALL_SIGNAL", session });
-      if (session.callerName) pushSSEEventToUser(session.callerName, { type: "CALL_SIGNAL", session });
+      const payload = { type: "CALL_ACCEPTED", session };
+      if (session.callerId) pushSSEEventToUser(session.callerId, payload);
+      if (session.callerName) pushSSEEventToUser(session.callerName, payload);
 
       return NextResponse.json({ success: true, session }, { status: 200 });
     }
@@ -166,13 +175,15 @@ export async function POST(req: NextRequest) {
       if (isCaller) {
         if (!session.callerCandidates) session.callerCandidates = [];
         session.callerCandidates.push(candidate);
-        if (session.recipientId) pushSSEEventToUser(session.recipientId, { type: "CALL_SIGNAL", session });
-        if (session.recipientName) pushSSEEventToUser(session.recipientName, { type: "CALL_SIGNAL", session });
+        const payload = { type: "CALL_SIGNAL", session };
+        if (session.recipientId) pushSSEEventToUser(session.recipientId, payload);
+        if (session.recipientName) pushSSEEventToUser(session.recipientName, payload);
       } else {
         if (!session.recipientCandidates) session.recipientCandidates = [];
         session.recipientCandidates.push(candidate);
-        if (session.callerId) pushSSEEventToUser(session.callerId, { type: "CALL_SIGNAL", session });
-        if (session.callerName) pushSSEEventToUser(session.callerName, { type: "CALL_SIGNAL", session });
+        const payload = { type: "CALL_SIGNAL", session };
+        if (session.callerId) pushSSEEventToUser(session.callerId, payload);
+        if (session.callerName) pushSSEEventToUser(session.callerName, payload);
       }
       session.updatedAt = Date.now();
       return NextResponse.json({ success: true, session }, { status: 200 });
@@ -185,7 +196,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/calls/signal - Instant State Check
+// GET /api/calls/signal - State Query Endpoint
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;

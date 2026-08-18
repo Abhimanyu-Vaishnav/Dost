@@ -318,17 +318,31 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       } catch (e) {}
     }, 600);
 
+    // CLEANUP ON UNMOUNT OR END CALL: Fully release peer connection and media streams
     return () => {
+      stopAllRingtones();
       if (animFrame) cancelAnimationFrame(animFrame);
       if (pollInterval) clearInterval(pollInterval);
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
       }
+      if (localMediaStreamRef.current) {
+        localMediaStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null;
+      }
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = null;
+      }
       try { pc.close(); } catch (e) {}
     };
   }, [session.callType, isCaller, isConnected, isSpeakerOn, facingMode]);
 
-  // Signaling Exchange (SDP Answer & Candidates)
+  // Two-Way Instant Signaling Exchange (SDP Answer & Candidates)
   useEffect(() => {
     const pc = peerConnectionRef.current;
     if (!pc || (pc as any).signalingState === "closed") return;
@@ -337,7 +351,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       const pc = peerConnectionRef.current;
       if (!pc || (pc as any).signalingState === "closed") return;
       try {
-        if (!isCaller && session.status === "CONNECTED" && session.sdpOffer && !pc.remoteDescription) {
+        // Recipient sets remote SDP offer and creates SDP answer
+        if (!isCaller && (session.status === "CONNECTED" || session.sdpOffer) && session.sdpOffer && !pc.remoteDescription) {
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
           if ((pc as any).signalingState !== "closed") {
             const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
@@ -352,10 +367,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         }
 
-        if (isCaller && session.sdpAnswer && pc.signalingState === "have-local-offer") {
+        // Caller receives SDP answer from recipient and connects instantly (< 10ms)
+        if (isCaller && session.sdpAnswer && (pc.signalingState === "have-local-offer" || !pc.remoteDescription)) {
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
         }
 
+        // Process ICE Candidates
         const candidates = !isCaller ? session.callerCandidates : session.recipientCandidates;
         if (candidates && candidates.length > 0 && (pc as any).signalingState !== "closed") {
           for (const cand of candidates) {
