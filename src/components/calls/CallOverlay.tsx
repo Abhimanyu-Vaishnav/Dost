@@ -101,6 +101,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }) || await requestUserMediaStream({ audio: true });
 
     if (stream) {
+      stream.getAudioTracks().forEach(t => { t.enabled = true; });
       localMediaStreamRef.current = stream;
       setIsMicActive(true);
       setShowMicHelpModal(false);
@@ -178,6 +179,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           return;
         }
 
+        stream.getAudioTracks().forEach(t => { t.enabled = true; });
         setIsMicActive(true);
         activeStream = stream;
         localMediaStreamRef.current = stream;
@@ -195,6 +197,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         try {
           const ctx = getOrCreateAudioContext();
           if (ctx) {
+            if (ctx.state === "suspended") ctx.resume().catch(() => {});
             const source = ctx.createMediaStreamSource(stream);
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 64;
@@ -213,34 +216,38 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         } catch (e) {}
 
-        // HTTP MediaRecorder Audio Chunk Relay Fallback (300ms Opus slices)
+        // Cross-Platform MediaRecorder Audio Chunk Relay Fallback (300ms Opus slices for Android Chrome & iOS Safari)
         try {
-          const mime = typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus") 
-            ? "audio/webm;codecs=opus" 
-            : "audio/webm";
-          
+          let mime = "";
           if (typeof MediaRecorder !== "undefined") {
-            mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+            if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) mime = "audio/webm;codecs=opus";
+            else if (MediaRecorder.isTypeSupported("audio/webm")) mime = "audio/webm";
+            else if (MediaRecorder.isTypeSupported("audio/mp4")) mime = "audio/mp4";
+            else if (MediaRecorder.isTypeSupported("audio/aac")) mime = "audio/aac";
 
-            mediaRecorder.ondataavailable = async (e) => {
-              if (e.data && e.data.size > 0 && isConnected) {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                  const base64 = (reader.result as string)?.split(",")[1];
-                  if (base64) {
-                    fetch("/api/messages/calls/audio-chunk", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ sessionId: session.sessionId, blobBase64: base64 })
-                    }).catch(() => {});
-                  }
-                };
-                reader.readAsDataURL(e.data);
+            if (mime) {
+              mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+
+              mediaRecorder.ondataavailable = async (e) => {
+                if (e.data && e.data.size > 0 && isConnected) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    const base64 = (reader.result as string)?.split(",")[1];
+                    if (base64) {
+                      fetch("/api/messages/calls/audio-chunk", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sessionId: session.sessionId, blobBase64: base64 })
+                      }).catch(() => {});
+                    }
+                  };
+                  reader.readAsDataURL(e.data);
+                }
+              };
+
+              if (isConnected) {
+                mediaRecorder.start(300);
               }
-            };
-
-            if (isConnected) {
-              mediaRecorder.start(300);
             }
           }
         } catch (e) {}
@@ -263,7 +270,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     initMedia();
 
-    // Poll HTTP Audio Chunks for Fallback Playback when CONNECTED
+    // Poll HTTP Audio Chunks with Hybrid Web Audio PCM / Audio Element Playback
     chunkInterval = setInterval(async () => {
       if (!isConnected) return;
       try {
@@ -275,7 +282,28 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               if (chunk.blobBase64) {
                 const audio = new Audio(`data:audio/webm;base64,${chunk.blobBase64}`);
                 audio.volume = isSpeakerOn ? 1.0 : 0.4;
-                audio.play().catch(() => {});
+                audio.play().catch(() => {
+                  // Web Audio Context decodeAudioData fallback
+                  try {
+                    const ctx = getOrCreateAudioContext();
+                    if (ctx) {
+                      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+                      fetch(`data:audio/webm;base64,${chunk.blobBase64}`)
+                        .then(r => r.arrayBuffer())
+                        .then(buf => ctx.decodeAudioData(buf))
+                        .then(audioBuffer => {
+                          const src = ctx.createBufferSource();
+                          src.buffer = audioBuffer;
+                          const gain = ctx.createGain();
+                          gain.gain.value = isSpeakerOn ? 1.0 : 0.4;
+                          src.connect(gain);
+                          gain.connect(ctx.destination);
+                          src.start(0);
+                        })
+                        .catch(() => {});
+                    }
+                  } catch (err) {}
+                });
               }
             }
           }
@@ -426,14 +454,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           <AlertTriangle size={48} style={{ color: "#f59e0b", marginBottom: "16px" }} />
           <h3 style={{ fontSize: "1.3rem", fontWeight: 800, margin: "0 0 8px 0" }}>Microphone Access Required</h3>
           <p style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.8)", maxWidth: "340px", lineHeight: 1.5, margin: "0 0 20px 0" }}>
-            Your mobile browser blocked microphone access on local IP <code style={{ color: "#00f2fe" }}>http://192.168.1.202:3000</code>.
+            Microphone access is not active. Please allow permission to start talking!
           </p>
-          <div style={{ background: "rgba(255,255,255,0.1)", padding: "14px", borderRadius: "14px", textAlign: "left", fontSize: "0.82rem", maxWidth: "340px", marginBottom: "20px" }}>
-            <strong>How to Allow Mic on Android Chrome:</strong><br />
-            1. Tap the Tune / Lock icon next to the URL.<br />
-            2. Tap <b>Permissions</b> &rarr; <b>Microphone</b> &rarr; <b>Allow</b>.<br />
-            3. Tap the button below to start talking!
-          </div>
           <button
             onClick={handleRequestMicPermission}
             style={{
@@ -441,7 +463,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               padding: "12px 28px", borderRadius: "9999px", cursor: "pointer", fontSize: "0.95rem"
             }}
           >
-            🎙️ Request Microphone Access Now
+            🎙️ Tap to Grant Microphone Access Now
           </button>
         </div>
       )}
