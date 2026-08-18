@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { CallSessionData, stopAllRingtones, getOrCreateAudioContext } from "@/lib/callEngine";
 import { CallOverlay } from "@/components/calls/CallOverlay";
 
@@ -22,8 +22,9 @@ export const useCall = () => useContext(CallContext);
 
 export function CallProvider({ children, currentUserId }: { children: React.ReactNode; currentUserId?: string }) {
   const [activeSession, setActiveSession] = useState<CallSessionData | null>(null);
+  const callStartedTimeRef = useRef<number>(0);
 
-  // Poll call signaling status every 150ms
+  // Poll call signaling status every 150ms (with 5s grace period for instant call initiation)
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -38,7 +39,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
             } else {
               setActiveSession(sess);
             }
-          } else {
+          } else if (Date.now() - callStartedTimeRef.current > 5000) {
             setActiveSession(null);
             stopAllRingtones();
           }
@@ -52,6 +53,24 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
   const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice") => {
     try {
       getOrCreateAudioContext();
+      callStartedTimeRef.current = Date.now();
+
+      // Instant 0ms optimistic session setup so CallOverlay opens IMMEDIATELY
+      const optimisticSession: CallSessionData = {
+        sessionId: `call_${Date.now()}`,
+        callerId: currentUserId || "me",
+        callerName: "Calling...",
+        callerAvatar: `https://ui-avatars.com/api/?name=User&background=00f2fe&color=ffffff`,
+        recipientId: targetUserId,
+        recipientName: targetUserId,
+        recipientAvatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(targetUserId)}&background=a855f7&color=ffffff`,
+        callType,
+        status: "RINGING",
+        updatedAt: Date.now()
+      };
+
+      setActiveSession(optimisticSession);
+
       const res = await fetch("/api/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -91,6 +110,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     try {
       stopAllRingtones();
       setActiveSession(null);
+      callStartedTimeRef.current = 0;
       await fetch("/api/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
