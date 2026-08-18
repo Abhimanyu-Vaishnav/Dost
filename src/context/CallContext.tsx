@@ -25,8 +25,25 @@ export const useCall = () => useContext(CallContext);
 
 export function CallProvider({ children, currentUserId }: { children: React.ReactNode; currentUserId?: string }) {
   const [activeSession, setActiveSession] = useState<CallSessionData | null>(null);
+  const [myUserId, setMyUserId] = useState<string | undefined>(currentUserId);
   const callStartedTimeRef = useRef<number>(0);
   const notifiedSessionIdRef = useRef<string | null>(null);
+
+  // Auto fetch user profile if currentUserId prop was omitted
+  useEffect(() => {
+    if (currentUserId) {
+      setMyUserId(currentUserId);
+    } else {
+      fetch("/api/users/profile")
+        .then(res => res.json())
+        .then(data => {
+          if (data.user?.id || data.user?.username) {
+            setMyUserId(data.user.id || data.user.username);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentUserId]);
 
   // Poll call signaling status at 100ms ultra-high speed for instant sub-100ms call delivery
   useEffect(() => {
@@ -46,8 +63,8 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               setActiveSession(sess);
 
               // Trigger WhatsApp-style device vibration & system notification for recipient
-              const isRecipient = sess.status === "RINGING" && currentUserId && (
-                sess.recipientId === currentUserId || sess.recipientName === currentUserId
+              const isRecipient = sess.status === "RINGING" && myUserId && (
+                sess.recipientId === myUserId || sess.recipientName === myUserId
               );
 
               if (isRecipient && notifiedSessionIdRef.current !== sess.sessionId) {
@@ -66,7 +83,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     }, 100);
 
     return () => clearInterval(interval);
-  }, [currentUserId]);
+  }, [myUserId]);
 
   const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice", targetName?: string, targetAvatar?: string) => {
     try {
@@ -78,7 +95,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
 
       const optimisticSession: CallSessionData = {
         sessionId: `call_${Date.now()}`,
-        callerId: currentUserId || "me",
+        callerId: myUserId || "me",
         callerName: "me",
         callerAvatar: `https://ui-avatars.com/api/?name=User&background=00f2fe&color=ffffff`,
         recipientId: targetUserId,
@@ -149,7 +166,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       {activeSession && (
         <CallOverlay
           session={activeSession}
-          currentUserId={currentUserId || ""}
+          currentUserId={myUserId || ""}
           onEndCall={endCall}
           onAcceptCall={acceptCall}
         />

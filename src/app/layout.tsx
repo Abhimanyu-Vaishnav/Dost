@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { CallProvider } from "@/context/CallContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -46,7 +47,9 @@ export default function RootLayout({
     >
       <body className="app-container mesh-gradient-bg">
         <ThemeProvider>
-          {children}
+          <CallProvider>
+            {children}
+          </CallProvider>
         </ThemeProvider>
         <Analytics />
       </body>

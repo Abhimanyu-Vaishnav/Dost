@@ -230,8 +230,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   const isMessagesPage = pathname?.startsWith("/messages");
 
   return (
-    <CallProvider currentUserId={user?.userId || user?.username || undefined}>
-      <div className={styles.layoutContainer}>
+    <div className={styles.layoutContainer}>
       {/* Mobile Top Navigation Header */}
       <header className={styles.mobileHeader}>
         <div 
@@ -703,6 +702,5 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
       )}
 
       </div>
-    </CallProvider>
   );
 }
