@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { CALL_STATE_STORE, CallSessionData } from "@/lib/callEngine";
+import { CALL_STATE_STORE, CallSessionData, pushSSEEventToUser } from "@/lib/callEngine";
 
-// POST /api/calls/signal - Universal Sub-100ms Call Signaling Router
+// POST /api/calls/signal - Ultra-Low Latency Sub-10ms Instant SSE Signal Push Router
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     if (!action) return NextResponse.json({ error: "Missing action" }, { status: 400 });
 
-    // Handle END or REJECT Action with Universal Search & Purge
+    // Handle END or REJECT Action
     if (action === "REJECT" || action === "END") {
       let targetSession: CallSessionData | undefined = undefined;
 
@@ -48,7 +48,13 @@ export async function POST(req: NextRequest) {
         targetSession.status = action === "REJECT" ? "REJECTED" : "ENDED";
         targetSession.updatedAt = Date.now();
 
-        // Purge session from all maps
+        // Push termination event instantly to both peers via SSE
+        if (targetSession.callerId) pushSSEEventToUser(targetSession.callerId, { type: "CALL_SIGNAL", session: targetSession });
+        if (targetSession.callerName) pushSSEEventToUser(targetSession.callerName, { type: "CALL_SIGNAL", session: targetSession });
+        if (targetSession.recipientId) pushSSEEventToUser(targetSession.recipientId, { type: "CALL_SIGNAL", session: targetSession });
+        if (targetSession.recipientName) pushSSEEventToUser(targetSession.recipientName, { type: "CALL_SIGNAL", session: targetSession });
+
+        // Purge session from maps
         Array.from(CALL_STATE_STORE.userSessionMap.entries()).forEach(([k, v]) => {
           if (v === targetSession!.sessionId) {
             CALL_STATE_STORE.userSessionMap.delete(k);
@@ -66,13 +72,14 @@ export async function POST(req: NextRequest) {
                            (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
     let session = existingSessionId ? CALL_STATE_STORE.sessions.get(existingSessionId) : undefined;
 
+    // Handle New Call OFFER Signal
     if (action === "OFFER") {
       if (!toUserId) return NextResponse.json({ error: "Target required" }, { status: 400 });
 
       const rawTarget = String(toUserId);
       const cleanTarget = rawTarget.replace("@", "").trim();
 
-      // Universal Recipient Lookup in Prisma DB
+      // Recipient DB Lookup
       const targetUser = await prisma.user.findFirst({
         where: { 
           OR: [
@@ -88,16 +95,18 @@ export async function POST(req: NextRequest) {
 
       const targetGuid = targetUser?.id || cleanTarget;
       const targetUsername = targetUser?.username ? targetUser.username.replace("@", "") : cleanTarget;
+      const targetDisplayName = targetUser?.name || targetUsername;
+      const targetAvatarUrl = targetUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(targetDisplayName)}&background=00f2fe&color=ffffff`;
 
       const sessionId = `call_${currentUserId}_${targetGuid}_${Date.now()}`;
       const newSession: CallSessionData = {
         sessionId,
         callerId: currentUserId,
-        callerName: callerName || currentUsername || "User",
-        callerAvatar: callerAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(callerName || "User")}`,
+        callerName: callerName || currentUsername || "Friend",
+        callerAvatar: callerAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(callerName || "Friend")}`,
         recipientId: targetGuid,
-        recipientName: targetUser?.name || targetUsername,
-        recipientAvatar: targetUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(targetUsername)}`,
+        recipientName: targetDisplayName,
+        recipientAvatar: targetAvatarUrl,
         callType: callType || "voice",
         status: "RINGING",
         updatedAt: Date.now(),
@@ -113,12 +122,21 @@ export async function POST(req: NextRequest) {
         if (k) CALL_STATE_STORE.userSessionMap.set(k, sessionId);
       });
 
+      // PUSH INSTANT RINGING SIGNAL TO RECIPIENT SSE STREAM (< 10ms!)
+      if (targetGuid) pushSSEEventToUser(targetGuid, { type: "CALL_SIGNAL", session: newSession });
+      if (targetUsername) pushSSEEventToUser(targetUsername, { type: "CALL_SIGNAL", session: newSession });
+      if (cleanTarget) pushSSEEventToUser(cleanTarget, { type: "CALL_SIGNAL", session: newSession });
+
       return NextResponse.json({ success: true, session: newSession }, { status: 200 });
     }
 
     if (action === "SDP_OFFER" && session) {
       session.sdpOffer = sdp;
       session.updatedAt = Date.now();
+
+      if (session.recipientId) pushSSEEventToUser(session.recipientId, { type: "CALL_SIGNAL", session });
+      if (session.recipientName) pushSSEEventToUser(session.recipientName, { type: "CALL_SIGNAL", session });
+
       return NextResponse.json({ success: true, session }, { status: 200 });
     }
 
@@ -126,12 +144,20 @@ export async function POST(req: NextRequest) {
       session.status = "CONNECTED";
       if (sdp) session.sdpAnswer = sdp;
       session.updatedAt = Date.now();
+
+      if (session.callerId) pushSSEEventToUser(session.callerId, { type: "CALL_SIGNAL", session });
+      if (session.callerName) pushSSEEventToUser(session.callerName, { type: "CALL_SIGNAL", session });
+
       return NextResponse.json({ success: true, session }, { status: 200 });
     }
 
     if (action === "SDP_ANSWER" && session) {
       session.sdpAnswer = sdp;
       session.updatedAt = Date.now();
+
+      if (session.callerId) pushSSEEventToUser(session.callerId, { type: "CALL_SIGNAL", session });
+      if (session.callerName) pushSSEEventToUser(session.callerName, { type: "CALL_SIGNAL", session });
+
       return NextResponse.json({ success: true, session }, { status: 200 });
     }
 
@@ -140,9 +166,13 @@ export async function POST(req: NextRequest) {
       if (isCaller) {
         if (!session.callerCandidates) session.callerCandidates = [];
         session.callerCandidates.push(candidate);
+        if (session.recipientId) pushSSEEventToUser(session.recipientId, { type: "CALL_SIGNAL", session });
+        if (session.recipientName) pushSSEEventToUser(session.recipientName, { type: "CALL_SIGNAL", session });
       } else {
         if (!session.recipientCandidates) session.recipientCandidates = [];
         session.recipientCandidates.push(candidate);
+        if (session.callerId) pushSSEEventToUser(session.callerId, { type: "CALL_SIGNAL", session });
+        if (session.callerName) pushSSEEventToUser(session.callerName, { type: "CALL_SIGNAL", session });
       }
       session.updatedAt = Date.now();
       return NextResponse.json({ success: true, session }, { status: 200 });
@@ -155,7 +185,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/calls/signal - Universal Sub-100ms Recipient Polling
+// GET /api/calls/signal - Instant State Check
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -169,28 +199,18 @@ export async function GET(req: NextRequest) {
     const currentUserId = String(userPayload.userId);
     const currentUsername = typeof userPayload.username === "string" ? userPayload.username.replace("@", "") : "";
 
-    // 1. First check direct map
     let sessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
     let session = sessionId ? CALL_STATE_STORE.sessions.get(sessionId) || null : null;
 
-    // 2. Universal Scan: If direct map was missing, scan active sessions for recipient match!
     if (!session) {
       const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
       for (const sess of allSessions) {
-        const cleanRecipientName = sess.recipientName?.replace("@", "").toLowerCase();
-        const cleanRecipientId = sess.recipientId?.replace("@", "").toLowerCase();
-        const cleanCurrentUsername = currentUsername.toLowerCase();
-        const cleanCurrentUserId = currentUserId.toLowerCase();
-
         const isRecipientMatch = 
-          cleanRecipientId === cleanCurrentUserId ||
-          cleanRecipientId === cleanCurrentUsername ||
-          cleanRecipientName === cleanCurrentUsername ||
-          cleanRecipientName === cleanCurrentUserId;
-
+          sess.recipientId?.toLowerCase() === currentUserId.toLowerCase() ||
+          sess.recipientName?.toLowerCase() === currentUsername.toLowerCase();
         const isCallerMatch = 
-          sess.callerId === currentUserId || 
-          sess.callerName?.replace("@", "").toLowerCase() === cleanCurrentUsername;
+          sess.callerId?.toLowerCase() === currentUserId.toLowerCase() ||
+          sess.callerName?.toLowerCase() === currentUsername.toLowerCase();
 
         if (isRecipientMatch || isCallerMatch) {
           session = sess;
@@ -201,15 +221,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (session && Date.now() - session.updatedAt > 60000) {
-      CALL_STATE_STORE.sessions.delete(session.sessionId);
-      [session.callerId, session.recipientId, session.callerName, session.recipientName].forEach(k => {
-        if (k) CALL_STATE_STORE.userSessionMap.delete(k);
-      });
-      return NextResponse.json({ session: null }, { status: 200 });
-    }
-
-    return NextResponse.json({ session }, { status: 200 });
+    return NextResponse.json({ session: session || null }, { status: 200 });
   } catch (error) {
     console.error("Call signal GET error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

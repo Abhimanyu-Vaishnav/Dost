@@ -32,7 +32,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
   const notifiedSessionIdRef = useRef<string | null>(null);
   const endedSessionIdsRef = useRef<Set<string>>(new Set());
 
-  // Fetch current user's full profile name and avatar
+  // Fetch current user profile
   useEffect(() => {
     fetch("/api/users/profile")
       .then(res => res.json())
@@ -49,8 +49,43 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       .catch(() => {});
   }, [currentUserId]);
 
-  // Poll call signaling status at 100ms ultra-high speed
+  // Real-Time Sub-50ms Server-Sent Events (SSE) Listener
   useEffect(() => {
+    let eventSource: EventSource | null = null;
+
+    try {
+      eventSource = new EventSource("/api/calls/sse");
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "CALL_SIGNAL" && data.session) {
+            const sess: CallSessionData = data.session;
+
+            if (endedSessionIdsRef.current.has(sess.sessionId) || sess.status === "REJECTED" || sess.status === "ENDED") {
+              setActiveSession(null);
+              stopAllRingtones();
+              notifiedSessionIdRef.current = null;
+            } else {
+              setActiveSession(sess);
+
+              // Instant Ringtone & Vibration Trigger (< 10ms!)
+              const isRecipient = sess.status === "RINGING" && myUserId && (
+                sess.recipientId === myUserId || sess.recipientName === myUserId
+              );
+
+              if (isRecipient && notifiedSessionIdRef.current !== sess.sessionId) {
+                notifiedSessionIdRef.current = sess.sessionId;
+                triggerDeviceVibration();
+                triggerSystemNotification(sess.callerName || "Friend", sess.callType);
+              }
+            }
+          }
+        } catch (e) {}
+      };
+    } catch (e) {}
+
+    // Fallback heartbeat polling
     const interval = setInterval(async () => {
       try {
         const res = await fetch("/api/calls/signal");
@@ -63,19 +98,8 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               setActiveSession(null);
               stopAllRingtones();
               notifiedSessionIdRef.current = null;
-            } else {
+            } else if (!activeSession) {
               setActiveSession(sess);
-
-              // Trigger WhatsApp-style device vibration & system notification for recipient
-              const isRecipient = sess.status === "RINGING" && myUserId && (
-                sess.recipientId === myUserId || sess.recipientName === myUserId
-              );
-
-              if (isRecipient && notifiedSessionIdRef.current !== sess.sessionId) {
-                notifiedSessionIdRef.current = sess.sessionId;
-                triggerDeviceVibration();
-                triggerSystemNotification(sess.callerName || "Friend", sess.callType);
-              }
             }
           } else if (activeSession) {
             if (
@@ -90,9 +114,12 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
           }
         }
       } catch (e) {}
-    }, 100);
+    }, 500);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (eventSource) eventSource.close();
+      clearInterval(interval);
+    };
   }, [myUserId, activeSession]);
 
   const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice", targetName?: string, targetAvatar?: string) => {

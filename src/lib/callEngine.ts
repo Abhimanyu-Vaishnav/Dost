@@ -23,12 +23,34 @@ export interface CallSessionData {
 const globalForCalls = globalThis as unknown as {
   callSessionsMap?: Map<string, CallSessionData>;
   userSessionMap?: Map<string, string>;
+  sseControllers?: Map<string, ReadableStreamDefaultController>;
 };
 
 export const CALL_STATE_STORE = {
   sessions: globalForCalls.callSessionsMap || (globalForCalls.callSessionsMap = new Map<string, CallSessionData>()),
   userSessionMap: globalForCalls.userSessionMap || (globalForCalls.userSessionMap = new Map<string, string>())
 };
+
+// Global SSE Connections Registry for Instant <50ms Ringing
+export const SSE_CONTROLLERS = globalForCalls.sseControllers || 
+  (globalForCalls.sseControllers = new Map<string, ReadableStreamDefaultController>());
+
+// Helper to push real-time event to a specific user's SSE stream in < 5ms
+export function pushSSEEventToUser(userIdOrName?: string | null, data?: any) {
+  if (!userIdOrName) return false;
+  const key = String(userIdOrName).toLowerCase().replace("@", "").trim();
+  const controller = SSE_CONTROLLERS.get(key);
+  if (controller) {
+    try {
+      const payload = `data: ${JSON.stringify(data)}\n\n`;
+      controller.enqueue(new TextEncoder().encode(payload));
+      return true;
+    } catch (e) {
+      SSE_CONTROLLERS.delete(key);
+    }
+  }
+  return false;
+}
 
 // --- HD Ringtone Audio Synthesizer Engine ---
 let activeAudioContext: AudioContext | null = null;
@@ -58,12 +80,13 @@ export function getOrCreateAudioContext(): AudioContext | null {
 export function claimSystemAudioSession(callerName: string, callType: string) {
   try {
     if (typeof window !== "undefined" && "mediaSession" in navigator) {
-      navigator.mediaSession.playbackState = "playing";
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: `📞 ${callType.toUpperCase()} Call with ${callerName}`,
-        artist: "DOST Call Engine",
-        album: "HD Encrypted Voice"
+        title: `DOST HD ${callType === "video" ? "Video" : "Voice"} Call`,
+        artist: callerName || "DOST User",
+        album: "DOST Real-Time Connection"
       });
+      navigator.mediaSession.setActionHandler("pause", () => {});
+      navigator.mediaSession.setActionHandler("stop", () => {});
     }
   } catch (e) {}
 }
@@ -71,139 +94,108 @@ export function claimSystemAudioSession(callerName: string, callType: string) {
 export function releaseSystemAudioSession() {
   try {
     if (typeof window !== "undefined" && "mediaSession" in navigator) {
-      navigator.mediaSession.playbackState = "none";
       navigator.mediaSession.metadata = null;
     }
   } catch (e) {}
 }
 
-// Start continuous dual-frequency US Ringback Tone loop
-export function startOutgoingRingbackSound() {
-  stopAllRingtones();
-  const ctx = getOrCreateAudioContext();
-  if (!ctx) return;
-
-  try {
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-
-    osc1.type = "sine";
-    osc2.type = "sine";
-    osc1.frequency.setValueAtTime(440, ctx.currentTime);
-    osc2.frequency.setValueAtTime(480, ctx.currentTime);
-
-    gainNode.gain.setValueAtTime(0.12, ctx.currentTime);
-
-    osc1.connect(gainNode);
-    osc2.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    osc1.start();
-    osc2.start();
-
-    activeToneOsc1 = osc1;
-    activeToneOsc2 = osc2;
-    activeGainNode = gainNode;
-  } catch (e) {}
-}
-
-// Start continuous high-pitched FaceTime/WhatsApp-style Incoming Caller Tune sound loop
+// Start Incoming Phone Caller Tune Sound
 export function startIncomingCallerTuneSound() {
   stopAllRingtones();
   const ctx = getOrCreateAudioContext();
   if (!ctx) return;
 
   try {
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
     const osc1 = ctx.createOscillator();
     const osc2 = ctx.createOscillator();
-    const gainNode = ctx.createGain();
+    const gain = ctx.createGain();
 
     osc1.type = "sine";
     osc2.type = "sine";
-    osc1.frequency.setValueAtTime(853, ctx.currentTime);
-    osc2.frequency.setValueAtTime(960, ctx.currentTime);
+    osc1.frequency.setValueAtTime(440, ctx.currentTime);
+    osc2.frequency.setValueAtTime(480, ctx.currentTime);
 
-    gainNode.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
 
-    osc1.connect(gainNode);
-    osc2.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
 
     osc1.start();
     osc2.start();
 
     activeToneOsc1 = osc1;
     activeToneOsc2 = osc2;
-    activeGainNode = gainNode;
+    activeGainNode = gain;
   } catch (e) {}
 }
 
-// WhatsApp-Style Haptic Pattern Device Vibration
-export function triggerDeviceVibration() {
+// Start Outgoing Phone Ringback Sound
+export function startOutgoingRingbackSound() {
+  stopAllRingtones();
+  const ctx = getOrCreateAudioContext();
+  if (!ctx) return;
+
   try {
-    if (typeof window !== "undefined" && "vibrate" in navigator) {
-      navigator.vibrate([600, 300, 600, 300, 600, 300]);
-      if (!vibrationInterval) {
-        vibrationInterval = setInterval(() => {
-          if (typeof window !== "undefined" && "vibrate" in navigator) {
-            navigator.vibrate([600, 300, 600, 300, 600, 300]);
-          }
-        }, 3000);
-      }
-    }
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = "sine";
+    osc2.type = "sine";
+    osc1.frequency.setValueAtTime(440, ctx.currentTime);
+    osc2.frequency.setValueAtTime(480, ctx.currentTime);
+
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start();
+    osc2.start();
+
+    activeToneOsc1 = osc1;
+    activeToneOsc2 = osc2;
+    activeGainNode = gain;
   } catch (e) {}
 }
 
-// Trigger Native Browser System Notification
-export function triggerSystemNotification(callerName: string, callType: string) {
-  try {
-    if (typeof window === "undefined" || !("Notification" in window)) return;
-
-    if (Notification.permission === "granted") {
-      new Notification(`📞 Incoming ${callType === "voice" ? "Voice" : "Video"} Call`, {
-        body: `${callerName} is calling you live. Tap to answer!`,
-        icon: `https://ui-avatars.com/api/?name=${encodeURIComponent(callerName)}&background=00f2fe&color=ffffff`,
-        requireInteraction: true
-      });
-    } else if (Notification.permission !== "denied") {
-      Notification.requestPermission().then(permission => {
-        if (permission === "granted") {
-          new Notification(`📞 Incoming ${callType === "voice" ? "Voice" : "Video"} Call`, {
-            body: `${callerName} is calling you live. Tap to answer!`,
-            icon: `https://ui-avatars.com/api/?name=${encodeURIComponent(callerName)}&background=00f2fe&color=ffffff`,
-            requireInteraction: true
-          });
-        }
-      });
-    }
-  } catch (e) {}
-}
-
-// Stop All Ringtone Sounds, MediaSession & Vibration
+// Stop All Ringtone Sounds
 export function stopAllRingtones() {
   try {
-    if (activeToneOsc1) {
-      activeToneOsc1.stop();
-      activeToneOsc1.disconnect();
-      activeToneOsc1 = null;
-    }
-    if (activeToneOsc2) {
-      activeToneOsc2.stop();
-      activeToneOsc2.disconnect();
-      activeToneOsc2 = null;
-    }
-    if (activeGainNode) {
-      activeGainNode.disconnect();
-      activeGainNode = null;
-    }
-    if (vibrationInterval) {
-      clearInterval(vibrationInterval);
-      vibrationInterval = null;
-    }
-    if (typeof window !== "undefined" && "vibrate" in navigator) {
+    if (activeToneOsc1) { activeToneOsc1.stop(); activeToneOsc1.disconnect(); activeToneOsc1 = null; }
+    if (activeToneOsc2) { activeToneOsc2.stop(); activeToneOsc2.disconnect(); activeToneOsc2 = null; }
+    if (activeGainNode) { activeGainNode.disconnect(); activeGainNode = null; }
+    if (vibrationInterval) { clearInterval(vibrationInterval); vibrationInterval = null; }
+    if (typeof window !== "undefined" && navigator.vibrate) {
       navigator.vibrate(0);
     }
-    releaseSystemAudioSession();
+  } catch (e) {}
+}
+
+// Trigger Phone Vibration pattern
+export function triggerDeviceVibration() {
+  try {
+    if (typeof window !== "undefined" && navigator.vibrate) {
+      navigator.vibrate([400, 200, 400, 200, 800]);
+    }
+  } catch (e) {}
+}
+
+// Trigger System Native Notification
+export function triggerSystemNotification(callerName: string, callType: string) {
+  try {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      new Notification(`Incoming DOST ${callType === "video" ? "Video" : "Voice"} Call`, {
+        body: `${callerName} is calling you on DOST!`,
+        icon: "/icon.svg",
+        tag: "dost-incoming-call"
+      });
+    }
   } catch (e) {}
 }

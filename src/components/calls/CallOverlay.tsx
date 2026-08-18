@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   Phone, PhoneOff, Mic, MicOff, Volume2, Video, VideoOff, 
-  Shield, PhoneCall, Smartphone, Headphones, Play, Minimize2, Maximize2
+  Shield, PhoneCall, Smartphone, Headphones, Play, Minimize2, Maximize2, RefreshCw
 } from "lucide-react";
 import { 
   CallSessionData, startOutgoingRingbackSound, 
@@ -27,7 +27,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(session.callType === "video");
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [voiceVolume, setVoiceVolume] = useState<number>(0);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
@@ -172,10 +173,14 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       try {
         if ((pc as any).signalingState === "closed") return;
 
-        // Request Microphone & Camera
+        // Request HD Microphone & Full HD Video Camera (1280x720)
         const constraints: MediaStreamConstraints = {
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-          video: session.callType === "video" ? { width: { ideal: 640 }, height: { ideal: 480 } } : false
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 },
+          video: session.callType === "video" ? {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: facingMode
+          } : false
         };
 
         const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(async () => {
@@ -321,7 +326,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
       try { pc.close(); } catch (e) {}
     };
-  }, [session.callType, isCaller, isConnected, isSpeakerOn]);
+  }, [session.callType, isCaller, isConnected, isSpeakerOn, facingMode]);
 
   // Signaling Exchange (SDP Answer & Candidates)
   useEffect(() => {
@@ -396,6 +401,11 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }
   };
 
+  // Switch Front / Rear Camera
+  const handleFlipCamera = () => {
+    setFacingMode(prev => prev === "user" ? "environment" : "user");
+  };
+
   // Toggle Speaker / Earpiece Target Output
   const handleToggleSpeaker = () => {
     const nextSpeaker = !isSpeakerOn;
@@ -411,7 +421,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Minimized Picture-in-Picture Floating Bar (Allows user to navigate app while call remains 100% active in background!)
+  // Minimized Picture-in-Picture Floating Bar
   if (isMinimized) {
     return (
       <div 
@@ -510,7 +520,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         }} 
       />
 
-      {/* Top Bar Header with Minimize PiP Button */}
+      {/* Top Bar Header with Exact Full Partner Name */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", zIndex: 2, width: "100%", maxWidth: "420px", position: "relative" }}>
         <button
           onClick={() => setIsMinimized(true)}
@@ -532,7 +542,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           borderRadius: "9999px", color: "white", fontSize: "0.85rem", fontWeight: 800,
           border: "1px solid rgba(255, 255, 255, 0.2)", backdropFilter: "blur(12px)"
         }}>
-          <Shield size={16} style={{ color: "#10b981" }} /> End-to-End Encrypted HD Voice Call
+          <Shield size={16} style={{ color: "#10b981" }} /> End-to-End Encrypted HD {session.callType === "voice" ? "Voice" : "Video"} Call
         </div>
 
         <h2 style={{ fontSize: "2.2rem", fontWeight: 900, color: "#ffffff", margin: "14px 0 2px 0", textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
@@ -554,7 +564,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         </span>
       </div>
 
-      {/* Avatar Visualizer */}
+      {/* Avatar / Video Canvas Display */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", position: "relative", width: "100%", maxHeight: "520px", flex: 1, zIndex: 2 }}>
         {session.callType === "voice" ? (
           <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -583,7 +593,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               position: "absolute", bottom: "20px", right: "20px", width: "120px", height: "160px",
               borderRadius: "18px", background: "#000", border: "2px solid rgba(255, 255, 255, 0.4)", overflow: "hidden"
             }}>
-              <video ref={localVideoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }} />
+              <video ref={localVideoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", transform: facingMode === "user" ? "scaleX(-1)" : "none" }} />
             </div>
           </div>
         )}
@@ -664,20 +674,37 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
             {/* Video Toggle */}
             {session.callType === "video" && (
-              <button
-                onClick={handleToggleVideo}
-                style={{
-                  width: "52px", height: "52px", borderRadius: "50%",
-                  background: isVideoEnabled ? "rgba(168, 85, 247, 0.3)" : "rgba(255, 255, 255, 0.2)",
-                  border: "none", color: isVideoEnabled ? "#a855f7" : "white",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer", transition: "all 0.2s ease"
-                }}
-                className="hover:scale-105 active:scale-95"
-                title={isVideoEnabled ? "Turn Video Off" : "Turn Video On"}
-              >
-                {isVideoEnabled ? <Video size={22} /> : <VideoOff size={22} />}
-              </button>
+              <>
+                <button
+                  onClick={handleToggleVideo}
+                  style={{
+                    width: "52px", height: "52px", borderRadius: "50%",
+                    background: isVideoEnabled ? "rgba(168, 85, 247, 0.3)" : "rgba(255, 255, 255, 0.2)",
+                    border: "none", color: isVideoEnabled ? "#a855f7" : "white",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", transition: "all 0.2s ease"
+                  }}
+                  className="hover:scale-105 active:scale-95"
+                  title={isVideoEnabled ? "Turn Video Off" : "Turn Video On"}
+                >
+                  {isVideoEnabled ? <Video size={22} /> : <VideoOff size={22} />}
+                </button>
+
+                {/* Flip Camera Button (Front / Rear) */}
+                <button
+                  onClick={handleFlipCamera}
+                  style={{
+                    width: "52px", height: "52px", borderRadius: "50%",
+                    background: "rgba(255, 255, 255, 0.2)", border: "none", color: "white",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", transition: "all 0.2s ease"
+                  }}
+                  className="hover:scale-105 active:scale-95"
+                  title="Flip Camera (Front / Back)"
+                >
+                  <RefreshCw size={22} />
+                </button>
+              </>
             )}
 
             {/* End Call */}
