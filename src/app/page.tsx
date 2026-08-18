@@ -45,6 +45,27 @@ export default function Home() {
   // Sample Poll Option Selected State for interactive preview
   const [pollVotedOption, setPollVotedOption] = useState<number | null>(0);
 
+  const handleQuickLogin = async (demoUser: string) => {
+    setIsLoading(true);
+    setError("");
+    setEmail(demoUser);
+    setPassword("password123");
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: demoUser, password: "password123" })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Quick login failed");
+      window.location.href = "/feed";
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleAuthSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!email || !password) {
@@ -493,6 +514,39 @@ export default function Home() {
                     </>
                   )}
                 </button>
+
+                {/* 1-Tap Quick Demo Login Buttons */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+                  <div style={{ fontSize: "0.76rem", color: "var(--color-text-muted)", textAlign: "center", fontWeight: 700 }}>
+                    ⚡ INSTANT 1-TAP DEMO SIGN IN:
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickLogin("sumit")}
+                      disabled={isLoading}
+                      style={{
+                        background: "rgba(29, 155, 240, 0.12)", border: "1px solid rgba(29, 155, 240, 0.3)",
+                        color: "var(--color-primary)", padding: "8px", borderRadius: "10px",
+                        fontSize: "0.8rem", fontWeight: 800, cursor: "pointer"
+                      }}
+                    >
+                      ⚡ Login @sumit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickLogin("alex")}
+                      disabled={isLoading}
+                      style={{
+                        background: "rgba(168, 85, 247, 0.12)", border: "1px solid rgba(168, 85, 247, 0.3)",
+                        color: "#a855f7", padding: "8px", borderRadius: "10px",
+                        fontSize: "0.8rem", fontWeight: 800, cursor: "pointer"
+                      }}
+                    >
+                      ⚡ Login @alex
+                    </button>
+                  </div>
+                </div>
 
                 <div className={styles.authToggleFooter}>
                   {authMode === "login" ? (
