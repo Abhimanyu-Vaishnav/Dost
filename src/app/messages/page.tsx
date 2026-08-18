@@ -106,18 +106,21 @@ function MessagesContent() {
   const searchParams = useSearchParams();
   const targetUserParam = searchParams?.get("user") || searchParams?.get("target");
 
-  const [conversations, setConversations] = useState<Conversation[]>(() => {
+  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
+
+  useEffect(() => {
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem("dost_conversations_cache");
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setConversations(parsed);
+          }
         } catch (e) {}
       }
     }
-    return INITIAL_CONVERSATIONS;
-  });
+  }, []);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>(INITIAL_MESSAGES);
   
