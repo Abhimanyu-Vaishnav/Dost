@@ -9,6 +9,10 @@ export interface CallSession {
   callType: "voice" | "video";
   status: "RINGING" | "CONNECTED" | "REJECTED" | "ENDED";
   updatedAt: number;
+  sdpOffer?: any;
+  sdpAnswer?: any;
+  callerCandidates?: any[];
+  recipientCandidates?: any[];
 }
 
 // In-memory active call sessions map: sessionId -> CallSession

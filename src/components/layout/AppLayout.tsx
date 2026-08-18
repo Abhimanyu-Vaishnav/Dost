@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   Home, User, Search, LogOut, Bell, Mail, Bookmark, MoreHorizontal, EyeOff, Plus, MessageSquare, Shield, ShieldAlert,
   Settings as SettingsIcon, List, Users, CheckCircle2, TrendingUp, BarChart3, HelpCircle, Command, Palette, Edit3, Camera, Sparkles, Feather, X,
@@ -106,6 +106,8 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
     return () => clearInterval(interval);
   }, []);
 
+  const lastNotifiedMsgIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     async function fetchMessagesUnread() {
       try {
@@ -119,15 +121,15 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             const { id, senderName, content, conversationId } = data.latestUnread;
             const isViewingThisChat = pathname === `/messages/${conversationId}`;
             
-            setLatestUnreadMsgId(prevId => {
-              if (prevId !== id && !isViewingThisChat) {
+            if (lastNotifiedMsgIdRef.current !== id) {
+              lastNotifiedMsgIdRef.current = id;
+              if (!isViewingThisChat) {
                 setActiveToast({ id, senderName, content, conversationId });
                 setTimeout(() => {
                   setActiveToast(current => current?.id === id ? null : current);
                 }, 4000);
               }
-              return id;
-            });
+            }
           }
         }
       } catch (e) {
@@ -136,7 +138,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
     }
 
     fetchMessagesUnread();
-    const interval = setInterval(fetchMessagesUnread, 1200);
+    const interval = setInterval(fetchMessagesUnread, 1500);
     return () => clearInterval(interval);
   }, [pathname]);
 
@@ -151,11 +153,17 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
 
           if (session) {
             const myId = user?.userId || user?.username;
-            if (session.status === "RINGING" && session.recipientId === myId) {
-              setIncomingCallSession(session);
-            } else if (session.status === "CONNECTED" && session.recipientId === myId) {
+            const isCaller = myId && (session.callerId === myId || session.callerName === user?.username);
+
+            if (session.status === "RINGING") {
+              if (!isCaller) {
+                setIncomingCallSession(session);
+              }
+            } else if (session.status === "CONNECTED") {
               setIncomingCallSession(null);
-              setActiveAcceptedCallSession(session);
+              if (!isCaller) {
+                setActiveAcceptedCallSession(session);
+              }
             } else if (session.status === "REJECTED" || session.status === "ENDED") {
               setIncomingCallSession(null);
               setActiveAcceptedCallSession(null);

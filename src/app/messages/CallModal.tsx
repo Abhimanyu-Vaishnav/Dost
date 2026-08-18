@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   PhoneOff, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, 
-  Shield, PhoneCall, MicOff as MicMutedIcon, Smartphone, HeadphoneOff, Headphones
+  Shield, PhoneCall, MicOff as MicMutedIcon, Smartphone, Headphones
 } from "lucide-react";
 
 interface CallModalProps {
@@ -30,61 +30,56 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
     isIncomingAccepted ? "connected" : "ringing"
   );
   
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const localMediaStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const callInitTimeRef = useRef<number>(Date.now());
+  const processedIceCandidatesRef = useRef<Set<string>>(new Set());
 
-  // Send OFFER signal IMMEDIATELY on mount (0ms delay) before any media permission prompts
-  useEffect(() => {
-    const targetId = contact.id || contact.username;
-    if (!isIncomingAccepted && targetId) {
-      fetch("/api/messages/calls/signal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "OFFER",
-          toUserId: targetId,
-          callType: type,
-          callerName: contact.name,
-          callerAvatar: contact.avatar
-        })
-      }).catch(err => console.error("Send call offer error:", err));
-    }
-  }, [isIncomingAccepted, contact, type]);
-
-  // Poll for active call session status updates at 250ms stream (with 5s grace period guard)
-  useEffect(() => {
-    const signalInterval = setInterval(async () => {
-      try {
-        const res = await fetch("/api/messages/calls/signal");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.session) {
-            if (data.session.status === "CONNECTED") {
-              setCallState("connected");
-            } else if (data.session.status === "REJECTED" || data.session.status === "ENDED") {
-              setCallState("declined");
-              setTimeout(() => {
-                onEndCall();
-              }, 400);
-            }
-          } else if (!isIncomingAccepted && Date.now() - callInitTimeRef.current > 5000) {
-            // Only close after 5s grace period if session was explicitly ended
-            onEndCall();
-          }
-        }
-      } catch (e) {}
-    }, 250);
-
-    return () => clearInterval(signalInterval);
-  }, [isIncomingAccepted, onEndCall]);
-
-  // Initialize Microphone & Camera MediaStream inside non-blocking try/catch
+  // Initialize WebRTC Peer Connection & Media Streams
   useEffect(() => {
     let activeStream: MediaStream | null = null;
     let animFrame: number;
+
+    const configuration: RTCConfiguration = {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+      ]
+    };
+
+    const pc = new RTCPeerConnection(configuration);
+    peerConnectionRef.current = pc;
+
+    // Handle Remote Track Received (WebRTC Voice & Video Stream Arrives from Remote Peer!)
+    pc.ontrack = (event) => {
+      console.log("WebRTC Remote Track Received:", event.track.kind, event.streams);
+      const remoteStream = event.streams[0] || new MediaStream([event.track]);
+
+      if (event.track.kind === "video" && remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteStream;
+      }
+
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remoteStream;
+        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.3;
+        remoteAudioRef.current.play().catch(e => console.log("Remote audio play error:", e));
+      }
+    };
+
+    // Handle Local ICE Candidates Generated
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        fetch("/api/messages/calls/signal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "ICE_CANDIDATE", candidate: event.candidate })
+        }).catch(() => {});
+      }
+    };
 
     async function initMediaCall() {
       try {
@@ -93,28 +88,26 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
         const stream = await navigator.mediaDevices.getUserMedia({
           video: type === "video",
           audio: true
-        }).catch(async (e) => {
+        }).catch(async () => {
           return await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
         });
 
         if (!stream) return;
 
         activeStream = stream;
-        mediaStreamRef.current = stream;
+        localMediaStreamRef.current = stream;
 
-        // Bind video feed for camera self-view
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+        // Add local tracks to WebRTC Peer Connection
+        stream.getTracks().forEach(track => {
+          pc.addTrack(track, stream);
+        });
+
+        // Bind local video feed for self-view
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
         }
 
-        // Pipe audio stream to hidden element BUT KEEP MUTED LOCALLY TO PREVENT VOICE ECHO!
-        if (audioPlaybackRef.current) {
-          audioPlaybackRef.current.srcObject = stream;
-          audioPlaybackRef.current.muted = true; // MUTE LOCAL LOOPBACK TO PREVENT ECHO REPETITION 100%!
-          audioPlaybackRef.current.play().catch(() => {});
-        }
-
-        // Set up Web Audio Analyser for live frequency spectrum visualizer
+        // Set up Web Audio Analyser for live mic spectrum visualizer
         try {
           const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
           if (AudioCtx) {
@@ -139,6 +132,26 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
             updateVolume();
           }
         } catch (err) {}
+
+        // If caller: Create WebRTC SDP Offer
+        const targetId = contact.id || contact.username;
+        if (!isIncomingAccepted && targetId) {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          fetch("/api/messages/calls/signal", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "OFFER",
+              toUserId: targetId,
+              callType: type,
+              callerName: contact.name,
+              callerAvatar: contact.avatar,
+              sdp: offer
+            })
+          }).catch(err => console.error("Send call offer error:", err));
+        }
       } catch (err) {
         console.error("Camera/Mic access error:", err);
       }
@@ -154,8 +167,68 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
       if (activeStream) {
         activeStream.getTracks().forEach(track => track.stop());
       }
+      pc.close();
     };
-  }, [type]);
+  }, [type, isIncomingAccepted, contact]);
+
+  // Poll active session & exchange WebRTC SDP Offer/Answer and ICE Candidates
+  useEffect(() => {
+    const signalInterval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/messages/calls/signal");
+        if (res.ok) {
+          const data = await res.json();
+          const session = data.session;
+          const pc = peerConnectionRef.current;
+
+          if (session && pc) {
+            if (session.status === "CONNECTED") {
+              setCallState("connected");
+            } else if (session.status === "REJECTED" || session.status === "ENDED") {
+              setCallState("declined");
+              setTimeout(() => {
+                onEndCall();
+              }, 400);
+            }
+
+            // Recipient handles SDP Offer from Caller
+            if (isIncomingAccepted && session.sdpOffer && !pc.remoteDescription) {
+              await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+
+              fetch("/api/messages/calls/signal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
+              }).catch(() => {});
+            }
+
+            // Caller handles SDP Answer from Recipient
+            if (!isIncomingAccepted && session.sdpAnswer && pc.signalingState === "have-local-offer") {
+              await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
+            }
+
+            // Process Remote ICE Candidates
+            const candidates = isIncomingAccepted ? session.callerCandidates : session.recipientCandidates;
+            if (candidates && candidates.length > 0) {
+              for (const cand of candidates) {
+                const candStr = JSON.stringify(cand);
+                if (!processedIceCandidatesRef.current.has(candStr)) {
+                  processedIceCandidatesRef.current.add(candStr);
+                  await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+                }
+              }
+            }
+          } else if (!isIncomingAccepted && Date.now() - callInitTimeRef.current > 5000) {
+            onEndCall();
+          }
+        }
+      } catch (e) {}
+    }, 250);
+
+    return () => clearInterval(signalInterval);
+  }, [isIncomingAccepted, onEndCall]);
 
   // Handle Proximity Sensor API for screen auto-dim when near ear
   useEffect(() => {
@@ -166,11 +239,7 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
       if ("ProximitySensor" in window) {
         sensor = new (window as any).ProximitySensor();
         sensor.addEventListener("reading", () => {
-          if (sensor.near) {
-            setIsNearEarMode(true);
-          } else {
-            setIsNearEarMode(false);
-          }
+          setIsNearEarMode(Boolean(sensor.near));
         });
         sensor.start();
       }
@@ -183,7 +252,7 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
     };
   }, []);
 
-  // Call duration timer (runs ONLY when connected)
+  // Call duration timer
   useEffect(() => {
     if (callState !== "connected") return;
 
@@ -196,8 +265,8 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
 
   // Handle Mute Toggle
   useEffect(() => {
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getAudioTracks().forEach(track => {
+    if (localMediaStreamRef.current) {
+      localMediaStreamRef.current.getAudioTracks().forEach(track => {
         track.enabled = !isMuted;
       });
     }
@@ -205,16 +274,19 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
 
   // Handle Video Toggle
   useEffect(() => {
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getVideoTracks().forEach(track => {
+    if (localMediaStreamRef.current) {
+      localMediaStreamRef.current.getVideoTracks().forEach(track => {
         track.enabled = isVideoEnabled;
       });
     }
   }, [isVideoEnabled]);
 
   const handleEndCallClick = () => {
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+    if (localMediaStreamRef.current) {
+      localMediaStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
     }
     fetch("/api/messages/calls/signal", {
       method: "POST",
@@ -248,8 +320,8 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
       }} 
       className="animate-fade-in"
     >
-      {/* Hidden Audio Output Element */}
-      <audio ref={audioPlaybackRef} autoPlay playsInline style={{ display: "none" }} />
+      {/* Remote Peer Voice Audio Output Element */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: "none" }} />
 
       {/* Near-Ear Screen Off Black Overlay */}
       {isNearEarMode && (
@@ -387,7 +459,7 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
             />
           </div>
         ) : (
-          /* Real Video Call Stream Container */
+          /* Real WebRTC Video Call Stream Container */
           <div style={{
             width: "100%", maxWidth: "640px", height: "100%", minHeight: "360px",
             borderRadius: "28px", overflow: "hidden", background: "#111111",
@@ -395,10 +467,11 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
             boxShadow: "0 20px 50px rgba(0,0,0,0.6)"
           }}>
             {/* Contact Remote Video Feed */}
-            <img
-              src={contact.avatar}
-              alt={contact.name}
-              style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.9)" }}
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
 
             {/* Real Camera Self-View Feed (PiP Badge) */}
@@ -410,7 +483,7 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
             }}>
               {isVideoEnabled ? (
                 <video
-                  ref={videoRef}
+                  ref={localVideoRef}
                   autoPlay
                   playsInline
                   muted
@@ -458,6 +531,9 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
           onClick={() => {
             setIsSpeakerOn(!isSpeakerOn);
             setIsEarpieceMode(isSpeakerOn);
+            if (remoteAudioRef.current) {
+              remoteAudioRef.current.volume = isSpeakerOn ? 0.3 : 1.0;
+            }
           }}
           style={{
             width: "52px", height: "52px", borderRadius: "50%",

@@ -6,7 +6,7 @@ import { ACTIVE_CALL_SESSIONS, USER_TO_SESSION_MAP, CallSession, setSessionForUs
 // In-memory cache for userId -> username
 const USER_NAME_CACHE: Map<string, string> = new Map();
 
-// POST /api/messages/calls/signal - State Machine transitions (OFFER, ANSWER, REJECT, END)
+// POST /api/messages/calls/signal - WebRTC Signaling & State Machine transitions
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (currentUsername) USER_NAME_CACHE.set(currentUserId, currentUsername);
 
     const body = await req.json();
-    const { action, toUserId, callType, callerName, callerAvatar } = body;
+    const { action, toUserId, callType, callerName, callerAvatar, sdp, candidate } = body;
 
     if (!action) {
       return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
@@ -56,16 +56,46 @@ export async function POST(req: NextRequest) {
         recipientAvatar: targetUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(targetUsername)}`,
         callType: callType || "voice",
         status: "RINGING",
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        callerCandidates: [],
+        recipientCandidates: []
       };
+
+      if (sdp) newSession.sdpOffer = sdp;
 
       ACTIVE_CALL_SESSIONS.set(sessionId, newSession);
       setSessionForUserKeys([currentUserId, currentUsername, targetGuid, targetUsername], newSession);
       return NextResponse.json({ success: true, session: newSession }, { status: 200 });
     }
 
+    if (action === "SDP_OFFER" && session) {
+      session.sdpOffer = sdp;
+      session.updatedAt = Date.now();
+      return NextResponse.json({ success: true, session }, { status: 200 });
+    }
+
     if (action === "ANSWER" && session) {
       session.status = "CONNECTED";
+      if (sdp) session.sdpAnswer = sdp;
+      session.updatedAt = Date.now();
+      return NextResponse.json({ success: true, session }, { status: 200 });
+    }
+
+    if (action === "SDP_ANSWER" && session) {
+      session.sdpAnswer = sdp;
+      session.updatedAt = Date.now();
+      return NextResponse.json({ success: true, session }, { status: 200 });
+    }
+
+    if (action === "ICE_CANDIDATE" && session && candidate) {
+      const isCaller = currentUserId === session.callerId || currentUsername === session.callerName;
+      if (isCaller) {
+        if (!session.callerCandidates) session.callerCandidates = [];
+        session.callerCandidates.push(candidate);
+      } else {
+        if (!session.recipientCandidates) session.recipientCandidates = [];
+        session.recipientCandidates.push(candidate);
+      }
       session.updatedAt = Date.now();
       return NextResponse.json({ success: true, session }, { status: 200 });
     }
@@ -74,7 +104,6 @@ export async function POST(req: NextRequest) {
       session.status = action === "REJECT" ? "REJECTED" : "ENDED";
       session.updatedAt = Date.now();
       
-      // Cleanup session from maps
       const keysToClean = [session.callerId, session.recipientId];
       if (currentUsername) keysToClean.push(currentUsername);
       setSessionForUserKeys(keysToClean, null);
@@ -90,7 +119,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/messages/calls/signal - Poll active call session state (250ms high-frequency stream)
+// GET /api/messages/calls/signal - Poll active call session state
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -107,8 +136,8 @@ export async function GET(req: NextRequest) {
     const sessionId = USER_TO_SESSION_MAP.get(userIdKey) || (usernameKey ? USER_TO_SESSION_MAP.get(usernameKey) : undefined);
     const session = sessionId ? ACTIVE_CALL_SESSIONS.get(sessionId) || null : null;
 
-    // Auto-cleanup stale sessions older than 45s
-    if (session && (Date.now() - session.updatedAt > 45000)) {
+    // Auto-cleanup stale sessions older than 60s
+    if (session && (Date.now() - session.updatedAt > 60000)) {
       ACTIVE_CALL_SESSIONS.delete(session.sessionId);
       setSessionForUserKeys([session.callerId, session.recipientId, usernameKey], null);
       return NextResponse.json({ session: null }, { status: 200 });
