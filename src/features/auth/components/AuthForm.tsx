@@ -50,8 +50,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         }));
       }
 
-      router.push("/feed"); // Redirect to feed upon success
-      router.refresh();
+      window.location.href = "/feed";
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -75,8 +75,7 @@ export default function Home() {
         }));
       }
 
-      router.push("/feed");
-      router.refresh();
+      window.location.href = "/feed";
     } catch (err: any) {
       setError(err.message);
     } finally {
