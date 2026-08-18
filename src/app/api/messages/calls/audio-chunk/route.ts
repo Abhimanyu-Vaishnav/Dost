@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 
 interface AudioChunk {
+  sessionId: string;
   senderId: string;
   senderName: string;
   blobBase64: string;
   timestamp: number;
 }
 
-// In-memory audio chunk buffer: sessionId -> AudioChunk[]
-const AUDIO_CHUNK_BUFFER: Map<string, AudioChunk[]> = new Map();
+// In-memory global singleton audio chunk buffer (Attached to globalThis for Next.js API route persistence)
+const globalForAudioChunks = globalThis as unknown as {
+  audioChunkBufferMap?: Map<string, AudioChunk[]>;
+};
+
+const AUDIO_CHUNK_BUFFER = globalForAudioChunks.audioChunkBufferMap || 
+  (globalForAudioChunks.audioChunkBufferMap = new Map<string, AudioChunk[]>());
 
 // POST /api/messages/calls/audio-chunk - Push recorded mic audio chunk (300ms PCM/WebM slice)
 export async function POST(req: NextRequest) {
@@ -31,21 +37,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
     }
 
-    if (!AUDIO_CHUNK_BUFFER.has(sessionId)) {
-      AUDIO_CHUNK_BUFFER.set(sessionId, []);
+    const chunkKey = "global_active_call";
+    if (!AUDIO_CHUNK_BUFFER.has(chunkKey)) {
+      AUDIO_CHUNK_BUFFER.set(chunkKey, []);
     }
 
-    const chunks = AUDIO_CHUNK_BUFFER.get(sessionId)!;
+    const chunks = AUDIO_CHUNK_BUFFER.get(chunkKey)!;
     chunks.push({
+      sessionId,
       senderId,
       senderName,
       blobBase64,
       timestamp: Date.now()
     });
 
-    // Keep only last 20 chunks to prevent memory buildup
-    if (chunks.length > 20) {
-      AUDIO_CHUNK_BUFFER.set(sessionId, chunks.slice(chunks.length - 20));
+    // Keep only last 30 chunks to prevent memory buildup
+    if (chunks.length > 30) {
+      AUDIO_CHUNK_BUFFER.set(chunkKey, chunks.slice(chunks.length - 30));
     }
 
     return NextResponse.json({ success: true }, { status: 200 });
@@ -55,7 +63,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/messages/calls/audio-chunk?sessionId=xyz - Poll unread audio chunks for peer
+// GET /api/messages/calls/audio-chunk - Poll unread audio chunks for peer
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -68,30 +76,29 @@ export async function GET(req: NextRequest) {
 
     const currentUserId = String(userPayload.userId);
     const currentUsername = typeof userPayload.username === "string" ? userPayload.username.replace("@", "").toLowerCase() : "";
-    const { searchParams } = new URL(req.url);
-    const sessionId = searchParams.get("sessionId");
 
-    if (!sessionId || !AUDIO_CHUNK_BUFFER.has(sessionId)) {
+    const chunkKey = "global_active_call";
+    if (!AUDIO_CHUNK_BUFFER.has(chunkKey)) {
       return NextResponse.json({ chunks: [] }, { status: 200 });
     }
 
-    const allChunks = AUDIO_CHUNK_BUFFER.get(sessionId)!;
+    const allChunks = AUDIO_CHUNK_BUFFER.get(chunkKey)!;
     // Get chunks sent by PEER (filter out self GUID and self username strictly)
     const peerChunks = allChunks.filter(c => {
       const cName = c.senderName?.replace("@", "").toLowerCase();
       const isSelf = c.senderId === currentUserId || cName === currentUsername;
-      const isRecent = Date.now() - c.timestamp < 5000;
+      const isRecent = Date.now() - c.timestamp < 6000;
       return !isSelf && isRecent;
     });
 
-    // Drain retrieved chunks
-    AUDIO_CHUNK_BUFFER.set(
-      sessionId,
-      allChunks.filter(c => {
-        const cName = c.senderName?.replace("@", "").toLowerCase();
-        return c.senderId === currentUserId || cName === currentUsername || Date.now() - c.timestamp >= 5000;
-      })
-    );
+    // Drain retrieved peer chunks
+    if (peerChunks.length > 0) {
+      const peerChunkSet = new Set(peerChunks);
+      AUDIO_CHUNK_BUFFER.set(
+        chunkKey,
+        allChunks.filter(c => !peerChunkSet.has(c))
+      );
+    }
 
     return NextResponse.json({ chunks: peerChunks }, { status: 200 });
   } catch (error) {
