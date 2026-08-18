@@ -6,7 +6,7 @@ import { CallOverlay } from "@/components/calls/CallOverlay";
 
 interface CallContextType {
   activeSession: CallSessionData | null;
-  startCall: (targetUserId: string, callType?: "voice" | "video") => Promise<void>;
+  startCall: (targetUserId: string, callType?: "voice" | "video", targetName?: string, targetAvatar?: string) => Promise<void>;
   endCall: () => Promise<void>;
   acceptCall: () => Promise<void>;
 }
@@ -50,20 +50,23 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     return () => clearInterval(interval);
   }, []);
 
-  const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice") => {
+  const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice", targetName?: string, targetAvatar?: string) => {
     try {
       getOrCreateAudioContext();
       callStartedTimeRef.current = Date.now();
 
       // Instant 0ms optimistic session setup so CallOverlay opens IMMEDIATELY
+      const displayName = targetName || targetUserId;
+      const displayAvatar = targetAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=a855f7&color=ffffff`;
+
       const optimisticSession: CallSessionData = {
         sessionId: `call_${Date.now()}`,
         callerId: currentUserId || "me",
-        callerName: "Calling...",
+        callerName: "me",
         callerAvatar: `https://ui-avatars.com/api/?name=User&background=00f2fe&color=ffffff`,
         recipientId: targetUserId,
-        recipientName: targetUserId,
-        recipientAvatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(targetUserId)}&background=a855f7&color=ffffff`,
+        recipientName: displayName,
+        recipientAvatar: displayAvatar,
         callType,
         status: "RINGING",
         updatedAt: Date.now()

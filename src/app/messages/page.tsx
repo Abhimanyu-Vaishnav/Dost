@@ -1025,7 +1025,7 @@ function MessagesContent() {
 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <button 
-                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.id, "voice")}
+                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.id, "voice", activeConv.name, activeConv.avatar)}
                     style={{ background: "rgba(29, 155, 240, 0.12)", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Voice Call"
@@ -1033,7 +1033,7 @@ function MessagesContent() {
                     <Phone size={17} />
                   </button>
                   <button 
-                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.id, "video")}
+                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.id, "video", activeConv.name, activeConv.avatar)}
                     style={{ background: "rgba(168, 85, 247, 0.12)", border: "none", color: "#a855f7", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Video Call"
