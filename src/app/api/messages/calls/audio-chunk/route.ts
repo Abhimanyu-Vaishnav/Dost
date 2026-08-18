@@ -5,6 +5,7 @@ interface AudioChunk {
   sessionId: string;
   senderId: string;
   senderName: string;
+  mime: string;
   blobBase64: string;
   timestamp: number;
 }
@@ -17,7 +18,7 @@ const globalForAudioChunks = globalThis as unknown as {
 const AUDIO_CHUNK_BUFFER = globalForAudioChunks.audioChunkBufferMap || 
   (globalForAudioChunks.audioChunkBufferMap = new Map<string, AudioChunk[]>());
 
-// POST /api/messages/calls/audio-chunk - Push recorded mic audio chunk (300ms PCM/WebM slice)
+// POST /api/messages/calls/audio-chunk - Push recorded mic audio chunk (300ms PCM/WebM/MP4 slice)
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     const senderId = String(userPayload.userId);
     const senderName = typeof userPayload.username === "string" ? userPayload.username.replace("@", "") : "";
     const body = await req.json();
-    const { sessionId, blobBase64 } = body;
+    const { sessionId, mime, blobBase64 } = body;
 
     if (!sessionId || !blobBase64) {
       return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
       sessionId,
       senderId,
       senderName,
+      mime: mime || "audio/webm",
       blobBase64,
       timestamp: Date.now()
     });

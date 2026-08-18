@@ -216,17 +216,18 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         remoteAudioRef.current.play().catch(() => {});
       }
 
-      // Direct Web Audio Clean Gain Destination Bridge (Bypasses Browser Muting Restrictions)
+      // Direct Web Audio Clean Gain Destination Bridge
       try {
         const ctx = getOrCreateAudioContext();
         if (ctx) {
           if (ctx.state === "suspended") ctx.resume().catch(() => {});
           const audioTrack = remoteStream.getAudioTracks()[0];
           if (audioTrack) {
+            audioTrack.enabled = true;
             const audioStream = new MediaStream([audioTrack]);
             const source = ctx.createMediaStreamSource(audioStream);
             const gainNode = ctx.createGain();
-            gainNode.gain.value = isSpeakerOn ? 2.5 : 0.3; // 2.5x volume for Loudspeaker, 0.3x for Earpiece
+            gainNode.gain.value = isSpeakerOn ? 2.5 : 0.3;
 
             source.connect(gainNode);
             gainNode.connect(ctx.destination);
@@ -322,7 +323,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                       fetch("/api/messages/calls/audio-chunk", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ sessionId: session.sessionId, blobBase64: base64 })
+                        body: JSON.stringify({ sessionId: session.sessionId, mime, blobBase64: base64 })
                       }).catch(() => {});
                     }
                   };
@@ -365,7 +366,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           if (data.chunks && Array.isArray(data.chunks)) {
             for (const chunk of data.chunks) {
               if (chunk.blobBase64) {
-                const audio = new Audio(`data:audio/webm;base64,${chunk.blobBase64}`);
+                const chunkMime = chunk.mime || "audio/webm";
+                const audio = new Audio(`data:${chunkMime};base64,${chunk.blobBase64}`);
                 audio.volume = isSpeakerOn ? 1.0 : 0.2;
                 audio.play().catch(() => {
                   // Web Audio Context decodeAudioData fallback
@@ -373,7 +375,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                     const ctx = getOrCreateAudioContext();
                     if (ctx) {
                       if (ctx.state === "suspended") ctx.resume().catch(() => {});
-                      fetch(`data:audio/webm;base64,${chunk.blobBase64}`)
+                      fetch(`data:${chunkMime};base64,${chunk.blobBase64}`)
                         .then(r => r.arrayBuffer())
                         .then(buf => ctx.decodeAudioData(buf))
                         .then(audioBuffer => {
@@ -528,12 +530,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }}
       className="animate-fade-in"
     >
-      {/* Remote Voice Audio Element */}
+      {/* Active Remote Voice Audio Element in DOM */}
       <audio 
         ref={remoteAudioRef} 
         autoPlay 
         playsInline 
-        style={{ position: "fixed", top: "-9999px", opacity: 0, pointerEvents: "none" }} 
+        style={{ width: "1px", height: "1px", opacity: 0.01, pointerEvents: "none" }} 
       />
 
       {/* Mic Access Help Modal if Browser Blocked HTTP Permission */}
