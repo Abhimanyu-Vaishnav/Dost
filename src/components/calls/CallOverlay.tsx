@@ -41,7 +41,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const processedIceCandidatesRef = useRef<Set<string>>(new Set());
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
-  const initializedHandshakeRef = useRef<boolean>(false);
+  const isPipelineStartedRef = useRef<boolean>(false);
 
   // Clean Partner Name & Avatar Resolution
   const rawOtherName = isCaller ? (session.recipientName || session.recipientId) : (session.callerName || session.callerId);
@@ -181,16 +181,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }
   };
 
-  // CORE WEBRTC ENGINE INITIALIZATION (STRICT SEQUENTIAL ORDER: MEDIA FIRST, SDP SECOND)
+  // INITIALIZE WEBRTC PEER CONNECTION (SINGLETON LIFECYCLE FOR COMPONENT LIFETIME)
   useEffect(() => {
-    // If recipient is in RINGING state, DO NOT start media or auto-accept!
-    if (isRecipient && isRinging) return;
-    if (initializedHandshakeRef.current) return;
-
-    initializedHandshakeRef.current = true;
-    console.log("[CallOverlay] Initializing WebRTC Engine (Media First -> SDP Second)...");
-    let localStream: MediaStream | null = null;
-    let animFrame: number;
+    console.log("[CallOverlay] Mounting Singleton WebRTC PeerConnection...");
 
     const configuration: RTCConfiguration = {
       iceServers: [
@@ -260,11 +253,45 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
     };
 
-    async function initPipeline() {
-      try {
-        if ((pc as any).signalingState === "closed") return;
+    // UNMOUNT-ONLY CLEANUP (RUNS ONLY WHEN CALL IS COMPLETELY CLOSED/REMOVED!)
+    return () => {
+      console.log("[CallOverlay] Unmounting CallOverlay component: Closing Peer Connection permanently...");
+      stopAllRingtones();
+      if (localMediaStreamRef.current) {
+        localMediaStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null;
+      }
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = null;
+      }
+      try { pc.close(); } catch (e) {}
+    };
+  }, []); // EMPTY DEPENDENCY ARRAY! PC IS NEVER CLOSED BY RE-RENDERS!
 
-        // STEP 1: CAPTURE LOCAL MEDIA FIRST (MANDATORY BEFORE ANY SDP CREATION)
+  // START MEDIA PIPELINE WHEN CONNECTED (OR FOR CALLER IMMEDIATELY)
+  useEffect(() => {
+    const pc = peerConnectionRef.current;
+    if (!pc || (pc as any).signalingState === "closed") return;
+
+    // If recipient is still ringing, wait until recipient taps Accept!
+    if (isRecipient && isRinging) return;
+    if (isPipelineStartedRef.current) return;
+
+    isPipelineStartedRef.current = true;
+    console.log("[CallOverlay] Starting Media Pipeline (Capture Media -> Attach Tracks -> SDP)...");
+
+    let animFrame: number;
+
+    async function initPipeline() {
+      const pc = peerConnectionRef.current;
+      if (!pc || (pc as any).signalingState === "closed") return;
+
+      try {
         console.log("[CallOverlay] STEP 1: Requesting getUserMedia...");
         const constraints: MediaStreamConstraints = {
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 },
@@ -283,7 +310,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         if (!stream || (pc as any).signalingState === "closed") return;
 
         console.log("[CallOverlay] STEP 2: Adding local tracks to PC...");
-        localStream = stream;
         localMediaStreamRef.current = stream;
 
         stream.getTracks().forEach(track => {
@@ -323,7 +349,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         } catch (e) {}
 
-        // STEP 3: SDP HANDSHAKE AFTER TRACKS ARE ADDED
+        // STEP 3: SDP HANDSHAKE AFTER TRACKS ARE ATTACHED
         if (isCaller) {
           console.log("[CallOverlay] STEP 3 (Caller): Creating SDP Offer with local tracks attached...");
           const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
@@ -353,30 +379,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }
 
     initPipeline();
-
-    // CLEANUP ON UNMOUNT ONLY
-    return () => {
-      console.log("[CallOverlay] Unmounting: Closing Peer Connection...");
-      stopAllRingtones();
-      if (animFrame) cancelAnimationFrame(animFrame);
-      if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-      }
-      if (localMediaStreamRef.current) {
-        localMediaStreamRef.current.getTracks().forEach(t => t.stop());
-      }
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = null;
-      }
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = null;
-      }
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = null;
-      }
-      try { pc.close(); } catch (e) {}
-    };
-  }, [session.sessionId, isRecipient, isRinging, isCaller]);
+  }, [isRecipient, isRinging, isCaller, session.callType]);
 
   // CONTINUOUS SIGNALING EXCHANGE LISTENER (FOR LATE-ARRIVING sdpOffer OR sdpAnswer)
   useEffect(() => {
@@ -403,7 +406,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           console.log("[WebRTC Handshake] SDP Answer sent successfully!");
         }
 
-        // Caller receives sdpAnswer -> sets remote description (regardless of exact signalingState as long as remoteDescription is missing)
+        // Caller receives sdpAnswer -> sets remote description
         if (isCaller && session.sdpAnswer && !pc.remoteDescription) {
           console.log("[WebRTC Handshake] Caller received sdpAnswer! Setting Remote Description -> Transitioning to STABLE!");
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
