@@ -26,27 +26,30 @@ export const useCall = () => useContext(CallContext);
 export function CallProvider({ children, currentUserId }: { children: React.ReactNode; currentUserId?: string }) {
   const [activeSession, setActiveSession] = useState<CallSessionData | null>(null);
   const [myUserId, setMyUserId] = useState<string | undefined>(currentUserId);
+  const [myProfile, setMyProfile] = useState<{ name: string; username: string; avatar: string } | null>(null);
+
   const callStartedTimeRef = useRef<number>(0);
   const notifiedSessionIdRef = useRef<string | null>(null);
   const endedSessionIdsRef = useRef<Set<string>>(new Set());
 
-  // Auto fetch user profile if currentUserId prop was omitted
+  // Fetch current user's full profile name and avatar
   useEffect(() => {
-    if (currentUserId) {
-      setMyUserId(currentUserId);
-    } else {
-      fetch("/api/users/profile")
-        .then(res => res.json())
-        .then(data => {
-          if (data.user?.id || data.user?.username) {
-            setMyUserId(data.user.id || data.user.username);
-          }
-        })
-        .catch(() => {});
-    }
+    fetch("/api/users/profile")
+      .then(res => res.json())
+      .then(data => {
+        if (data.user) {
+          setMyUserId(data.user.id || data.user.username);
+          setMyProfile({
+            name: data.user.name || data.user.username || "User",
+            username: data.user.username ? data.user.username.replace("@", "") : "user",
+            avatar: data.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.user.name || "User")}`
+          });
+        }
+      })
+      .catch(() => {});
   }, [currentUserId]);
 
-  // Poll call signaling status at 100ms ultra-high speed with rock-solid session stability
+  // Poll call signaling status at 100ms ultra-high speed
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -71,11 +74,10 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               if (isRecipient && notifiedSessionIdRef.current !== sess.sessionId) {
                 notifiedSessionIdRef.current = sess.sessionId;
                 triggerDeviceVibration();
-                triggerSystemNotification(sess.callerName, sess.callType);
+                triggerSystemNotification(sess.callerName || "Friend", sess.callType);
               }
             }
           } else if (activeSession) {
-            // Only clear active session if call was ended locally or terminated on server
             if (
               activeSession.status === "ENDED" || 
               activeSession.status === "REJECTED" || 
@@ -95,7 +97,6 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
 
   const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice", targetName?: string, targetAvatar?: string) => {
     try {
-      // 1. Mobile Mic & Audio Context Unlock directly on click
       getOrCreateAudioContext();
       if (typeof window !== "undefined" && navigator.mediaDevices?.getUserMedia) {
         navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
@@ -104,13 +105,16 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       callStartedTimeRef.current = Date.now();
 
       const displayName = targetName || targetUserId;
-      const displayAvatar = targetAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=a855f7&color=ffffff`;
+      const displayAvatar = targetAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=00f2fe&color=ffffff`;
+
+      const callerRealName = myProfile?.name || myProfile?.username || "Friend";
+      const callerRealAvatar = myProfile?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(callerRealName)}`;
 
       const optimisticSession: CallSessionData = {
         sessionId: `call_${Date.now()}`,
         callerId: myUserId || "me",
-        callerName: "me",
-        callerAvatar: `https://ui-avatars.com/api/?name=User&background=00f2fe&color=ffffff`,
+        callerName: callerRealName,
+        callerAvatar: callerRealAvatar,
         recipientId: targetUserId,
         recipientName: displayName,
         recipientAvatar: displayAvatar,
@@ -127,12 +131,17 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
         body: JSON.stringify({
           action: "OFFER",
           toUserId: targetUserId,
-          callType
+          callType,
+          callerName: callerRealName,
+          callerAvatar: callerRealAvatar
         })
       });
+
       if (res.ok) {
         const data = await res.json();
-        if (data.session) setActiveSession(data.session);
+        if (data.session) {
+          setActiveSession(data.session);
+        }
       }
     } catch (e) {
       console.error("Start call error:", e);
@@ -140,43 +149,31 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
   };
 
   const acceptCall = async () => {
+    if (!activeSession) return;
     try {
-      // 1. Mobile Mic & Audio Context Unlock directly on user touch event
       getOrCreateAudioContext();
-      if (typeof window !== "undefined" && navigator.mediaDevices?.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
-      }
+      const updated = { ...activeSession, status: "CONNECTED" as const, updatedAt: Date.now() };
+      setActiveSession(updated);
 
-      stopAllRingtones();
-
-      // 2. 0ms Optimistic Accept state change
-      setActiveSession(prev => prev ? { ...prev, status: "CONNECTED" } : null);
-
-      const res = await fetch("/api/calls/signal", {
+      await fetch("/api/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "ANSWER" })
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.session) {
-          setActiveSession({ ...data.session, status: "CONNECTED" });
-        }
-      }
     } catch (e) {
       console.error("Accept call error:", e);
     }
   };
 
   const endCall = async () => {
+    if (!activeSession) return;
+    const sessId = activeSession.sessionId;
+    endedSessionIdsRef.current.add(sessId);
+    setActiveSession(null);
+    stopAllRingtones();
+    notifiedSessionIdRef.current = null;
+
     try {
-      if (activeSession) {
-        endedSessionIdsRef.current.add(activeSession.sessionId);
-      }
-      stopAllRingtones();
-      setActiveSession(null);
-      callStartedTimeRef.current = 0;
-      notifiedSessionIdRef.current = null;
       await fetch("/api/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -190,10 +187,10 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
   return (
     <CallContext.Provider value={{ activeSession, startCall, endCall, acceptCall }}>
       {children}
-      {activeSession && (
+      {activeSession && myUserId && (
         <CallOverlay
           session={activeSession}
-          currentUserId={myUserId || ""}
+          currentUserId={myUserId}
           onEndCall={endCall}
           onAcceptCall={acceptCall}
         />

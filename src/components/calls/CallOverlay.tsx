@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   Phone, PhoneOff, Mic, MicOff, Volume2, Video, VideoOff, 
-  Shield, PhoneCall, MicOff as MicMutedIcon, Smartphone, Headphones, Play, VolumeX
+  Shield, PhoneCall, Smartphone, Headphones, Play
 } from "lucide-react";
 import { 
   CallSessionData, startOutgoingRingbackSound, 
@@ -39,10 +39,13 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const processedIceCandidatesRef = useRef<Set<string>>(new Set());
 
-  const otherPersonName = isCaller ? (session.recipientName || "Recipient") : session.callerName;
-  const otherPersonAvatar = isCaller ? (session.recipientAvatar || session.callerAvatar) : session.callerAvatar;
+  // Clean Partner Name & Avatar Resolution
+  const rawOtherName = isCaller ? (session.recipientName || session.recipientId) : (session.callerName || session.callerId);
+  const otherPersonName = (rawOtherName && rawOtherName !== "me" && rawOtherName !== "User") ? rawOtherName : "Friend";
+  const rawOtherAvatar = isCaller ? session.recipientAvatar : session.callerAvatar;
+  const otherPersonAvatar = rawOtherAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(otherPersonName)}&background=00f2fe&color=ffffff`;
 
-  // Claim System Audio Session (Pauses background Spotify / YouTube & assigns priority to DOST Call)
+  // Claim System Audio Session
   useEffect(() => {
     claimSystemAudioSession(otherPersonName, session.callType);
     return () => {
@@ -50,28 +53,61 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     };
   }, [otherPersonName, session.callType]);
 
-  // User Tap Audio Unlocker
-  const unlockAndPlay = async () => {
+  // Route Sound to Loudspeaker or Earpiece Hardware Target
+  const applySpeakerRouting = async () => {
     try {
       const ctx = getOrCreateAudioContext();
       if (ctx && ctx.state === "suspended") await ctx.resume();
+      
       if (remoteAudioRef.current) {
         remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
+        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.15;
+
+        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const speakerDev = devices.find(d => 
+              d.kind === "audiooutput" && (
+                d.label.toLowerCase().includes("speaker") || 
+                d.label.toLowerCase().includes("loudspeaker") || 
+                d.deviceId === "default"
+              )
+            );
+            if (speakerDev && (remoteAudioRef.current as any).setSinkId) {
+              await (remoteAudioRef.current as any).setSinkId(isSpeakerOn && speakerDev ? speakerDev.deviceId : "");
+            }
+          } catch (e) {}
+        }
+
         await remoteAudioRef.current.play().then(() => setIsAudioPlaying(true)).catch(() => {});
       }
     } catch (e) {}
   };
 
-  // Bind Remote Stream to Audio Element whenever available
+  // Bind Remote Stream to Audio Element & Web Audio Destination Graph
   useEffect(() => {
-    if (remoteStream && remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current.muted = false;
-      remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
-      remoteAudioRef.current.play().then(() => setIsAudioPlaying(true)).catch(() => {
-        setIsAudioPlaying(false);
-      });
+    applySpeakerRouting();
+
+    if (remoteStream) {
+      try {
+        const ctx = getOrCreateAudioContext();
+        if (ctx) {
+          if (ctx.state === "suspended") ctx.resume().catch(() => {});
+          const audioTrack = remoteStream.getAudioTracks()[0];
+          if (audioTrack) {
+            audioTrack.enabled = true;
+            const audioStream = new MediaStream([audioTrack]);
+            const source = ctx.createMediaStreamSource(audioStream);
+            const gainNode = ctx.createGain();
+            
+            // 6.0x Gain Boost for Main Bottom Loudspeaker, 0.2x for Earpiece
+            gainNode.gain.value = isSpeakerOn ? 6.0 : 0.2;
+
+            source.connect(gainNode);
+            gainNode.connect(ctx.destination);
+          }
+        }
+      } catch (e) {}
     }
   }, [remoteStream, isConnected, isSpeakerOn]);
 
@@ -86,11 +122,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return () => stopAllRingtones();
   }, [isRinging, isCaller]);
 
-  // WebRTC & Audio Relay Core Engine
+  // WebRTC Core Engine
   useEffect(() => {
     let localStream: MediaStream | null = null;
     let animFrame: number;
-    let mediaRecorder: MediaRecorder | null = null;
     let pollInterval: any = null;
 
     const configuration: RTCConfiguration = {
@@ -110,6 +145,11 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     pc.ontrack = (event) => {
       const stream = event.streams[0] || new MediaStream([event.track]);
       setRemoteStream(stream);
+
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = stream;
+        applySpeakerRouting();
+      }
 
       if (event.track.kind === "video" && remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = stream;
@@ -131,7 +171,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       try {
         if ((pc as any).signalingState === "closed") return;
 
-        // Request HD Microphone & Camera
+        // Request Microphone & Camera
         const constraints: MediaStreamConstraints = {
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
           video: session.callType === "video" ? { width: { ideal: 640 }, height: { ideal: 480 } } : false
@@ -181,15 +221,15 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         } catch (e) {}
 
-        // HTTP Audio Chunk Recorder (800ms full valid WebM/MP4 slices)
+        // HTTP Audio Chunk Relay Fallback
         try {
           let mime = "audio/webm";
           if (typeof MediaRecorder !== "undefined") {
             if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) mime = "audio/webm;codecs=opus";
             else if (MediaRecorder.isTypeSupported("audio/mp4")) mime = "audio/mp4";
 
-            mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
-            mediaRecorder.ondataavailable = async (e) => {
+            const mr = new MediaRecorder(stream, { mimeType: mime });
+            mr.ondataavailable = async (e) => {
               if (e.data && e.data.size > 0) {
                 const reader = new FileReader();
                 reader.onloadend = () => {
@@ -205,11 +245,11 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                 reader.readAsDataURL(e.data);
               }
             };
-            mediaRecorder.start(800);
+            mr.start(800);
           }
         } catch (e) {}
 
-        // Caller creates SDP Offer
+        // Caller SDP Offer
         if (isCaller && (pc as any).signalingState !== "closed") {
           const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
           if ((pc as any).signalingState !== "closed") {
@@ -228,7 +268,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     startMedia();
 
-    // Web Audio Buffer Decoder Player
+    // HTTP Audio Chunk Decoder
     pollInterval = setInterval(async () => {
       if (!isConnected) return;
       try {
@@ -242,9 +282,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                   const binaryStr = atob(chunk.blobBase64);
                   const len = binaryStr.length;
                   const bytes = new Uint8Array(len);
-                  for (let i = 0; i < len; i++) {
-                    bytes[i] = binaryStr.charCodeAt(i);
-                  }
+                  for (let i = 0; i < len; i++) bytes[i] = binaryStr.charCodeAt(i);
 
                   const ctx = getOrCreateAudioContext();
                   if (ctx) {
@@ -256,7 +294,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                         src.buffer = audioBuffer;
 
                         const gainNode = ctx.createGain();
-                        gainNode.gain.value = isSpeakerOn ? 3.0 : 0.4;
+                        gainNode.gain.value = isSpeakerOn ? 6.0 : 0.2; // 6x Volume for Loudspeaker
 
                         src.connect(gainNode);
                         gainNode.connect(ctx.destination);
@@ -277,9 +315,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return () => {
       if (animFrame) cancelAnimationFrame(animFrame);
       if (pollInterval) clearInterval(pollInterval);
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        try { mediaRecorder.stop(); } catch (e) {}
-      }
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
       }
@@ -287,7 +322,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     };
   }, [session.callType, isCaller, isConnected, isSpeakerOn]);
 
-  // Handle Signaling Exchange (Recipient SDP Answer & ICE Candidates)
+  // Signaling Exchange (SDP Answer & Candidates)
   useEffect(() => {
     const pc = peerConnectionRef.current;
     if (!pc || (pc as any).signalingState === "closed") return;
@@ -296,7 +331,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       const pc = peerConnectionRef.current;
       if (!pc || (pc as any).signalingState === "closed") return;
       try {
-        // Recipient sets SDP Offer & creates SDP Answer
         if (!isCaller && session.status === "CONNECTED" && session.sdpOffer && !pc.remoteDescription) {
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
           if ((pc as any).signalingState !== "closed") {
@@ -312,12 +346,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         }
 
-        // Caller sets SDP Answer
         if (isCaller && session.sdpAnswer && pc.signalingState === "have-local-offer") {
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
         }
 
-        // Exchange ICE Candidates
         const candidates = !isCaller ? session.callerCandidates : session.recipientCandidates;
         if (candidates && candidates.length > 0 && (pc as any).signalingState !== "closed") {
           for (const cand of candidates) {
@@ -347,7 +379,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Mute
   const handleToggleMute = () => {
-    unlockAndPlay();
+    applySpeakerRouting();
     if (localMediaStreamRef.current) {
       localMediaStreamRef.current.getAudioTracks().forEach(t => t.enabled = isMuted);
       setIsMuted(!isMuted);
@@ -356,20 +388,19 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Video
   const handleToggleVideo = () => {
-    unlockAndPlay();
+    applySpeakerRouting();
     if (localMediaStreamRef.current) {
       localMediaStreamRef.current.getVideoTracks().forEach(t => t.enabled = !isVideoEnabled);
       setIsVideoEnabled(!isVideoEnabled);
     }
   };
 
-  // Toggle Speaker / Earpiece
+  // Toggle Speaker / Earpiece Target Output
   const handleToggleSpeaker = () => {
-    unlockAndPlay();
-    const next = !isSpeakerOn;
-    setIsSpeakerOn(next);
+    const nextSpeaker = !isSpeakerOn;
+    setIsSpeakerOn(nextSpeaker);
     if (remoteAudioRef.current) {
-      remoteAudioRef.current.volume = next ? 1.0 : 0.2;
+      remoteAudioRef.current.volume = nextSpeaker ? 1.0 : 0.15;
     }
   };
 
@@ -381,7 +412,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   return (
     <div 
-      onClick={unlockAndPlay}
+      onClick={applySpeakerRouting}
       style={{
         position: "fixed", inset: 0, zIndex: 99999,
         backgroundColor: "rgba(0, 0, 0, 0.94)",
@@ -391,24 +422,22 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }}
       className="animate-fade-in"
     >
-      {/* Native High-Priority Audio Player */}
+      {/* Hidden Native Audio Element (Unwanted Bar Removed) */}
       <audio 
         ref={remoteAudioRef} 
         autoPlay 
         playsInline 
-        controls
         style={{
-          position: "fixed", bottom: "16px", right: "16px", zIndex: 100000,
-          width: "220px", height: "45px", opacity: 0.95,
-          background: "#111111", border: "2px solid #00f2fe", borderRadius: "14px",
-          boxShadow: "0 0 20px rgba(0,242,254,0.4)"
+          position: "fixed", bottom: 0, right: 0,
+          width: "1px", height: "1px", opacity: 0.001,
+          pointerEvents: "none"
         }}
       />
 
-      {/* Prominent Tap to Play Overlay if Browser Paused Sound */}
+      {/* Prominent Tap to Unmute Overlay */}
       {!isAudioPlaying && isConnected && (
         <button 
-          onClick={unlockAndPlay}
+          onClick={applySpeakerRouting}
           style={{
             position: "absolute", top: "18px", zIndex: 100001,
             background: "linear-gradient(135deg, #00f2fe, #4facfe)",
@@ -419,7 +448,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }}
           className="animate-bounce"
         >
-          <Play size={20} fill="#000" /> 🎙️🔊 TAP HERE TO START HEARING VOICE SOUND!
+          <Play size={20} fill="#000" /> 🎙️🔊 TAP HERE TO START HEARING LOUDSPEAKER SOUND!
         </button>
       )}
 
@@ -432,7 +461,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         }} 
       />
 
-      {/* Top Bar Header */}
+      {/* Top Bar Header with Exact Full Partner Name */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", zIndex: 2 }}>
         <div style={{
           display: "flex", alignItems: "center", gap: "6px",
@@ -454,7 +483,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         }}>
           {isRinging ? (
             <>
-              <PhoneCall size={16} className="animate-pulse" /> {isCaller ? "Calling... (Ringing)" : "Incoming Call..."}
+              <PhoneCall size={16} className="animate-pulse" /> {isCaller ? `Calling ${otherPersonName}...` : `Incoming Call from ${otherPersonName}...`}
             </>
           ) : (
             `Connected • ${formatTimer(callDuration)}`
@@ -509,7 +538,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           <>
             <button
               onClick={() => {
-                unlockAndPlay();
+                applySpeakerRouting();
                 onAcceptCall();
               }}
               style={{
@@ -554,7 +583,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
             </button>
 
-            {/* Speaker Toggle */}
+            {/* Loudspeaker / Earpiece Toggle Button */}
             <button
               onClick={handleToggleSpeaker}
               style={{
@@ -565,7 +594,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                 cursor: "pointer", transition: "all 0.2s ease"
               }}
               className="hover:scale-105 active:scale-95"
-              title={isSpeakerOn ? "Speaker ON" : "Earpiece Mode"}
+              title={isSpeakerOn ? "Loudspeaker Mode (Main Bottom Speaker)" : "Earpiece Mode (Top Receiver)"}
             >
               {isSpeakerOn ? <Volume2 size={22} /> : <Headphones size={22} />}
             </button>
