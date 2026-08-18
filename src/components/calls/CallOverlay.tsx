@@ -56,7 +56,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const localMediaStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const processedIceCandidatesRef = useRef<Set<string>>(new Set());
@@ -114,7 +113,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       });
     }
 
-    const audioEl = (remoteAudioRef.current || document.getElementById("global_webrtc_remote_audio")) as HTMLAudioElement | null;
+    const audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
     if (audioEl) {
       audioEl.muted = false;
       audioEl.volume = isSpeakerOn ? 1.0 : 0.2;
@@ -204,7 +203,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
 
       // Audio DOM Element info
-      const audioEl = (remoteAudioRef.current || document.getElementById("global_webrtc_remote_audio")) as HTMLAudioElement | null;
+      const audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
       let elInfo = "none";
       if (audioEl) {
         elInfo = `pause=${audioEl.paused}, vol=${audioEl.volume}, ready=${audioEl.readyState}, mut=${audioEl.muted}`;
@@ -237,13 +236,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     if (remoteStream) {
       remoteStream.getAudioTracks().forEach(t => t.enabled = true);
       playRemoteAudioStream(remoteStream, isSpeakerOn);
-
-      if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== remoteStream) {
-        remoteAudioRef.current.srcObject = remoteStream;
-        remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
-        remoteAudioRef.current.play().catch(() => {});
-      }
     }
   }, [remoteStream, isSpeakerOn]);
 
@@ -318,30 +310,24 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     const configuration: RTCConfiguration = {
       iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" },
-        { urls: "stun:stun3.l.google.com:19302" },
-        { urls: "stun:stun4.l.google.com:19302" },
+        { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302", "stun:stun3.l.google.com:19302", "stun:stun4.l.google.com:19302"] },
         { urls: "stun:global.stun.twilio.com:3478" },
         { urls: "stun:stun.services.mozilla.com" },
+        { urls: "stun:stun.nextcloud.com:443" },
         {
-          urls: "turn:openrelay.metered.ca:80",
-          username: "openrelayproject",
-          credential: "openrelayproject"
-        },
-        {
-          urls: "turn:openrelay.metered.ca:443",
-          username: "openrelayproject",
-          credential: "openrelayproject"
-        },
-        {
-          urls: "turn:openrelay.metered.ca:443?transport=tcp",
+          urls: [
+            "turn:openrelay.metered.ca:80?transport=udp",
+            "turn:openrelay.metered.ca:80?transport=tcp",
+            "turn:openrelay.metered.ca:443?transport=tcp",
+            "turns:openrelay.metered.ca:443?transport=tcp"
+          ],
           username: "openrelayproject",
           credential: "openrelayproject"
         }
       ],
-      iceCandidatePoolSize: 10
+      iceCandidatePoolSize: 10,
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require"
     };
 
     const pc = new RTCPeerConnection(configuration);
@@ -375,12 +361,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       setRemoteStream(stream);
       playRemoteAudioStream(stream, isSpeakerOn);
 
-      if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== stream) {
-        remoteAudioRef.current.srcObject = stream;
-        remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.play().catch(() => {});
-      }
-
       if (event.track.kind === "video" && remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = stream;
       }
@@ -408,9 +388,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       stopAllRingtones();
       if (localMediaStreamRef.current) {
         localMediaStreamRef.current.getTracks().forEach(t => t.stop());
-      }
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = null;
       }
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = null;
@@ -630,7 +607,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     } else {
       setCallDuration(0);
     }
-    return () => { if (timer) clearInterval(timer); };
+    return () => { if (timer) clearTimeout(timer); };
   }, [isConnected]);
 
   // Toggle Mute
@@ -664,9 +641,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     if (remoteStream) {
       playRemoteAudioStream(remoteStream, nextSpeaker);
     }
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.volume = nextSpeaker ? 1.0 : 0.2;
-    }
   };
 
   const formatTimer = (seconds: number) => {
@@ -689,7 +663,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         onClick={() => setIsMinimized(false)}
         className="animate-pulse"
       >
-        <audio ref={remoteAudioRef} autoPlay playsInline style={{ width: 0, height: 0, opacity: 0 }} />
         <img
           src={otherPersonAvatar}
           alt={otherPersonName}
@@ -735,18 +708,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }}
       className="animate-fade-in"
     >
-      {/* Hidden Native Audio Element */}
-      <audio 
-        ref={remoteAudioRef} 
-        autoPlay 
-        playsInline 
-        style={{
-          position: "fixed", bottom: 0, right: 0,
-          width: "1px", height: "1px", opacity: 0.001,
-          pointerEvents: "none"
-        }}
-      />
-
       {/* Background Artwork */}
       <div 
         style={{

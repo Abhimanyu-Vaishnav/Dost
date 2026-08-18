@@ -76,20 +76,20 @@ export function getOrCreateAudioContext(): AudioContext | null {
   }
 }
 
-// Play Remote Audio Stream via DOM Audio Element & Dual Web Audio Destination Pipeline
+// Single Unified Remote Audio Stream Playback Engine
 export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = true) {
   console.log("[AudioEngine] Remote stream received. Audio tracks count:", stream.getAudioTracks().length);
   
   if (typeof window === "undefined") return;
 
   try {
-    // 1. Force enable all audio tracks
+    // Force enable all audio tracks
     stream.getAudioTracks().forEach((track, idx) => {
       track.enabled = true;
-      console.log(`[AudioEngine] Remote Track #${idx} - readyState: ${track.readyState}, enabled: ${track.enabled}, muted: ${track.muted}, id: ${track.id}`);
+      console.log(`[AudioEngine] Remote Track #${idx} - readyState: ${track.readyState}, enabled: ${track.enabled}, muted: ${track.muted}`);
     });
 
-    // 2. DOM HTML Audio Element
+    // DOM HTML Audio Element (Single Shared Instance)
     let audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
     if (!audioEl) {
       audioEl = document.createElement("audio");
@@ -117,14 +117,14 @@ export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = 
     if (playPromise !== undefined) {
       playPromise
         .then(() => {
-          console.log("[AudioEngine] SUCCESS: Remote audio play() resolved successfully!");
+          console.log("[AudioEngine] SUCCESS: Remote audio play() resolved!");
         })
         .catch(err => {
-          console.warn("[AudioEngine] WARN: Remote audio play() deferred by autoplay policy:", err);
+          console.warn("[AudioEngine] Remote audio play deferred:", err);
         });
     }
 
-    // 3. Web Audio API Direct Destination Node Routing (Bypasses mobile browser silent switches & element blocks)
+    // Direct Web Audio API Destination Node Routing
     const ctx = getOrCreateAudioContext();
     if (ctx) {
       if (ctx.state === "suspended") {
@@ -135,11 +135,9 @@ export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = 
           const source = ctx.createMediaStreamSource(stream);
           source.connect(ctx.destination);
           globalForCalls.webAudioSourceNode = source;
-          console.log("[AudioEngine] SUCCESS: Connected remote stream directly to Web Audio ctx.destination!");
+          console.log("[AudioEngine] SUCCESS: Connected remote stream to Web Audio ctx.destination!");
         }
-      } catch (e) {
-        console.warn("[AudioEngine] WebAudio source node creation note:", e);
-      }
+      } catch (e) {}
     }
   } catch (e) {
     console.error("[AudioEngine] ERROR in playRemoteAudioStream:", e);
@@ -150,16 +148,12 @@ export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = 
 if (typeof window !== "undefined") {
   const unlockCtx = () => {
     if (activeAudioContext && activeAudioContext.state === "suspended") {
-      activeAudioContext.resume().then(() => {
-        console.log("[AudioEngine] AudioContext resumed via window gesture listener!");
-      }).catch(() => {});
+      activeAudioContext.resume().catch(() => {});
     }
     const audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
     if (audioEl) {
       audioEl.muted = false;
-      audioEl.play().then(() => {
-        console.log("[AudioEngine] Remote HTML Audio played via window gesture listener!");
-      }).catch(() => {});
+      audioEl.play().catch(() => {});
     }
   };
   window.addEventListener("click", unlockCtx, { capture: true });
