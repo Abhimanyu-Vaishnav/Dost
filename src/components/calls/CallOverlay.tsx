@@ -40,6 +40,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
   const [micStatusText, setMicStatusText] = useState<string>("Requesting Mic...");
+  const [signalingError, setSignalingError] = useState<string>("");
 
   // Live Detailed Diagnostic State
   const [diag, setDiag] = useState({
@@ -90,14 +91,16 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     } catch (e) {}
   };
 
-  // 1. BUTTON ACTION: FORCE PLAY REMOTE AUDIO
+  // 1. BUTTON ACTION: FORCE PLAY REMOTE AUDIO & UNMUTE TRACKS
   const handleForcePlayAudio = () => {
     console.log("[FORCE PLAY AUDIO] Diagnostic Button Tapped!");
     unlockAudioPipeline();
 
     const pc = peerConnectionRef.current;
     if (remoteStream) {
-      remoteStream.getAudioTracks().forEach(t => t.enabled = true);
+      remoteStream.getAudioTracks().forEach(t => {
+        t.enabled = true;
+      });
       playRemoteAudioStream(remoteStream, isSpeakerOn);
     }
 
@@ -222,16 +225,17 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         pcState,
         iceState,
         sigState,
-        lastMsg: isConnected ? "Call Connected & Live" : micStatusText
+        lastMsg: signalingError ? `Err: ${signalingError}` : (isConnected ? "Call Connected & Live" : micStatusText)
       });
     }, 300);
 
     return () => clearInterval(monitor);
-  }, [remoteStream, isConnected, micStatusText]);
+  }, [remoteStream, isConnected, micStatusText, signalingError]);
 
   // Bind Remote Stream to Audio Engines
   useEffect(() => {
     if (remoteStream) {
+      remoteStream.getAudioTracks().forEach(t => t.enabled = true);
       playRemoteAudioStream(remoteStream, isSpeakerOn);
 
       if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== remoteStream) {
@@ -262,7 +266,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     if (pc.remoteDescription && pc.remoteDescription.type) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(cand));
-      } catch (e) {}
+        console.log("[WebRTC] Added ICE Candidate successfully!");
+      } catch (e) {
+        console.warn("[WebRTC] ICE candidate add error:", e);
+      }
     } else {
       pendingIceCandidatesRef.current.push(cand);
     }
@@ -272,6 +279,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     const pc = peerConnectionRef.current;
     if (!pc || !pc.remoteDescription || (pc as any).signalingState === "closed") return;
     
+    console.log(`[WebRTC] Flushing ${pendingIceCandidatesRef.current.length} queued ICE candidates...`);
     while (pendingIceCandidatesRef.current.length > 0) {
       const cand = pendingIceCandidatesRef.current.shift();
       if (cand) {
@@ -330,13 +338,13 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       console.log("[WebRTC State] pc.iceConnectionState changed to:", pc.iceConnectionState);
     };
 
-    // Handle Remote Track Received via WebRTC
+    // Handle Remote Track Received via WebRTC (UNMUTE TRACK IMMEDIATELY!)
     pc.ontrack = (event) => {
       console.log("[CallOverlay] pc.ontrack event received! Track kind:", event.track.kind, "Streams count:", event.streams.length);
-      const stream = event.streams[0] || new MediaStream([event.track]);
       event.track.enabled = true;
+      const stream = event.streams[0] || new MediaStream([event.track]);
+      
       setRemoteStream(stream);
-
       playRemoteAudioStream(stream, isSpeakerOn);
 
       if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== stream) {
@@ -492,13 +500,20 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           const sess = data.session;
           if (sess && sess.sdpAnswer && !pc.remoteDescription && (pc as any).signalingState !== "closed") {
             console.log("[CallOverlay Direct Poller] Caller PC applying sdpAnswer!");
-            await pc.setRemoteDescription(new RTCSessionDescription(sess.sdpAnswer));
-            await flushPendingIceCandidates();
-            console.log("[CallOverlay Direct Poller] SUCCESS: Caller PC Signaling State is now:", pc.signalingState);
+            try {
+              const answerObj = typeof sess.sdpAnswer === "string" ? { type: "answer", sdp: sess.sdpAnswer } : sess.sdpAnswer;
+              await pc.setRemoteDescription(new RTCSessionDescription(answerObj));
+              await flushPendingIceCandidates();
+              console.log("[CallOverlay Direct Poller] SUCCESS: Caller PC Signaling State is now:", pc.signalingState);
+              setSignalingError("");
+            } catch (err: any) {
+              console.error("[CallOverlay Direct Poller] setRemoteDescription error:", err);
+              setSignalingError(err?.message || "SDP Answer Format Error");
+            }
           }
         }
       } catch (e) {}
-    }, 250);
+    }, 200);
 
     return () => clearInterval(poller);
   }, [isCaller]);
@@ -516,29 +531,43 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         // RECIPIENT: When sdpOffer is present AND remoteDescription is not set yet
         if (!isCaller && session.sdpOffer && !pc.remoteDescription && pc.signalingState !== "closed") {
           console.log("[WebRTC Handshake] Recipient processing sdpOffer! Setting Remote Description & Creating Answer...");
-          await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
-          await flushPendingIceCandidates();
+          try {
+            const offerObj = typeof session.sdpOffer === "string" ? { type: "offer", sdp: session.sdpOffer } : session.sdpOffer;
+            await pc.setRemoteDescription(new RTCSessionDescription(offerObj));
+            await flushPendingIceCandidates();
 
-          if ((pc as any).signalingState !== "closed") {
-            const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
             if ((pc as any).signalingState !== "closed") {
-              await pc.setLocalDescription(answer);
-              await fetch("/api/calls/signal", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
-              });
-              console.log("[WebRTC Handshake] Recipient sent SDP Answer to server!");
+              const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
+              if ((pc as any).signalingState !== "closed") {
+                await pc.setLocalDescription(answer);
+                await fetch("/api/calls/signal", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
+                });
+                console.log("[WebRTC Handshake] Recipient sent SDP Answer to server!");
+                setSignalingError("");
+              }
             }
+          } catch (err: any) {
+            console.error("[WebRTC Handshake] Recipient setRemoteDescription error:", err);
+            setSignalingError(err?.message || "SDP Offer Format Error");
           }
         }
 
         // CALLER: When sdpAnswer is present AND remoteDescription is not set yet
         if (isCaller && session.sdpAnswer && !pc.remoteDescription && pc.signalingState !== "closed") {
           console.log("[WebRTC Handshake] Caller processing sdpAnswer! Setting Remote Description -> Transitioning to STABLE!");
-          await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
-          await flushPendingIceCandidates();
-          console.log("[WebRTC Handshake] SUCCESS: Caller PC Signaling State is now:", pc.signalingState);
+          try {
+            const answerObj = typeof session.sdpAnswer === "string" ? { type: "answer", sdp: session.sdpAnswer } : session.sdpAnswer;
+            await pc.setRemoteDescription(new RTCSessionDescription(answerObj));
+            await flushPendingIceCandidates();
+            console.log("[WebRTC Handshake] SUCCESS: Caller PC Signaling State is now:", pc.signalingState);
+            setSignalingError("");
+          } catch (err: any) {
+            console.error("[WebRTC Handshake] Caller setRemoteDescription error:", err);
+            setSignalingError(err?.message || "SDP Answer Format Error");
+          }
         }
 
         // ICE Candidates Process: Caller receives recipientCandidates, Recipient receives callerCandidates
