@@ -46,7 +46,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     }
   }, [currentUserId]);
 
-  // Poll call signaling status at 100ms ultra-high speed with instant 0ms hangup sync
+  // Poll call signaling status at 100ms ultra-high speed with rock-solid session stability
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -74,9 +74,13 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
                 triggerSystemNotification(sess.callerName, sess.callType);
               }
             }
-          } else {
-            // Wipes out session only after 3s grace period to prevent race conditions during call setup
-            if (Date.now() - callStartedTimeRef.current > 3000) {
+          } else if (activeSession) {
+            // Only clear active session if call was ended locally or terminated on server
+            if (
+              activeSession.status === "ENDED" || 
+              activeSession.status === "REJECTED" || 
+              endedSessionIdsRef.current.has(activeSession.sessionId)
+            ) {
               setActiveSession(null);
               stopAllRingtones();
               notifiedSessionIdRef.current = null;
@@ -87,7 +91,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     }, 100);
 
     return () => clearInterval(interval);
-  }, [myUserId]);
+  }, [myUserId, activeSession]);
 
   const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice", targetName?: string, targetAvatar?: string) => {
     try {
