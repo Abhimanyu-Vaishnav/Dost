@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
     "10.83.89.169",
     "localhost:3000",
     "0.0.0.0:3000",
+    "*.trycloudflare.com",
+    "senators-calculate-assessed-accomplished.trycloudflare.com",
     "warm-suns-warn.loca.lt",
     "*.loca.lt",
     "*.ngrok-free.app",
