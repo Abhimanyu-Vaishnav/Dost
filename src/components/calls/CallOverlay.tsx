@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   Phone, PhoneOff, Mic, MicOff, Volume2, Video, VideoOff, 
-  Shield, PhoneCall, MicOff as MicMutedIcon, Smartphone, Headphones, Play
+  Shield, PhoneCall, MicOff as MicMutedIcon, Smartphone, Headphones, Play, VolumeX
 } from "lucide-react";
 import { 
   CallSessionData, startOutgoingRingbackSound, 
@@ -29,7 +29,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [voiceVolume, setVoiceVolume] = useState<number>(0);
-  const [audioNeedsTap, setAudioNeedsTap] = useState<boolean>(false);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -49,21 +50,30 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     };
   }, [otherPersonName, session.callType]);
 
-  // User Tap Audio Unlocker (Unlocks Web Audio Context & Audio Element permanently)
-  const unlockAudio = async () => {
+  // User Tap Audio Unlocker
+  const unlockAndPlay = async () => {
     try {
       const ctx = getOrCreateAudioContext();
       if (ctx && ctx.state === "suspended") await ctx.resume();
       if (remoteAudioRef.current) {
         remoteAudioRef.current.muted = false;
         remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
-        await remoteAudioRef.current.play().catch(() => {
-          setAudioNeedsTap(true);
-        });
-        setAudioNeedsTap(false);
+        await remoteAudioRef.current.play().then(() => setIsAudioPlaying(true)).catch(() => {});
       }
     } catch (e) {}
   };
+
+  // Bind Remote Stream to Audio Element whenever available
+  useEffect(() => {
+    if (remoteStream && remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.muted = false;
+      remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
+      remoteAudioRef.current.play().then(() => setIsAudioPlaying(true)).catch(() => {
+        setIsAudioPlaying(false);
+      });
+    }
+  }, [remoteStream, isConnected, isSpeakerOn]);
 
   // Ringtone Management
   useEffect(() => {
@@ -98,17 +108,11 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     // Handle Remote Track Received via WebRTC
     pc.ontrack = (event) => {
-      const remoteStream = event.streams[0] || new MediaStream([event.track]);
-      
-      if (event.track.kind === "video" && remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStream;
-      }
+      const stream = event.streams[0] || new MediaStream([event.track]);
+      setRemoteStream(stream);
 
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteStream;
-        remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
-        remoteAudioRef.current.play().catch(() => setAudioNeedsTap(true));
+      if (event.track.kind === "video" && remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = stream;
       }
     };
 
@@ -224,7 +228,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     startMedia();
 
-    // Web Audio Buffer Decoder Player (Decodes & plays binary audio slices via unlocked Web Audio Context)
+    // Web Audio Buffer Decoder Player
     pollInterval = setInterval(async () => {
       if (!isConnected) return;
       try {
@@ -257,6 +261,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                         src.connect(gainNode);
                         gainNode.connect(ctx.destination);
                         src.start(0);
+                        setIsAudioPlaying(true);
                       },
                       () => {}
                     );
@@ -342,7 +347,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Mute
   const handleToggleMute = () => {
-    unlockAudio();
+    unlockAndPlay();
     if (localMediaStreamRef.current) {
       localMediaStreamRef.current.getAudioTracks().forEach(t => t.enabled = isMuted);
       setIsMuted(!isMuted);
@@ -351,7 +356,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Video
   const handleToggleVideo = () => {
-    unlockAudio();
+    unlockAndPlay();
     if (localMediaStreamRef.current) {
       localMediaStreamRef.current.getVideoTracks().forEach(t => t.enabled = !isVideoEnabled);
       setIsVideoEnabled(!isVideoEnabled);
@@ -360,7 +365,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Speaker / Earpiece
   const handleToggleSpeaker = () => {
-    unlockAudio();
+    unlockAndPlay();
     const next = !isSpeakerOn;
     setIsSpeakerOn(next);
     if (remoteAudioRef.current) {
@@ -376,7 +381,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   return (
     <div 
-      onClick={unlockAudio}
+      onClick={unlockAndPlay}
       style={{
         position: "fixed", inset: 0, zIndex: 99999,
         backgroundColor: "rgba(0, 0, 0, 0.94)",
@@ -386,32 +391,36 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }}
       className="animate-fade-in"
     >
-      {/* Visible High-Priority Audio Player */}
+      {/* Native High-Priority Audio Player */}
       <audio 
         ref={remoteAudioRef} 
         autoPlay 
         playsInline 
         controls
         style={{
-          position: "fixed", bottom: "12px", right: "12px", zIndex: 100000,
-          width: "180px", height: "40px", opacity: isConnected ? 0.9 : 0.01,
-          background: "#000", borderRadius: "12px"
+          position: "fixed", bottom: "16px", right: "16px", zIndex: 100000,
+          width: "220px", height: "45px", opacity: 0.95,
+          background: "#111111", border: "2px solid #00f2fe", borderRadius: "14px",
+          boxShadow: "0 0 20px rgba(0,242,254,0.4)"
         }}
       />
 
-      {/* Autoplay Tap Unlock Banner */}
-      {audioNeedsTap && (
-        <div 
-          onClick={unlockAudio}
+      {/* Prominent Tap to Play Overlay if Browser Paused Sound */}
+      {!isAudioPlaying && isConnected && (
+        <button 
+          onClick={unlockAndPlay}
           style={{
-            position: "absolute", top: "20px", zIndex: 100001,
-            background: "#00f2fe", color: "#000", fontWeight: 900,
-            padding: "10px 24px", borderRadius: "9999px", cursor: "pointer",
-            display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 0 20px #00f2fe"
+            position: "absolute", top: "18px", zIndex: 100001,
+            background: "linear-gradient(135deg, #00f2fe, #4facfe)",
+            color: "#000000", fontWeight: 900, fontSize: "0.95rem",
+            padding: "12px 28px", borderRadius: "9999px", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: "10px",
+            boxShadow: "0 0 35px rgba(0, 242, 254, 0.9)", border: "none"
           }}
+          className="animate-bounce"
         >
-          <Play size={18} /> Tap Here to Hear Partner Voice Sound!
-        </div>
+          <Play size={20} fill="#000" /> 🎙️🔊 TAP HERE TO START HEARING VOICE SOUND!
+        </button>
       )}
 
       {/* Background Artwork */}
@@ -500,7 +509,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           <>
             <button
               onClick={() => {
-                unlockAudio();
+                unlockAndPlay();
                 onAcceptCall();
               }}
               style={{
