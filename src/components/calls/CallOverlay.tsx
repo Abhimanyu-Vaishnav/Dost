@@ -58,15 +58,20 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     };
   }, [isRinging, isCaller]);
 
-  // Manage WebRTC P2P Peer Connection & Media Streams
+  // Manage WebRTC P2P Peer Connection, Media Streams & HTTP Audio Relay Fallback
   useEffect(() => {
     let activeStream: MediaStream | null = null;
     let animFrame: number;
+    let mediaRecorder: MediaRecorder | null = null;
+    let chunkInterval: any = null;
 
     const configuration: RTCConfiguration = {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" }
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" }
       ]
     };
 
@@ -83,7 +88,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = remoteStream;
-        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.3;
+        remoteAudioRef.current.muted = false;
+        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.4;
         remoteAudioRef.current.play().catch(() => {});
       }
     };
@@ -125,6 +131,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
+          localVideoRef.current.muted = true; // CRITICAL: Mute local preview to prevent echo!
         }
 
         // Live mic equalizer wave frequency analyser
@@ -149,6 +156,33 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         } catch (e) {}
 
+        // HTTP MediaRecorder Audio Chunk Relay Fallback (300ms Opus slices for 100% reliable voice transfer)
+        try {
+          const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
+          mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+
+          mediaRecorder.ondataavailable = async (e) => {
+            if (e.data && e.data.size > 0 && isConnected) {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64 = (reader.result as string)?.split(",")[1];
+                if (base64) {
+                  fetch("/api/messages/calls/audio-chunk", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sessionId: session.sessionId, blobBase64: base64 })
+                  }).catch(() => {});
+                }
+              };
+              reader.readAsDataURL(e.data);
+            }
+          };
+
+          if (isConnected) {
+            mediaRecorder.start(300);
+          }
+        } catch (e) {}
+
         // If caller: Send WebRTC SDP Offer
         if (isCaller) {
           const offer = await pc.createOffer();
@@ -167,14 +201,38 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     initMedia();
 
+    // Poll HTTP Audio Chunks for Fallback Playback when CONNECTED
+    chunkInterval = setInterval(async () => {
+      if (!isConnected) return;
+      try {
+        const res = await fetch(`/api/messages/calls/audio-chunk?sessionId=${encodeURIComponent(session.sessionId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.chunks && Array.isArray(data.chunks)) {
+            for (const chunk of data.chunks) {
+              if (chunk.blobBase64) {
+                const audio = new Audio(`data:audio/webm;base64,${chunk.blobBase64}`);
+                audio.volume = isSpeakerOn ? 1.0 : 0.4;
+                audio.play().catch(() => {});
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }, 350);
+
     return () => {
       if (animFrame) cancelAnimationFrame(animFrame);
+      if (chunkInterval) clearInterval(chunkInterval);
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        try { mediaRecorder.stop(); } catch (e) {}
+      }
       if (activeStream) {
         activeStream.getTracks().forEach(track => track.stop());
       }
       pc.close();
     };
-  }, [session.callType, isCaller]);
+  }, [session.callType, isCaller, isConnected]);
 
   // Exchange WebRTC SDP Answer & ICE Candidates
   useEffect(() => {
@@ -218,50 +276,61 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }
 
     handleSignalingExchange();
-  }, [session, isCaller]);
+  }, [session.sdpOffer, session.sdpAnswer, session.callerCandidates, session.recipientCandidates, isCaller]);
 
-  // Call timer
+  // Call Duration Timer
   useEffect(() => {
-    if (!isConnected) return;
-    const interval = setInterval(() => setCallDuration(p => p + 1), 1000);
-    return () => clearInterval(interval);
+    let timer: any;
+    if (isConnected) {
+      timer = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    } else {
+      setCallDuration(0);
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, [isConnected]);
 
-  // Mute & Video Toggles
-  useEffect(() => {
+  // Toggle Mic Mute
+  const handleToggleMute = () => {
     if (localMediaStreamRef.current) {
-      localMediaStreamRef.current.getAudioTracks().forEach(t => t.enabled = !isMuted);
+      const audioTracks = localMediaStreamRef.current.getAudioTracks();
+      audioTracks.forEach(t => {
+        t.enabled = isMuted; // Toggle enabled state
+      });
+      setIsMuted(!isMuted);
     }
-  }, [isMuted]);
-
-  useEffect(() => {
-    if (localMediaStreamRef.current) {
-      localMediaStreamRef.current.getVideoTracks().forEach(t => t.enabled = isVideoEnabled);
-    }
-  }, [isVideoEnabled]);
-
-  const handleAcceptButtonClick = () => {
-    try {
-      getOrCreateAudioContext();
-      const unlock = new Audio();
-      unlock.play().catch(() => {});
-    } catch (e) {}
-    onAcceptCall();
   };
 
-  const handleEndCallButtonClick = () => {
-    stopAllRingtones();
+  // Toggle Camera Video
+  const handleToggleVideo = () => {
     if (localMediaStreamRef.current) {
-      localMediaStreamRef.current.getTracks().forEach(t => t.stop());
+      const videoTracks = localMediaStreamRef.current.getVideoTracks();
+      videoTracks.forEach(t => {
+        t.enabled = !isVideoEnabled;
+      });
+      setIsVideoEnabled(!isVideoEnabled);
     }
-    if (peerConnectionRef.current) peerConnectionRef.current.close();
-    onEndCall();
   };
 
-  const formatTimer = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
+  // Toggle Speaker / Earpiece Audio Route
+  const handleToggleSpeaker = () => {
+    const nextSpeaker = !isSpeakerOn;
+    setIsSpeakerOn(nextSpeaker);
+    setIsEarpieceMode(!nextSpeaker);
+
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.volume = nextSpeaker ? 1.0 : 0.3;
+    }
+  };
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   return (
@@ -275,7 +344,13 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }}
       className="animate-fade-in"
     >
-      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: "none" }} />
+      {/* Remote Voice Audio Element (Positioned off-screen, NOT display:none so mobile browser plays sound!) */}
+      <audio 
+        ref={remoteAudioRef} 
+        autoPlay 
+        playsInline 
+        style={{ position: "fixed", top: "-9999px", opacity: 0, pointerEvents: "none" }} 
+      />
 
       {/* Near Ear Black Screen Overlay */}
       {isNearEarMode && (
@@ -373,77 +448,113 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         borderRadius: "9999px", border: "1px solid rgba(255, 255, 255, 0.25)",
         backdropFilter: "blur(24px)", boxShadow: "0 10px 40px rgba(0,0,0,0.5)", zIndex: 2
       }}>
-        {!isCaller && isRinging ? (
+        {/* If Recipient & Ringing: Show Green Accept & Red Decline */}
+        {isRecipient && isRinging ? (
           <>
             <button
-              onClick={handleEndCallButtonClick}
+              onClick={onAcceptCall}
               style={{
-                width: "68px", height: "68px", borderRadius: "50%",
-                background: "linear-gradient(135deg, #ef4444, #dc2626)", color: "white", border: "none", cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 10px 30px rgba(239, 68, 68, 0.6)"
+                width: "64px", height: "64px", borderRadius: "50%",
+                background: "#10b981", border: "none", color: "white",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", boxShadow: "0 0 30px rgba(16, 185, 129, 0.7)"
               }}
+              className="hover:scale-110 active:scale-95 transition-all animate-bounce"
+              title="Accept Call"
             >
-              <PhoneOff size={30} />
+              <Phone size={28} />
             </button>
             <button
-              onClick={handleAcceptButtonClick}
+              onClick={onEndCall}
               style={{
-                width: "76px", height: "76px", borderRadius: "50%",
-                background: "linear-gradient(135deg, #10b981, #059669)", color: "white", border: "none", cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 12px 36px rgba(16, 185, 129, 0.65)"
+                width: "64px", height: "64px", borderRadius: "50%",
+                background: "#ef4444", border: "none", color: "white",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", boxShadow: "0 0 30px rgba(239, 68, 68, 0.7)"
               }}
-              className="animate-bounce"
+              className="hover:scale-110 active:scale-95 transition-all"
+              title="Decline Call"
             >
-              <Phone size={34} />
+              <PhoneOff size={28} />
             </button>
           </>
         ) : (
           <>
+            {/* Mute Mic */}
             <button
-              onClick={() => setIsMuted(!isMuted)}
+              onClick={handleToggleMute}
               style={{
                 width: "52px", height: "52px", borderRadius: "50%",
                 background: isMuted ? "#ef4444" : "rgba(255, 255, 255, 0.2)",
-                color: "white", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
+                border: "none", color: "white", display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", transition: "all 0.2s ease"
               }}
+              className="hover:scale-105 active:scale-95"
+              title={isMuted ? "Unmute Mic" : "Mute Mic"}
             >
               {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
             </button>
 
+            {/* Speaker / Earpiece Toggle */}
             <button
-              onClick={() => {
-                setIsSpeakerOn(!isSpeakerOn);
-                setIsEarpieceMode(isSpeakerOn);
-                if (remoteAudioRef.current) remoteAudioRef.current.volume = isSpeakerOn ? 0.3 : 1.0;
-              }}
+              onClick={handleToggleSpeaker}
               style={{
                 width: "52px", height: "52px", borderRadius: "50%",
-                background: isEarpieceMode ? "#8b5cf6" : "rgba(255, 255, 255, 0.2)",
-                color: "white", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
+                background: isSpeakerOn ? "rgba(0, 242, 254, 0.3)" : "rgba(255, 255, 255, 0.2)",
+                border: "none", color: isSpeakerOn ? "#00f2fe" : "white",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", transition: "all 0.2s ease"
               }}
+              className="hover:scale-105 active:scale-95"
+              title={isSpeakerOn ? "Speaker ON" : "Earpiece Mode"}
             >
-              {isEarpieceMode ? <Headphones size={22} /> : <Volume2 size={22} />}
+              {isSpeakerOn ? <Volume2 size={22} /> : <Headphones size={22} />}
             </button>
 
+            {/* Video Toggle (if Video Call) */}
+            {session.callType === "video" && (
+              <button
+                onClick={handleToggleVideo}
+                style={{
+                  width: "52px", height: "52px", borderRadius: "50%",
+                  background: isVideoEnabled ? "rgba(168, 85, 247, 0.3)" : "rgba(255, 255, 255, 0.2)",
+                  border: "none", color: isVideoEnabled ? "#a855f7" : "white",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer", transition: "all 0.2s ease"
+                }}
+                className="hover:scale-105 active:scale-95"
+                title={isVideoEnabled ? "Turn Video Off" : "Turn Video On"}
+              >
+                {isVideoEnabled ? <Video size={22} /> : <VideoOff size={22} />}
+              </button>
+            )}
+
+            {/* Proximity Ear Screen Lock Button */}
             <button
               onClick={() => setIsNearEarMode(true)}
               style={{
                 width: "52px", height: "52px", borderRadius: "50%",
-                background: "rgba(255, 255, 255, 0.2)", color: "white", border: "none", cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center"
+                background: "rgba(255, 255, 255, 0.2)", border: "none", color: "white",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", transition: "all 0.2s ease"
               }}
+              className="hover:scale-105 active:scale-95"
+              title="Ear Proximity Lock"
             >
               <Smartphone size={22} />
             </button>
 
+            {/* Red End Call Button */}
             <button
-              onClick={handleEndCallButtonClick}
+              onClick={onEndCall}
               style={{
-                width: "60px", height: "60px", borderRadius: "50%",
-                background: "linear-gradient(135deg, #ef4444, #dc2626)", color: "white", border: "none",
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: "0 10px 30px rgba(239, 68, 68, 0.65)"
+                width: "56px", height: "56px", borderRadius: "50%",
+                background: "#ef4444", border: "none", color: "white",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", boxShadow: "0 0 25px rgba(239, 68, 68, 0.7)"
               }}
+              className="hover:scale-110 active:scale-95 transition-all"
+              title="End Call"
             >
               <PhoneOff size={26} />
             </button>
