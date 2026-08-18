@@ -296,18 +296,18 @@ function MessagesContent() {
                   </button>
                   <div className={styles.avatarWrapper}>
                     <img
-                      src={activeConv.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeConv.name)}`}
-                      alt={activeConv.name}
+                      src={activeConv.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeConv.name || activeConv.username || "User")}`}
+                      alt={activeConv.name || activeConv.username || "User"}
                       style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }}
                     />
                     {activeConv.isOnline && <div className={styles.onlineBadge} />}
                   </div>
                   <div>
                     <h3 style={{ fontSize: "1.1rem", fontWeight: 900, color: "#ffffff", margin: 0 }}>
-                      {activeConv.name}
+                      {activeConv.name || activeConv.username || "Friend"}
                     </h3>
                     <span style={{ fontSize: "0.78rem", color: activeConv.isOnline ? "#10b981" : "rgba(255,255,255,0.4)", fontWeight: 700 }}>
-                      {activeConv.isOnline ? "Online • Active Now" : `@${activeConv.username}`}
+                      {activeConv.isOnline ? "Online • Active Now" : `@${activeConv.username || "user"}`}
                     </span>
                   </div>
                 </div>
@@ -369,7 +369,7 @@ function MessagesContent() {
               <form onSubmit={handleSendMessage} className={styles.inputForm}>
                 <input
                   type="text"
-                  placeholder={`Message ${activeConv.name}...`}
+                  placeholder={`Message ${activeConv.name || activeConv.username || "Friend"}...`}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   className={styles.messageInput}
