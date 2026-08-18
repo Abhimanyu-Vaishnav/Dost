@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   Phone, PhoneOff, Mic, MicOff, Volume2, Video, VideoOff, 
-  Shield, PhoneCall, Headphones, Minimize2, Maximize2, RefreshCw
+  Shield, PhoneCall, Headphones, Minimize2, Maximize2, RefreshCw, VolumeX
 } from "lucide-react";
 import { 
   CallSessionData, startOutgoingRingbackSound, 
@@ -32,6 +32,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const [voiceVolume, setVoiceVolume] = useState<number>(0);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const [debugLogText, setDebugLogText] = useState<string>("");
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -57,7 +58,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   // Audio Context Gesture Unlock Helper
   const unlockAudioPipeline = async () => {
     try {
-      console.log("[CallOverlay] Unlocking audio pipeline via user touch...");
+      console.log("[CallOverlay] Unlocking audio pipeline via user tap...");
       const ctx = getOrCreateAudioContext();
       if (ctx && ctx.state === "suspended") {
         await ctx.resume();
@@ -70,12 +71,58 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }
   };
 
-  // Bind Remote Stream to Audio Engines
-  useEffect(() => {
-    unlockAudioPipeline();
+  // FORCE PLAY AUDIO DEBUG BUTTON HANDLER
+  const handleForcePlayAudio = () => {
+    console.log("[FORCE PLAY AUDIO] Diagnostic Button Pressed!");
+    const pc = peerConnectionRef.current;
+    let log = `[DEBUG LOG @ ${new Date().toLocaleTimeString()}]\n`;
+
+    if (pc) {
+      log += `PC Connection State: ${pc.connectionState}\n`;
+      log += `PC ICE State: ${pc.iceConnectionState}\n`;
+      log += `PC Signaling State: ${pc.signalingState}\n`;
+    } else {
+      log += `PC Connection: NULL\n`;
+    }
 
     if (remoteStream) {
-      console.log("[CallOverlay] Binding remote stream to Audio Engine. Audio tracks:", remoteStream.getAudioTracks().length);
+      const audioTracks = remoteStream.getAudioTracks();
+      log += `Remote Stream Audio Tracks: ${audioTracks.length}\n`;
+      audioTracks.forEach((t, i) => {
+        t.enabled = true;
+        log += `Track #${i} -> label: ${t.label}, readyState: ${t.readyState}, enabled: ${t.enabled}, muted: ${t.muted}\n`;
+      });
+      playRemoteAudioStream(remoteStream, isSpeakerOn);
+    } else {
+      log += `Remote Stream: NULL (Waiting for pc.ontrack)\n`;
+    }
+
+    const ctx = getOrCreateAudioContext();
+    if (ctx) {
+      log += `AudioContext State: ${ctx.state}, SampleRate: ${ctx.sampleRate}\n`;
+      ctx.resume().catch(() => {});
+    }
+
+    const audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
+    if (audioEl) {
+      log += `Global Audio El readyState: ${audioEl.readyState}, paused: ${audioEl.paused}, muted: ${audioEl.muted}\n`;
+      audioEl.muted = false;
+      audioEl.play().then(() => {
+        log += `SUCCESS: Global Audio El play() resolved!\n`;
+        setDebugLogText(log);
+      }).catch(e => {
+        log += `ERROR: Global Audio El play() failed: ${e.message}\n`;
+        setDebugLogText(log);
+      });
+    }
+
+    setDebugLogText(log);
+  };
+
+  // Bind Remote Stream to Audio Engines
+  useEffect(() => {
+    if (remoteStream) {
+      console.log("[CallOverlay] Binding remoteStream to Audio Engine. Audio tracks count:", remoteStream.getAudioTracks().length);
       playRemoteAudioStream(remoteStream, isSpeakerOn);
 
       if (remoteAudioRef.current) {
@@ -85,7 +132,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         remoteAudioRef.current.play().catch(e => console.warn("[CallOverlay] Local audio element play error:", e));
       }
     }
-  }, [remoteStream, isConnected, isSpeakerOn]);
+  }, [remoteStream, isSpeakerOn]);
 
   // Ringtone Management
   useEffect(() => {
@@ -98,12 +145,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return () => stopAllRingtones();
   }, [isRinging, isCaller]);
 
-  // WebRTC Core Engine (Starts ONLY when caller calls OR recipient clicks Accept!)
+  // CORE WEBRTC ENGINE (STABLE LIFECYCLE: DECOUPLED FROM UI RE-RENDERS!)
   useEffect(() => {
     // If recipient is in RINGING state, DO NOT start media or auto-accept!
     if (isRecipient && isRinging) return;
 
-    console.log("[CallOverlay] Initializing WebRTC Peer Connection...");
+    console.log("[CallOverlay] Initializing STABLE WebRTC Peer Connection...");
     let localStream: MediaStream | null = null;
     let animFrame: number;
 
@@ -119,9 +166,17 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     const pc = new RTCPeerConnection(configuration);
     peerConnectionRef.current = pc;
 
+    pc.onconnectionstatechange = () => {
+      console.log("[WebRTC State] pc.connectionState changed to:", pc.connectionState);
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log("[WebRTC State] pc.iceConnectionState changed to:", pc.iceConnectionState);
+    };
+
     // Handle Remote Track Received via WebRTC
     pc.ontrack = (event) => {
-      console.log("[CallOverlay] pc.ontrack event received! Track kind:", event.track.kind);
+      console.log("[CallOverlay] pc.ontrack event received! Track kind:", event.track.kind, "Streams count:", event.streams.length);
       const stream = event.streams[0] || new MediaStream([event.track]);
       setRemoteStream(stream);
 
@@ -155,7 +210,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         if ((pc as any).signalingState === "closed") return;
 
         console.log("[CallOverlay] Requesting getUserMedia...");
-        // Request Microphone & Video Camera
         const constraints: MediaStreamConstraints = {
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 },
           video: session.callType === "video" ? {
@@ -234,9 +288,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     startMedia();
 
-    // CLEANUP ON UNMOUNT OR END CALL
+    // CLEANUP ON UNMOUNT ONLY
     return () => {
-      console.log("[CallOverlay] Cleaning up WebRTC PeerConnection and media tracks...");
+      console.log("[CallOverlay] Unmounting: Closing Peer Connection...");
       stopAllRingtones();
       if (animFrame) cancelAnimationFrame(animFrame);
       if (localStream) {
@@ -256,7 +310,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
       try { pc.close(); } catch (e) {}
     };
-  }, [session.callType, isCaller, isConnected, isSpeakerOn, facingMode, isRecipient, isRinging]);
+  }, [session.sessionId, isRecipient, isRinging]); // DECOUPLED! Runs once per call session!
 
   // Two-Way Instant Signaling Exchange (SDP Answer & Candidates)
   useEffect(() => {
@@ -487,6 +541,33 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             `Connected • ${formatTimer(callDuration)}`
           )}
         </span>
+
+        {/* MANDATORY DIAGNOSTIC "FORCE PLAY AUDIO" DEBUG BUTTON */}
+        <button
+          onClick={handleForcePlayAudio}
+          style={{
+            marginTop: "10px",
+            background: "linear-gradient(135deg, #ef4444, #dc2626)",
+            color: "#ffffff", fontWeight: 900, fontSize: "0.8rem",
+            padding: "8px 20px", borderRadius: "9999px", border: "none",
+            cursor: "pointer", boxShadow: "0 0 20px rgba(239, 68, 68, 0.6)",
+            display: "flex", alignItems: "center", gap: "6px"
+          }}
+        >
+          <Volume2 size={16} /> 🔊 FORCE PLAY AUDIO (DIAGNOSTIC UNLOCK)
+        </button>
+
+        {/* Live Diagnostic Logs Box */}
+        {debugLogText && (
+          <pre style={{
+            background: "rgba(0, 0, 0, 0.85)", border: "1px solid #ef4444",
+            color: "#00f2fe", padding: "10px", borderRadius: "12px",
+            fontSize: "0.7rem", maxWidth: "100%", overflowX: "auto",
+            marginTop: "10px", textAlign: "left", whiteSpace: "pre-wrap"
+          }}>
+            {debugLogText}
+          </pre>
+        )}
       </div>
 
       {/* Avatar / Video Canvas Display */}

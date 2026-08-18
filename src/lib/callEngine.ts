@@ -78,13 +78,14 @@ export function getOrCreateAudioContext(): AudioContext | null {
 
 // Play Remote Audio Stream via DOM Audio Element & Web Audio Pipeline
 export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = true) {
-  console.log("[AudioEngine] Remote audio track received. Tracks count:", stream.getAudioTracks().length);
+  console.log("[AudioEngine] Remote stream received. Audio tracks count:", stream.getAudioTracks().length);
   
   if (typeof window === "undefined") return;
 
   try {
-    stream.getAudioTracks().forEach(track => {
+    stream.getAudioTracks().forEach((track, idx) => {
       track.enabled = true;
+      console.log(`[AudioEngine] Track #${idx} - readyState: ${track.readyState}, enabled: ${track.enabled}, muted: ${track.muted}, id: ${track.id}`);
     });
 
     let audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
@@ -107,14 +108,16 @@ export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = 
     audioEl.volume = isSpeaker ? 1.0 : 0.15;
     audioEl.srcObject = stream;
 
+    console.log(`[AudioEngine] Audio Element readyState: ${audioEl.readyState}, paused: ${audioEl.paused}`);
+
     const playPromise = audioEl.play();
     if (playPromise !== undefined) {
       playPromise
         .then(() => {
-          console.log("[AudioEngine] Audio play() resolved successfully!");
+          console.log("[AudioEngine] SUCCESS: Remote audio play() resolved successfully!");
         })
         .catch(err => {
-          console.warn("[AudioEngine] Audio play() blocked by browser autoplay policy:", err);
+          console.warn("[AudioEngine] WARN: Remote audio play() deferred by autoplay policy:", err);
         });
     }
 
@@ -123,7 +126,7 @@ export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = 
       ctx.resume().catch(() => {});
     }
   } catch (e) {
-    console.error("[AudioEngine] Error playing remote audio stream:", e);
+    console.error("[AudioEngine] ERROR in playRemoteAudioStream:", e);
   }
 }
 
@@ -132,14 +135,14 @@ if (typeof window !== "undefined") {
   const unlockCtx = () => {
     if (activeAudioContext && activeAudioContext.state === "suspended") {
       activeAudioContext.resume().then(() => {
-        console.log("[AudioEngine] AudioContext resumed via user gesture!");
+        console.log("[AudioEngine] AudioContext resumed via window gesture listener!");
       }).catch(() => {});
     }
     const audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
     if (audioEl) {
       audioEl.muted = false;
       audioEl.play().then(() => {
-        console.log("[AudioEngine] Remote HTML Audio played via user gesture!");
+        console.log("[AudioEngine] Remote HTML Audio played via window gesture listener!");
       }).catch(() => {});
     }
   };
