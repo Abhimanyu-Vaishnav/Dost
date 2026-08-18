@@ -324,7 +324,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               mediaRecorder = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 128000 });
 
               mediaRecorder.ondataavailable = async (e) => {
-                if (e.data && e.data.size > 0 && isConnected) {
+                if (e.data && e.data.size > 0) {
                   const reader = new FileReader();
                   reader.onloadend = () => {
                     const base64 = (reader.result as string)?.split(",")[1];
@@ -340,9 +340,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                 }
               };
 
-              if (isConnected) {
+              try {
                 mediaRecorder.start(300);
-              }
+              } catch (err) {}
             }
           }
         } catch (e) {}
