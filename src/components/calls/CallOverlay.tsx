@@ -41,7 +41,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const processedIceCandidatesRef = useRef<Set<string>>(new Set());
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
-  const isPipelineStartedRef = useRef<boolean>(false);
+  const isMediaCapturedRef = useRef<boolean>(false);
 
   // Clean Partner Name & Avatar Resolution
   const rawOtherName = isCaller ? (session.recipientName || session.recipientId) : (session.callerName || session.callerId);
@@ -271,28 +271,25 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
       try { pc.close(); } catch (e) {}
     };
-  }, []); // EMPTY DEPENDENCY ARRAY! PC IS NEVER CLOSED BY RE-RENDERS!
+  }, []);
 
-  // START MEDIA PIPELINE WHEN CONNECTED (OR FOR CALLER IMMEDIATELY)
+  // MEDIA CAPTURE ENGINE (CAPTURES MICROPHONE AND ADDS TRACKS TO PC)
   useEffect(() => {
     const pc = peerConnectionRef.current;
     if (!pc || (pc as any).signalingState === "closed") return;
-
-    // If recipient is still ringing, wait until recipient taps Accept!
     if (isRecipient && isRinging) return;
-    if (isPipelineStartedRef.current) return;
+    if (isMediaCapturedRef.current) return;
 
-    isPipelineStartedRef.current = true;
-    console.log("[CallOverlay] Starting Media Pipeline (Capture Media -> Attach Tracks -> SDP)...");
+    isMediaCapturedRef.current = true;
+    console.log("[CallOverlay] Capturing Local Media Stream...");
 
     let animFrame: number;
 
-    async function initPipeline() {
+    async function captureMedia() {
       const pc = peerConnectionRef.current;
       if (!pc || (pc as any).signalingState === "closed") return;
 
       try {
-        console.log("[CallOverlay] STEP 1: Requesting getUserMedia...");
         const constraints: MediaStreamConstraints = {
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 },
           video: session.callType === "video" ? {
@@ -309,7 +306,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
         if (!stream || (pc as any).signalingState === "closed") return;
 
-        console.log("[CallOverlay] STEP 2: Adding local tracks to PC...");
         localMediaStreamRef.current = stream;
 
         stream.getTracks().forEach(track => {
@@ -349,9 +345,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         } catch (e) {}
 
-        // STEP 3: SDP HANDSHAKE AFTER TRACKS ARE ATTACHED
-        if (isCaller) {
-          console.log("[CallOverlay] STEP 3 (Caller): Creating SDP Offer with local tracks attached...");
+        // CALLER: Create SDP Offer immediately after adding local tracks
+        if (isCaller && (pc as any).signalingState !== "closed") {
+          console.log("[CallOverlay] Caller creating SDP Offer after tracks attached...");
           const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
           await pc.setLocalDescription(offer);
           await fetch("/api/calls/signal", {
@@ -359,29 +355,17 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "SDP_OFFER", sdp: offer })
           });
-          console.log("[CallOverlay] SDP Offer sent successfully to signaling server!");
-        } else if (session.sdpOffer) {
-          console.log("[CallOverlay] STEP 3 (Recipient): Setting remote SDP Offer & Creating Answer with local tracks attached...");
-          await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
-          await flushPendingIceCandidates();
-          const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
-          await pc.setLocalDescription(answer);
-          await fetch("/api/calls/signal", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
-          });
-          console.log("[CallOverlay] SDP Answer sent successfully to signaling server!");
+          console.log("[CallOverlay] SDP Offer sent successfully!");
         }
       } catch (e) {
-        console.error("[CallOverlay] Init pipeline error:", e);
+        console.error("[CallOverlay] Media capture error:", e);
       }
     }
 
-    initPipeline();
+    captureMedia();
   }, [isRecipient, isRinging, isCaller, session.callType]);
 
-  // CONTINUOUS SIGNALING EXCHANGE LISTENER (FOR LATE-ARRIVING sdpOffer OR sdpAnswer)
+  // DECOUPLED REACTIVE SIGNALING LISTENER (HANDLES sdpOffer AND sdpAnswer REACTION INSTANTLY)
   useEffect(() => {
     const pc = peerConnectionRef.current;
     if (!pc || (pc as any).signalingState === "closed") return;
@@ -391,30 +375,35 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       if (!pc || (pc as any).signalingState === "closed") return;
 
       try {
-        // Recipient receives late sdpOffer -> sets remote description & creates SDP Answer
+        // RECIPIENT: When sdpOffer is present AND remoteDescription is not set yet
         if (!isCaller && session.sdpOffer && !pc.remoteDescription && pc.signalingState !== "closed") {
-          console.log("[WebRTC Handshake] Late sdpOffer received! Setting Remote Description & Creating Answer...");
+          console.log("[WebRTC Handshake] Recipient processing sdpOffer! Setting Remote Description & Creating Answer...");
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
           await flushPendingIceCandidates();
-          const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
-          await pc.setLocalDescription(answer);
-          await fetch("/api/calls/signal", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
-          });
-          console.log("[WebRTC Handshake] SDP Answer sent successfully!");
+
+          if ((pc as any).signalingState !== "closed") {
+            const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
+            if ((pc as any).signalingState !== "closed") {
+              await pc.setLocalDescription(answer);
+              await fetch("/api/calls/signal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
+              });
+              console.log("[WebRTC Handshake] Recipient sent SDP Answer to server!");
+            }
+          }
         }
 
-        // Caller receives sdpAnswer -> sets remote description
-        if (isCaller && session.sdpAnswer && !pc.remoteDescription) {
-          console.log("[WebRTC Handshake] Caller received sdpAnswer! Setting Remote Description -> Transitioning to STABLE!");
+        // CALLER: When sdpAnswer is present AND remoteDescription is not set yet
+        if (isCaller && session.sdpAnswer && !pc.remoteDescription && pc.signalingState !== "closed") {
+          console.log("[WebRTC Handshake] Caller processing sdpAnswer! Setting Remote Description -> Transitioning to STABLE!");
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
           await flushPendingIceCandidates();
           console.log("[WebRTC Handshake] SUCCESS: Caller PC Signaling State is now:", pc.signalingState);
         }
 
-        // Process Candidates
+        // ICE Candidates Process
         const candidates = !isCaller ? session.callerCandidates : session.recipientCandidates;
         if (candidates && candidates.length > 0 && (pc as any).signalingState !== "closed") {
           for (const cand of candidates) {
