@@ -85,9 +85,10 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               stopAllRingtones();
               notifiedSessionIdRef.current = null;
             } else {
+              // Keep incoming call in RINGING status! Do NOT auto-accept!
               setActiveSession(sess);
 
-              // Ringtone & Vibration for Recipient (< 10ms)
+              // Ringtone & Vibration for Recipient
               const isRecipient = sess.status === "RINGING" && myUserId && (
                 sess.recipientId === myUserId || sess.recipientName === myUserId
               );
@@ -103,7 +104,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       };
     } catch (e) {}
 
-    // Polling fallback every 500ms
+    // Polling fallback every 600ms
     const interval = setInterval(async () => {
       try {
         const res = await fetch("/api/calls/signal");
@@ -116,7 +117,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               setActiveSession(null);
               stopAllRingtones();
               notifiedSessionIdRef.current = null;
-            } else {
+            } else if (!activeSession) {
               setActiveSession(sess);
             }
           } else if (activeSession) {
@@ -126,7 +127,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
           }
         }
       } catch (e) {}
-    }, 500);
+    }, 600);
 
     return () => {
       if (eventSource) eventSource.close();
@@ -134,13 +135,13 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     };
   }, [myUserId, activeSession]);
 
-  // Ringing 40-second Timeout Cleanup
+  // Ringing 45-second Timeout Cleanup
   useEffect(() => {
     let timer: any;
     if (activeSession && activeSession.status === "RINGING") {
       timer = setTimeout(() => {
         endCall();
-      }, 40000);
+      }, 45000);
     }
     return () => { if (timer) clearTimeout(timer); };
   }, [activeSession?.status, activeSession?.sessionId]);
@@ -198,11 +199,13 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     }
   };
 
+  // ACCEPT CALL (Manual user tap required)
   const acceptCall = async () => {
     if (!activeSession) return;
     try {
-      getOrCreateAudioContext();
       stopAllRingtones();
+      const ctx = getOrCreateAudioContext();
+      if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
 
       const updated = { ...activeSession, status: "CONNECTED" as const, updatedAt: Date.now() };
       setActiveSession(updated);

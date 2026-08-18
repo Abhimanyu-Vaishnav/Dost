@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   Phone, PhoneOff, Mic, MicOff, Volume2, Video, VideoOff, 
-  Shield, PhoneCall, Smartphone, Headphones, Play, Minimize2, Maximize2, RefreshCw
+  Shield, PhoneCall, Headphones, Minimize2, Maximize2, RefreshCw
 } from "lucide-react";
 import { 
   CallSessionData, startOutgoingRingbackSound, 
@@ -31,7 +31,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [voiceVolume, setVoiceVolume] = useState<number>(0);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -55,42 +54,32 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     };
   }, [otherPersonName, session.callType]);
 
-  // Route Sound to Loudspeaker or Earpiece Hardware Target
-  const applySpeakerRouting = async () => {
+  // Audio Context Gesture Unlock Helper
+  const unlockAudioPipeline = async () => {
     try {
       const ctx = getOrCreateAudioContext();
-      if (ctx && ctx.state === "suspended") await ctx.resume();
-      
+      if (ctx && ctx.state === "suspended") {
+        await ctx.resume();
+      }
       if (remoteAudioRef.current) {
         remoteAudioRef.current.muted = false;
         remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.15;
-
-        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-          try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const speakerDev = devices.find(d => 
-              d.kind === "audiooutput" && (
-                d.label.toLowerCase().includes("speaker") || 
-                d.label.toLowerCase().includes("loudspeaker") || 
-                d.deviceId === "default"
-              )
-            );
-            if (speakerDev && (remoteAudioRef.current as any).setSinkId) {
-              await (remoteAudioRef.current as any).setSinkId(isSpeakerOn && speakerDev ? speakerDev.deviceId : "");
-            }
-          } catch (e) {}
-        }
-
-        await remoteAudioRef.current.play().then(() => setIsAudioPlaying(true)).catch(() => {});
+        await remoteAudioRef.current.play().catch(() => {});
       }
     } catch (e) {}
   };
 
-  // Bind Remote Stream to Audio Element & Web Audio Destination Graph
+  // Bind Remote Stream to HTML Audio Tag & Web Audio Destination Graph
   useEffect(() => {
-    applySpeakerRouting();
+    unlockAudioPipeline();
 
     if (remoteStream) {
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remoteStream;
+        remoteAudioRef.current.muted = false;
+        remoteAudioRef.current.play().catch(() => {});
+      }
+
       try {
         const ctx = getOrCreateAudioContext();
         if (ctx) {
@@ -102,8 +91,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             const source = ctx.createMediaStreamSource(audioStream);
             const gainNode = ctx.createGain();
             
-            // 6.0x Gain Boost for Main Bottom Loudspeaker, 0.2x for Earpiece
-            gainNode.gain.value = isSpeakerOn ? 6.0 : 0.2;
+            // 4.0x Gain Boost for Loudspeaker, 0.2x for Earpiece
+            gainNode.gain.value = isSpeakerOn ? 4.0 : 0.2;
 
             source.connect(gainNode);
             gainNode.connect(ctx.destination);
@@ -124,19 +113,20 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return () => stopAllRingtones();
   }, [isRinging, isCaller]);
 
-  // WebRTC Core Engine
+  // WebRTC Core Engine (Starts ONLY when caller calls OR recipient clicks Accept!)
   useEffect(() => {
+    // If recipient is in RINGING state, DO NOT start media or auto-accept!
+    if (isRecipient && isRinging) return;
+
     let localStream: MediaStream | null = null;
     let animFrame: number;
-    let pollInterval: any = null;
 
     const configuration: RTCConfiguration = {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
-        { urls: "stun:stun3.l.google.com:19302" },
-        { urls: "stun:stun4.l.google.com:19302" }
+        { urls: "stun:stun3.l.google.com:19302" }
       ]
     };
 
@@ -150,7 +140,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = stream;
-        applySpeakerRouting();
+        remoteAudioRef.current.play().catch(() => {});
       }
 
       if (event.track.kind === "video" && remoteVideoRef.current) {
@@ -173,7 +163,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       try {
         if ((pc as any).signalingState === "closed") return;
 
-        // Request HD Microphone & Full HD Video Camera (1280x720)
+        // Request HD Microphone & Full HD Video Camera
         const constraints: MediaStreamConstraints = {
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 },
           video: session.callType === "video" ? {
@@ -227,34 +217,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         } catch (e) {}
 
-        // HTTP Audio Chunk Relay Fallback
-        try {
-          let mime = "audio/webm";
-          if (typeof MediaRecorder !== "undefined") {
-            if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) mime = "audio/webm;codecs=opus";
-            else if (MediaRecorder.isTypeSupported("audio/mp4")) mime = "audio/mp4";
-
-            const mr = new MediaRecorder(stream, { mimeType: mime });
-            mr.ondataavailable = async (e) => {
-              if (e.data && e.data.size > 0) {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                  const base64 = (reader.result as string)?.split(",")[1];
-                  if (base64) {
-                    fetch("/api/messages/calls/audio-chunk", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ sessionId: session.sessionId, mime, blobBase64: base64 })
-                    }).catch(() => {});
-                  }
-                };
-                reader.readAsDataURL(e.data);
-              }
-            };
-            mr.start(800);
-          }
-        } catch (e) {}
-
         // Caller SDP Offer
         if (isCaller && (pc as any).signalingState !== "closed") {
           const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
@@ -274,55 +236,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     startMedia();
 
-    // HTTP Audio Chunk Decoder
-    pollInterval = setInterval(async () => {
-      if (!isConnected) return;
-      try {
-        const res = await fetch(`/api/messages/calls/audio-chunk?sessionId=${encodeURIComponent(session.sessionId)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.chunks && Array.isArray(data.chunks)) {
-            for (const chunk of data.chunks) {
-              if (chunk.blobBase64) {
-                try {
-                  const binaryStr = atob(chunk.blobBase64);
-                  const len = binaryStr.length;
-                  const bytes = new Uint8Array(len);
-                  for (let i = 0; i < len; i++) bytes[i] = binaryStr.charCodeAt(i);
-
-                  const ctx = getOrCreateAudioContext();
-                  if (ctx) {
-                    if (ctx.state === "suspended") ctx.resume().catch(() => {});
-                    ctx.decodeAudioData(
-                      bytes.buffer.slice(0),
-                      (audioBuffer) => {
-                        const src = ctx.createBufferSource();
-                        src.buffer = audioBuffer;
-
-                        const gainNode = ctx.createGain();
-                        gainNode.gain.value = isSpeakerOn ? 6.0 : 0.2;
-
-                        src.connect(gainNode);
-                        gainNode.connect(ctx.destination);
-                        src.start(0);
-                        setIsAudioPlaying(true);
-                      },
-                      () => {}
-                    );
-                  }
-                } catch (e) {}
-              }
-            }
-          }
-        }
-      } catch (e) {}
-    }, 600);
-
-    // CLEANUP ON UNMOUNT OR END CALL: Fully release peer connection and media streams
+    // CLEANUP ON UNMOUNT OR END CALL
     return () => {
       stopAllRingtones();
       if (animFrame) cancelAnimationFrame(animFrame);
-      if (pollInterval) clearInterval(pollInterval);
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
       }
@@ -340,7 +257,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
       try { pc.close(); } catch (e) {}
     };
-  }, [session.callType, isCaller, isConnected, isSpeakerOn, facingMode]);
+  }, [session.callType, isCaller, isConnected, isSpeakerOn, facingMode, isRecipient, isRinging]);
 
   // Two-Way Instant Signaling Exchange (SDP Answer & Candidates)
   useEffect(() => {
@@ -351,7 +268,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       const pc = peerConnectionRef.current;
       if (!pc || (pc as any).signalingState === "closed") return;
       try {
-        // Recipient sets remote SDP offer and creates SDP answer
+        // Recipient sets remote SDP offer and creates SDP answer after Accepting call
         if (!isCaller && (session.status === "CONNECTED" || session.sdpOffer) && session.sdpOffer && !pc.remoteDescription) {
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
           if ((pc as any).signalingState !== "closed") {
@@ -402,7 +319,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Mute
   const handleToggleMute = () => {
-    applySpeakerRouting();
+    unlockAudioPipeline();
     if (localMediaStreamRef.current) {
       localMediaStreamRef.current.getAudioTracks().forEach(t => t.enabled = isMuted);
       setIsMuted(!isMuted);
@@ -411,7 +328,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Video
   const handleToggleVideo = () => {
-    applySpeakerRouting();
+    unlockAudioPipeline();
     if (localMediaStreamRef.current) {
       localMediaStreamRef.current.getVideoTracks().forEach(t => t.enabled = !isVideoEnabled);
       setIsVideoEnabled(!isVideoEnabled);
@@ -425,6 +342,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   // Toggle Speaker / Earpiece Target Output
   const handleToggleSpeaker = () => {
+    unlockAudioPipeline();
     const nextSpeaker = !isSpeakerOn;
     setIsSpeakerOn(nextSpeaker);
     if (remoteAudioRef.current) {
@@ -488,10 +406,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   return (
     <div 
-      onClick={applySpeakerRouting}
+      onClick={unlockAudioPipeline}
       style={{
         position: "fixed", inset: 0, zIndex: 99999,
-        backgroundColor: "rgba(0, 0, 0, 0.94)",
+        backgroundColor: "rgba(8, 8, 12, 0.96)",
         backdropFilter: "blur(40px)",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "space-between", padding: "48px 24px", overflow: "hidden"
@@ -510,48 +428,32 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         }}
       />
 
-      {/* Prominent Tap to Unmute Overlay */}
-      {!isAudioPlaying && isConnected && (
-        <button 
-          onClick={applySpeakerRouting}
-          style={{
-            position: "absolute", top: "18px", zIndex: 100001,
-            background: "linear-gradient(135deg, #00f2fe, #4facfe)",
-            color: "#000000", fontWeight: 900, fontSize: "0.95rem",
-            padding: "12px 28px", borderRadius: "9999px", cursor: "pointer",
-            display: "flex", alignItems: "center", gap: "10px",
-            boxShadow: "0 0 35px rgba(0, 242, 254, 0.9)", border: "none"
-          }}
-          className="animate-bounce"
-        >
-          <Play size={20} fill="#000" /> 🎙️🔊 TAP HERE TO START HEARING LOUDSPEAKER SOUND!
-        </button>
-      )}
-
       {/* Background Artwork */}
       <div 
         style={{
           position: "absolute", inset: 0, backgroundImage: `url(${otherPersonAvatar})`,
           backgroundSize: "cover", backgroundPosition: "center",
-          filter: "blur(70px) brightness(0.2)", opacity: 0.6, transform: "scale(1.1)", zIndex: 0
+          filter: "blur(80px) brightness(0.18)", opacity: 0.5, transform: "scale(1.1)", zIndex: 0
         }} 
       />
 
-      {/* Top Bar Header with Exact Full Partner Name */}
+      {/* Top Bar Header */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", zIndex: 2, width: "100%", maxWidth: "420px", position: "relative" }}>
-        <button
-          onClick={() => setIsMinimized(true)}
-          style={{
-            position: "absolute", right: 0, top: 0,
-            background: "rgba(255, 255, 255, 0.15)", border: "1px solid rgba(255, 255, 255, 0.25)",
-            color: "white", borderRadius: "50%", width: "42px", height: "42px",
-            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-            backdropFilter: "blur(12px)"
-          }}
-          title="Minimize Call to Floating Pill"
-        >
-          <Minimize2 size={20} />
-        </button>
+        {isConnected && (
+          <button
+            onClick={() => setIsMinimized(true)}
+            style={{
+              position: "absolute", right: 0, top: 0,
+              background: "rgba(255, 255, 255, 0.15)", border: "1px solid rgba(255, 255, 255, 0.25)",
+              color: "white", borderRadius: "50%", width: "42px", height: "42px",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+              backdropFilter: "blur(12px)"
+            }}
+            title="Minimize Call to Floating Pill"
+          >
+            <Minimize2 size={20} />
+          </button>
+        )}
 
         <div style={{
           display: "flex", alignItems: "center", gap: "6px",
@@ -616,44 +518,44 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         )}
       </div>
 
-      {/* Control Buttons */}
+      {/* Bottom Control Bar */}
       <div style={{
         display: "flex", alignItems: "center", gap: "20px",
         background: "rgba(255, 255, 255, 0.14)", padding: "14px 28px",
         borderRadius: "9999px", border: "1px solid rgba(255, 255, 255, 0.25)",
         backdropFilter: "blur(24px)", boxShadow: "0 10px 40px rgba(0,0,0,0.5)", zIndex: 2
       }}>
-        {/* Recipient Ringing Controls */}
+        {/* Recipient Ringing Controls (MUST REQUIRE MANUAL TAP TO ACCEPT) */}
         {isRecipient && isRinging ? (
           <>
             <button
               onClick={() => {
-                applySpeakerRouting();
+                unlockAudioPipeline();
                 onAcceptCall();
               }}
               style={{
-                width: "64px", height: "64px", borderRadius: "50%",
+                width: "68px", height: "68px", borderRadius: "50%",
                 background: "#10b981", border: "none", color: "white",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", boxShadow: "0 0 30px rgba(16, 185, 129, 0.7)"
+                cursor: "pointer", boxShadow: "0 0 35px rgba(16, 185, 129, 0.8)"
               }}
               className="hover:scale-110 active:scale-95 transition-all animate-bounce"
               title="Accept Call"
             >
-              <Phone size={28} />
+              <Phone size={30} />
             </button>
             <button
               onClick={onEndCall}
               style={{
-                width: "64px", height: "64px", borderRadius: "50%",
+                width: "68px", height: "68px", borderRadius: "50%",
                 background: "#ef4444", border: "none", color: "white",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", boxShadow: "0 0 30px rgba(239, 68, 68, 0.7)"
+                cursor: "pointer", boxShadow: "0 0 35px rgba(239, 68, 68, 0.8)"
               }}
               className="hover:scale-110 active:scale-95 transition-all"
               title="Decline Call"
             >
-              <PhoneOff size={28} />
+              <PhoneOff size={30} />
             </button>
           </>
         ) : (
@@ -707,7 +609,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                   {isVideoEnabled ? <Video size={22} /> : <VideoOff size={22} />}
                 </button>
 
-                {/* Flip Camera Button (Front / Rear) */}
+                {/* Flip Camera Button */}
                 <button
                   onClick={handleFlipCamera}
                   style={{
