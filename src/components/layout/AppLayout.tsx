@@ -13,6 +13,9 @@ import { CreatePostModal } from "@/features/posts/components/CreatePostModal";
 import { CreateStoryModal } from "@/features/stories/components/CreateStoryModal";
 import { ThemeModal } from "@/components/layout/ThemeModal";
 import { useTheme } from "@/context/ThemeContext";
+import { IncomingCallModal } from "@/app/messages/IncomingCallModal";
+import { CallModal } from "@/app/messages/CallModal";
+import { CallSignal } from "@/lib/callSignalStore";
 
 let GLOBAL_USER_CACHE: any = null;
 let GLOBAL_UNREAD_NOTIF_CACHE: number = 0;
@@ -43,6 +46,8 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [incomingCallSignal, setIncomingCallSignal] = useState<CallSignal | null>(null);
+  const [activeAcceptedCall, setActiveAcceptedCall] = useState<CallSignal | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -131,9 +136,53 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
     }
 
     fetchMessagesUnread();
-    const interval = setInterval(fetchMessagesUnread, 4000);
+    const interval = setInterval(fetchMessagesUnread, 1200);
     return () => clearInterval(interval);
   }, [pathname]);
+
+  // Poll for incoming call signaling offers
+  useEffect(() => {
+    const signalInterval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/messages/calls/signal");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.signal && data.signal.action === "OFFER") {
+            setIncomingCallSignal(data.signal);
+          } else if (!data.signal) {
+            setIncomingCallSignal(null);
+          }
+        }
+      } catch (e) {}
+    }, 400);
+
+    return () => clearInterval(signalInterval);
+  }, []);
+
+  const handleAcceptCall = async () => {
+    if (!incomingCallSignal) return;
+    const sig = incomingCallSignal;
+    setIncomingCallSignal(null);
+    setActiveAcceptedCall(sig);
+
+    await fetch("/api/messages/calls/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ANSWER", toUserId: sig.fromUserId })
+    }).catch(() => {});
+  };
+
+  const handleDeclineCall = async () => {
+    if (!incomingCallSignal) return;
+    const sig = incomingCallSignal;
+    setIncomingCallSignal(null);
+
+    await fetch("/api/messages/calls/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "REJECT", toUserId: sig.fromUserId })
+    }).catch(() => {});
+  };
 
   const handleLogout = async () => {
     try {
@@ -154,7 +203,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   };
 
   const renderNavIcon = (id: string, isActive: boolean) => {
-    const size = 26.5;
+    const size = 21;
     switch (id) {
       case "home":
         return <Home size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
@@ -618,23 +667,19 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             router.push(`/messages/${activeToast.conversationId}`);
             setActiveToast(null);
           }}
-          className="glass animate-slide-up"
+          className="glass animate-slide-up responsive-msg-toast"
           style={{
-            position: "fixed",
-            bottom: "24px",
-            right: "24px",
             background: "var(--color-bg-surface)",
-            border: "1px solid var(--color-border)",
+            border: "1px solid var(--color-primary)",
             borderRadius: "20px",
-            padding: "16px 20px",
+            padding: "14px 18px",
             display: "flex",
             flexDirection: "column",
             gap: "6px",
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.15)",
-            zIndex: 9999,
+            boxShadow: "0 14px 40px rgba(0, 0, 0, 0.4)",
             cursor: "pointer",
             width: "320px",
-            maxWidth: "calc(100vw - 48px)"
+            maxWidth: "calc(100vw - 32px)"
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -699,6 +744,30 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             ✕
           </button>
         </div>
+      )}
+
+      {/* Incoming Call Ringing Overlay Modal */}
+      {incomingCallSignal && (
+        <IncomingCallModal
+          signal={incomingCallSignal}
+          onAccept={handleAcceptCall}
+          onDecline={handleDeclineCall}
+        />
+      )}
+
+      {/* Recipient Accepted Active Call Modal */}
+      {activeAcceptedCall && (
+        <CallModal
+          type={activeAcceptedCall.callType}
+          contact={{
+            id: activeAcceptedCall.fromUserId,
+            name: activeAcceptedCall.fromUserName,
+            avatar: activeAcceptedCall.fromUserAvatar,
+            username: activeAcceptedCall.fromUserName
+          }}
+          onEndCall={() => setActiveAcceptedCall(null)}
+          isIncomingAccepted={true}
+        />
       )}
     </div>
   );

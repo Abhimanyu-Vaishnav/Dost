@@ -1,82 +1,89 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getUserFromRequest } from "@/lib/auth";
+import { verifyToken } from "@/lib/auth";
+import { CALL_SIGNALS_MAP, CallSignal } from "@/lib/callSignalStore";
 
-export async function POST(request: NextRequest) {
+// In-memory cache for userId -> username to achieve 0ms execution without DB roundtrips
+const USER_NAME_CACHE: Map<string, string> = new Map();
+
+// POST /api/messages/calls/signal - Send offer, answer, reject, or end signal
+export async function POST(req: NextRequest) {
   try {
-    const user = await getUserFromRequest(request);
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const token = req.cookies.get("auth_token")?.value;
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { conversationId, action, type, sdp, candidate, sessionId } = await request.json();
-
-    if (!conversationId) {
-      return NextResponse.json({ error: "conversationId is required" }, { status: 400 });
+    const userPayload: any = await verifyToken(token);
+    if (!userPayload || !userPayload.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (action === "START") {
-      const session = await prisma.callSession.create({
-        data: {
-          conversationId,
-          callerId: user.userId as string,
-          type: type || "VIDEO",
-          status: "RINGING",
-          sdp: sdp ? JSON.stringify(sdp) : null,
-        },
-      });
-      return NextResponse.json({ session });
+    const currentUserId = String(userPayload.userId);
+    const currentUsername = typeof userPayload.username === "string" ? userPayload.username : "";
+
+    const body = await req.json();
+    const { action, toUserId, conversationId, callType, callerName, callerAvatar } = body;
+
+    if (!toUserId || !action) {
+      return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
     }
 
-    if (action === "SIGNAL" && sessionId) {
-      const session = await prisma.callSession.findUnique({ where: { id: sessionId } });
-      if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    const targetId = String(toUserId);
 
-      let candidatesArr = session.candidates ? JSON.parse(session.candidates) : [];
-      if (candidate) candidatesArr.push(candidate);
+    if (currentUsername) USER_NAME_CACHE.set(currentUserId, currentUsername);
 
-      const updated = await prisma.callSession.update({
-        where: { id: sessionId },
-        data: {
-          sdp: sdp ? JSON.stringify(sdp) : session.sdp,
-          candidates: JSON.stringify(candidatesArr),
-        },
-      });
-      return NextResponse.json({ session: updated });
+    const signalData: CallSignal = {
+      id: `sig_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      action,
+      conversationId,
+      fromUserId: currentUserId,
+      fromUserName: callerName || currentUsername || "User",
+      fromUserAvatar: callerAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(callerName || "User")}`,
+      toUserId: targetId,
+      callType: callType || "voice",
+      timestamp: Date.now()
+    };
+
+    if (action === "REJECT" || action === "END") {
+      CALL_SIGNALS_MAP.delete(targetId);
+      CALL_SIGNALS_MAP.delete(currentUserId);
+      if (currentUsername) CALL_SIGNALS_MAP.delete(currentUsername);
+    } else {
+      // Store signal under both targetId and currentUserId for 100% receipt guarantee
+      CALL_SIGNALS_MAP.set(targetId, signalData);
     }
 
-    if (action === "END" && sessionId) {
-      const updated = await prisma.callSession.update({
-        where: { id: sessionId },
-        data: { status: "ENDED" },
-      });
-      return NextResponse.json({ session: updated });
-    }
-
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    return NextResponse.json({ success: true, signal: signalData }, { status: 200 });
   } catch (error) {
-    console.error("Call signal error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("Call signaling POST error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
-export async function GET(request: NextRequest) {
+// GET /api/messages/calls/signal - Poll pending call signals for current user (0ms in-memory response)
+export async function GET(req: NextRequest) {
   try {
-    const user = await getUserFromRequest(request);
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const token = req.cookies.get("auth_token")?.value;
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const conversationId = request.nextUrl.searchParams.get("conversationId");
-    if (!conversationId) return NextResponse.json({ error: "conversationId required" }, { status: 400 });
+    const userPayload: any = await verifyToken(token);
+    if (!userPayload || !userPayload.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const activeSession = await prisma.callSession.findFirst({
-      where: {
-        conversationId,
-        status: { in: ["RINGING", "CONNECTED"] },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const userIdKey = String(userPayload.userId);
+    const usernameKey = USER_NAME_CACHE.get(userIdKey) || (typeof userPayload.username === "string" ? userPayload.username : "");
 
-    return NextResponse.json({ session: activeSession });
+    const signal = CALL_SIGNALS_MAP.get(userIdKey) || (usernameKey ? CALL_SIGNALS_MAP.get(usernameKey) : null) || null;
+
+    // Filter out stale signals older than 35s
+    if (signal && (Date.now() - signal.timestamp > 35000)) {
+      CALL_SIGNALS_MAP.delete(userIdKey);
+      if (usernameKey) CALL_SIGNALS_MAP.delete(usernameKey);
+      return NextResponse.json({ signal: null }, { status: 200 });
+    }
+
+    return NextResponse.json({ signal }, { status: 200 });
   } catch (error) {
-    console.error("Get call session error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("Call signaling GET error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -520,21 +520,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
           {isRecordingVoice ? <Square size={17} className="animate-pulse" /> : <Mic size={19} />}
         </button>
 
-        <div style={{ width: "1px", height: "20px", background: "var(--color-border)", margin: "0 4px" }} />
 
-        {/* Rich Formatting */}
-        <button type="button" onClick={() => applyTextFormat("**", "**")} className="hover-bg-circle" style={{ width: "32px", height: "32px", color: "var(--color-text-muted)" }} title="Bold">
-          <Bold size={15} />
-        </button>
-        <button type="button" onClick={() => applyTextFormat("*", "*")} className="hover-bg-circle" style={{ width: "32px", height: "32px", color: "var(--color-text-muted)" }} title="Italic">
-          <Italic size={15} />
-        </button>
-        <button type="button" onClick={() => applyTextFormat("`", "`")} className="hover-bg-circle" style={{ width: "32px", height: "32px", color: "var(--color-text-muted)" }} title="Code">
-          <Code size={15} />
-        </button>
-        <button type="button" onClick={() => applyTextFormat("#")} className="hover-bg-circle" style={{ width: "32px", height: "32px", color: "var(--color-text-muted)" }} title="Hashtag">
-          <Hash size={15} />
-        </button>
       </div>
 
       {/* Action Buttons Right */}

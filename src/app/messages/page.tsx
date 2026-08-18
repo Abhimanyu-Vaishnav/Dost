@@ -30,6 +30,7 @@ interface ChatMessage {
 
 interface Conversation {
   id: string;
+  partnerId?: string;
   name: string;
   username: string;
   avatar: string;
@@ -127,7 +128,9 @@ function MessagesContent() {
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [emojiFilter, setEmojiFilter] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const [audioPlaybackSpeed, setAudioPlaybackSpeed] = useState<number>(1);
+  const typingTimeoutRef = useRef<any>(null);
   const [activeCall, setActiveCall] = useState<{ type: "voice" | "video"; contact: any } | null>(null);
   const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
   const [fullEmojiPickerMsgId, setFullEmojiPickerMsgId] = useState<string | null>(null);
@@ -165,6 +168,7 @@ function MessagesContent() {
             }
             return {
               id: c.id,
+              partnerId: partner.id || partner.username,
               name: partner.name || partner.username || "User",
               username: partner.username || partner.id || "",
               avatar: partner.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(partner.name || "User")}&background=00f2fe&color=ffffff&bold=true`,
@@ -383,6 +387,10 @@ function MessagesContent() {
             }
           }
 
+          if (convId === activeConvId) {
+            setIsPartnerTyping(Boolean(data.isPartnerTyping));
+          }
+
           setMessagesMap(prev => ({
             ...prev,
             [convId]: data.messages
@@ -402,7 +410,7 @@ function MessagesContent() {
     const liveInterval = setInterval(() => {
       fetchMessagesForConv(activeConvId);
       fetchUserConversations();
-    }, 2500);
+    }, 700);
     return () => clearInterval(liveInterval);
   }, [activeConvId]);
 
@@ -534,6 +542,15 @@ function MessagesContent() {
       [currentId]: [...(prev[currentId] || []), newMsgObj]
     }));
 
+    // 0ms Optimistic conversation list reordering
+    const previewText = sendText || (sendImg ? "📷 Image Attached" : "");
+    setConversations(prev => {
+      const target = prev.find(c => c.id === currentId);
+      if (!target) return prev;
+      const updatedConv = { ...target, lastMessage: previewText, lastTime: "Just now" };
+      return [updatedConv, ...prev.filter(c => c.id !== currentId)];
+    });
+
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
@@ -596,41 +613,6 @@ function MessagesContent() {
       />
 
       <div className={styles.container} onClick={() => { setActiveReactionMsgId(null); setFullEmojiPickerMsgId(null); }}>
-        {/* Floating Toast Notification Banner for incoming messages */}
-        {floatingBanner && (
-          <div 
-            className="animate-slide-down"
-            style={{
-              position: "fixed", top: "20px", right: "20px", zIndex: 9999,
-              background: "rgba(15, 23, 42, 0.92)", backdropFilter: "blur(20px)",
-              border: "1px solid rgba(0, 242, 254, 0.5)", borderRadius: "16px",
-              padding: "12px 18px", boxShadow: "0 10px 40px rgba(0,242,254,0.3), 0 4px 20px rgba(0,0,0,0.8)",
-              display: "flex", alignItems: "center", gap: "14px", cursor: "pointer",
-              maxWidth: "340px"
-            }}
-            onClick={() => {
-              handleSelectConversation(floatingBanner.convId);
-              setFloatingBanner(null);
-            }}
-          >
-            <img src={floatingBanner.avatar} alt="" style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover", border: "2px solid #00f2fe" }} />
-            <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "white" }}>{floatingBanner.senderName}</span>
-                <span style={{ fontSize: "0.7rem", background: "linear-gradient(135deg, #00f2fe, #7b2cbf)", color: "white", padding: "1px 6px", borderRadius: "99px", fontWeight: 700 }}>NEW</span>
-              </div>
-              <span style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {floatingBanner.text}
-              </span>
-            </div>
-            <button 
-              onClick={(e) => { e.stopPropagation(); setFloatingBanner(null); }}
-              style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer" }}
-            >
-              <X size={16} />
-            </button>
-          </div>
-        )}
 
         {/* Left Sidebar Conversation List */}
         <div className={`${styles.sidebar} ${activeConvId ? styles.sidebarHiddenMobile : ""}`}>
@@ -1019,7 +1001,7 @@ function MessagesContent() {
                     <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--color-text-main)", margin: 0, lineHeight: 1.2 }}>
                       {activeConv.name}
                     </h3>
-                    {inputText.trim().length > 0 ? (
+                    {isPartnerTyping ? (
                       <span style={{ fontSize: "0.78rem", color: "var(--color-primary)", fontWeight: 700, display: "flex", alignItems: "center", gap: "4px" }}>
                         <span>typing</span>
                         <span style={{ display: "inline-flex", gap: "2px" }}>
@@ -1038,7 +1020,7 @@ function MessagesContent() {
 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <button 
-                    onClick={() => setActiveCall({ type: "voice", contact: activeConv })}
+                    onClick={() => setActiveCall({ type: "voice", contact: { ...activeConv, id: activeConv.partnerId || activeConv.username } })}
                     style={{ background: "rgba(29, 155, 240, 0.12)", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Voice Call"
@@ -1046,7 +1028,7 @@ function MessagesContent() {
                     <Phone size={17} />
                   </button>
                   <button 
-                    onClick={() => setActiveCall({ type: "video", contact: activeConv })}
+                    onClick={() => setActiveCall({ type: "video", contact: { ...activeConv, id: activeConv.partnerId || activeConv.username } })}
                     style={{ background: "rgba(168, 85, 247, 0.12)", border: "none", color: "#a855f7", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Video Call"
@@ -1706,13 +1688,27 @@ function MessagesContent() {
                 );
               })}
 
-                {/* Typing Indicator */}
-                {isTyping && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--color-text-muted)", fontSize: "0.98rem" }}>
-                    <span style={{ fontWeight: 600 }}>{activeConv.name} is typing...</span>
-                    <span className="animate-bounce">•</span>
-                    <span className="animate-bounce" style={{ animationDelay: "0.1s" }}>•</span>
-                    <span className="animate-bounce" style={{ animationDelay: "0.2s" }}>•</span>
+                {/* Partner Typing Indicator Bubble */}
+                {isPartnerTyping && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", alignSelf: "flex-start", marginTop: "6px" }} className="animate-slide-up">
+                    <img
+                      src={activeConv.avatar}
+                      alt={activeConv.name}
+                      style={{ width: "30px", height: "30px", borderRadius: "50%", objectFit: "cover" }}
+                    />
+                    <div style={{
+                      background: "var(--color-bg-surface)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "18px 18px 18px 4px",
+                      padding: "8px 14px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px"
+                    }}>
+                      <span style={{ animation: "typingDots 1.2s infinite 0s", width: "6px", height: "6px", borderRadius: "50%", background: "var(--color-primary)" }} />
+                      <span style={{ animation: "typingDots 1.2s infinite 0.2s", width: "6px", height: "6px", borderRadius: "50%", background: "var(--color-primary)" }} />
+                      <span style={{ animation: "typingDots 1.2s infinite 0.4s", width: "6px", height: "6px", borderRadius: "50%", background: "var(--color-primary)" }} />
+                    </div>
                   </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -1770,7 +1766,26 @@ function MessagesContent() {
                     type="text"
                     placeholder={`Message ${activeConv.name}...`}
                     value={inputText}
-                    onChange={e => setInputText(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInputText(val);
+                      if (activeConvId) {
+                        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                        fetch("/api/messages/typing", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ conversationId: activeConvId, isTyping: val.trim().length > 0 })
+                        }).catch(() => {});
+
+                        typingTimeoutRef.current = setTimeout(() => {
+                          fetch("/api/messages/typing", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ conversationId: activeConvId, isTyping: false })
+                          }).catch(() => {});
+                        }, 3000);
+                      }
+                    }}
                     style={{
                       flex: 1,
                       padding: "11px 18px",

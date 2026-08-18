@@ -324,6 +324,44 @@ button:active, a:active {
   animation: likePop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+@keyframes postSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-post-slide {
+  animation: postSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.responsive-msg-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  top: auto;
+  left: auto;
+  transform: none;
+  z-index: 9999;
+}
+
+@media (max-width: 639px) {
+  .responsive-msg-toast {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: auto;
+    right: auto;
+    width: calc(100vw - 32px);
+    max-width: 400px;
+  }
+}
+
 /* Floating Heart Bubbles Animation (Like) */
 @keyframes heartFloatBurst {
   0% {

@@ -620,11 +620,25 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
         <div className={styles.mainColumn}>
           <div className={styles.header}>
             <div className={styles.authorInfo} style={{ marginLeft: 0 }}>
-              <Link href={`/profile/${post.author.username || post.author.id}`} className={styles.authorName} style={{ textDecoration: "none" }}>
-                {post.author.name || "Unknown User"}
-              </Link>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                <Link href={`/profile/${post.author.username || post.author.id}`} className={styles.authorName} style={{ textDecoration: "none", color: "var(--color-text-main)", fontWeight: 800 }}>
+                  {post.author.name || "Unknown User"}
+                </Link>
+                {post.author.username && (
+                  <span style={{ fontSize: "0.88rem", color: "var(--color-text-muted)", fontWeight: 500 }}>
+                    @{post.author.username}
+                  </span>
+                )}
+                <span style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>·</span>
+                <span className="text-muted" style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }} suppressHydrationWarning>{formattedDate}</span>
+                {post.location && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.78rem", color: "var(--color-primary, #1d9bf0)", fontWeight: 700, background: "rgba(29, 155, 240, 0.12)", padding: "2px 8px", borderRadius: "9999px", border: "1px solid rgba(29, 155, 240, 0.2)" }}>
+                    <MapPin size={11} /> {post.location}
+                  </span>
+                )}
+              </div>
               {post.parent?.author && (
-                <div className={styles.replyHeader} style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", marginTop: "2px" }}>
+                <div className={styles.replyHeader} style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", marginTop: "3px" }}>
                   Replying to{" "}
                   <Link 
                     href={`/profile/${post.parent.author.id}`}
@@ -635,14 +649,6 @@ export function PostCard({ post, currentUserId, isPrivacyPage, isThreadParent, h
                   </Link>
                 </div>
               )}
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "2px" }}>
-                <span className="text-muted" style={{ fontSize: "0.85rem" }} suppressHydrationWarning>{formattedDate}</span>
-                {post.location && (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.8rem", color: "var(--color-primary, #1d9bf0)", fontWeight: 700, background: "rgba(29, 155, 240, 0.12)", padding: "2px 8px", borderRadius: "9999px", border: "1px solid rgba(29, 155, 240, 0.2)" }}>
-                    <MapPin size={12} /> {post.location}
-                  </span>
-                )}
-              </div>
             </div>
         
         <div style={{ marginLeft: "auto", position: "relative" }}>

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+import { TYPING_STORES } from "@/lib/typingStore";
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);
@@ -14,7 +16,7 @@ export async function GET(request: NextRequest) {
     const convId = searchParams.get("convId");
 
     if (!convId) {
-      return NextResponse.json({ messages: [] }, { status: 200 });
+      return NextResponse.json({ messages: [], isPartnerTyping: false }, { status: 200 });
     }
 
     // Check if conversation exists
@@ -28,7 +30,17 @@ export async function GET(request: NextRequest) {
     });
 
     if (!conversation) {
-      return NextResponse.json({ messages: [] }, { status: 200 });
+      return NextResponse.json({ messages: [], isPartnerTyping: false }, { status: 200 });
+    }
+
+    const partner = conversation.participants.find(p => p.id !== currentUserId);
+    let isPartnerTyping = false;
+    if (partner) {
+      const partnerKey = `${convId}:${partner.id}`;
+      const lastTypingTime = TYPING_STORES.get(partnerKey);
+      if (lastTypingTime && (Date.now() - lastTypingTime) < 3500) {
+        isPartnerTyping = true;
+      }
     }
 
     // Mark unread messages sent by others as read
@@ -78,7 +90,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ messages, conversation }, { status: 200 });
+    return NextResponse.json({ messages, conversation, isPartnerTyping }, { status: 200 });
   } catch (e) {
     console.error("GET /api/messages error:", e);
     return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
