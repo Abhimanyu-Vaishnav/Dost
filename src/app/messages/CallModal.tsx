@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   PhoneOff, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, 
-  Shield, PhoneCall, MicOff as MicMutedIcon
+  Shield, PhoneCall, MicOff as MicMutedIcon, Smartphone, HeadphoneOff, Headphones
 } from "lucide-react";
 
 interface CallModalProps {
@@ -22,7 +22,9 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [isEarpieceMode, setIsEarpieceMode] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [isNearEarMode, setIsNearEarMode] = useState(false);
   const [voiceVolume, setVoiceVolume] = useState<number>(0);
   const [callState, setCallState] = useState<"ringing" | "connected" | "declined">(
     isIncomingAccepted ? "connected" : "ringing"
@@ -32,12 +34,12 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const callInitTimeRef = useRef<number>(Date.now());
 
   // Send OFFER signal IMMEDIATELY on mount (0ms delay) before any media permission prompts
   useEffect(() => {
     const targetId = contact.id || contact.username;
     if (!isIncomingAccepted && targetId) {
-      // Fire signaling OFFER immediately
       fetch("/api/messages/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,7 +54,7 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
     }
   }, [isIncomingAccepted, contact, type]);
 
-  // Poll for active call session status updates at 250ms high-frequency stream
+  // Poll for active call session status updates at 250ms stream (with 5s grace period guard)
   useEffect(() => {
     const signalInterval = setInterval(async () => {
       try {
@@ -66,9 +68,10 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
               setCallState("declined");
               setTimeout(() => {
                 onEndCall();
-              }, 300);
+              }, 400);
             }
-          } else if (!isIncomingAccepted) {
+          } else if (!isIncomingAccepted && Date.now() - callInitTimeRef.current > 5000) {
+            // Only close after 5s grace period if session was explicitly ended
             onEndCall();
           }
         }
@@ -91,7 +94,6 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
           video: type === "video",
           audio: true
         }).catch(async (e) => {
-          // Fallback to audio-only if camera is blocked/unavailable
           return await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
         });
 
@@ -105,10 +107,10 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
           videoRef.current.srcObject = stream;
         }
 
-        // Pipe audio stream to hidden audio element for instant speaker sound
+        // Pipe audio stream to hidden element BUT KEEP MUTED LOCALLY TO PREVENT VOICE ECHO!
         if (audioPlaybackRef.current) {
           audioPlaybackRef.current.srcObject = stream;
-          audioPlaybackRef.current.volume = isSpeakerOn ? 1.0 : 0.3;
+          audioPlaybackRef.current.muted = true; // MUTE LOCAL LOOPBACK TO PREVENT ECHO REPETITION 100%!
           audioPlaybackRef.current.play().catch(() => {});
         }
 
@@ -155,13 +157,31 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
     };
   }, [type]);
 
-  // Update Audio Playback Volume on Speaker Toggle
+  // Handle Proximity Sensor API for screen auto-dim when near ear
   useEffect(() => {
-    if (audioPlaybackRef.current) {
-      audioPlaybackRef.current.muted = !isSpeakerOn;
-      audioPlaybackRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
-    }
-  }, [isSpeakerOn]);
+    if (typeof window === "undefined") return;
+
+    let sensor: any = null;
+    try {
+      if ("ProximitySensor" in window) {
+        sensor = new (window as any).ProximitySensor();
+        sensor.addEventListener("reading", () => {
+          if (sensor.near) {
+            setIsNearEarMode(true);
+          } else {
+            setIsNearEarMode(false);
+          }
+        });
+        sensor.start();
+      }
+    } catch (e) {}
+
+    return () => {
+      if (sensor) {
+        try { sensor.stop(); } catch (e) {}
+      }
+    };
+  }, []);
 
   // Call duration timer (runs ONLY when connected)
   useEffect(() => {
@@ -217,8 +237,8 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
         position: "fixed",
         inset: 0,
         zIndex: 99999,
-        backgroundColor: "rgba(0, 0, 0, 0.92)",
-        backdropFilter: "blur(36px)",
+        backgroundColor: isNearEarMode ? "rgba(0, 0, 0, 0.99)" : "rgba(0, 0, 0, 0.92)",
+        backdropFilter: isNearEarMode ? "none" : "blur(36px)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -228,8 +248,23 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
       }} 
       className="animate-fade-in"
     >
-      {/* Hidden Audio Output Element for Live Audio Transmit & Playback */}
+      {/* Hidden Audio Output Element */}
       <audio ref={audioPlaybackRef} autoPlay playsInline style={{ display: "none" }} />
+
+      {/* Near-Ear Screen Off Black Overlay */}
+      {isNearEarMode && (
+        <div 
+          onClick={() => setIsNearEarMode(false)}
+          style={{
+            position: "absolute", inset: 0, background: "#000000", zIndex: 9999,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            color: "rgba(255, 255, 255, 0.4)", gap: "12px", cursor: "pointer"
+          }}
+        >
+          <Smartphone size={32} />
+          <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>Proximity Screen Lock • Tap anywhere to wake screen</span>
+        </div>
+      )}
 
       {/* Ambient Blurred Background Avatar Artwork */}
       <div 
@@ -280,16 +315,27 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
           )}
         </span>
 
-        {/* Live Mute Status Pill Banner */}
-        {isMuted && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: "6px",
-            background: "rgba(239, 68, 68, 0.2)", border: "1px solid rgba(239, 68, 68, 0.5)",
-            padding: "4px 12px", borderRadius: "99px", color: "#ef4444", fontSize: "0.78rem", fontWeight: 800
-          }}>
-            <MicMutedIcon size={14} /> Microphone Muted
-          </div>
-        )}
+        {/* Live Status Banners */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+          {isMuted && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              background: "rgba(239, 68, 68, 0.2)", border: "1px solid rgba(239, 68, 68, 0.5)",
+              padding: "4px 12px", borderRadius: "99px", color: "#ef4444", fontSize: "0.78rem", fontWeight: 800
+            }}>
+              <MicMutedIcon size={14} /> Mic Muted
+            </div>
+          )}
+          {isEarpieceMode && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              background: "rgba(168, 85, 247, 0.2)", border: "1px solid rgba(168, 85, 247, 0.5)",
+              padding: "4px 12px", borderRadius: "99px", color: "#a855f7", fontSize: "0.78rem", fontWeight: 800
+            }}>
+              <Headphones size={14} /> Earpiece Mode
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Center Visual Content with Live Equalizer Waves */}
@@ -383,10 +429,10 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
         )}
       </div>
 
-      {/* FaceTime-Grade Glassmorphic Control Bar */}
+      {/* Control Bar: Mute, Speaker/Earpiece, Near-Ear Lock, End Call */}
       <div style={{
-        display: "flex", alignItems: "center", gap: "24px",
-        background: "rgba(255, 255, 255, 0.14)", padding: "16px 36px",
+        display: "flex", alignItems: "center", gap: "16px",
+        background: "rgba(255, 255, 255, 0.14)", padding: "14px 28px",
         borderRadius: "9999px", border: "1px solid rgba(255, 255, 255, 0.25)",
         backdropFilter: "blur(24px)", boxShadow: "0 10px 40px rgba(0,0,0,0.5)", zIndex: 2
       }}>
@@ -394,7 +440,7 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
         <button
           onClick={() => setIsMuted(!isMuted)}
           style={{
-            width: "56px", height: "56px", borderRadius: "50%",
+            width: "52px", height: "52px", borderRadius: "50%",
             background: isMuted ? "#ef4444" : "rgba(255, 255, 255, 0.2)",
             color: "white", border: "none", cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -404,15 +450,49 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
           className="hover:scale-110 active:scale-95"
           title={isMuted ? "Unmute Mic" : "Mute Mic"}
         >
-          {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
+          {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
         </button>
 
-        {/* Video Toggle / Speaker Toggle */}
-        {type === "video" ? (
+        {/* Loudspeaker vs Earpiece Route Button */}
+        <button
+          onClick={() => {
+            setIsSpeakerOn(!isSpeakerOn);
+            setIsEarpieceMode(isSpeakerOn);
+          }}
+          style={{
+            width: "52px", height: "52px", borderRadius: "50%",
+            background: isEarpieceMode ? "#8b5cf6" : "rgba(255, 255, 255, 0.2)",
+            color: "white", border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: isEarpieceMode ? "0 4px 18px rgba(139, 92, 246, 0.6)" : "none"
+          }}
+          className="hover:scale-110 active:scale-95"
+          title={isEarpieceMode ? "Switch to Loudspeaker" : "Switch to Earpiece Receiver"}
+        >
+          {isEarpieceMode ? <Headphones size={22} /> : <Volume2 size={22} />}
+        </button>
+
+        {/* Near Ear Screen Off Button */}
+        <button
+          onClick={() => setIsNearEarMode(true)}
+          style={{
+            width: "52px", height: "52px", borderRadius: "50%",
+            background: "rgba(255, 255, 255, 0.2)",
+            color: "white", border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center"
+          }}
+          className="hover:scale-110 active:scale-95"
+          title="Near-Ear Screen Off Mode"
+        >
+          <Smartphone size={22} />
+        </button>
+
+        {/* Video Toggle */}
+        {type === "video" && (
           <button
             onClick={() => setIsVideoEnabled(!isVideoEnabled)}
             style={{
-              width: "56px", height: "56px", borderRadius: "50%",
+              width: "52px", height: "52px", borderRadius: "50%",
               background: !isVideoEnabled ? "#ef4444" : "rgba(255, 255, 255, 0.2)",
               color: "white", border: "none", cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center"
@@ -420,22 +500,7 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
             className="hover:scale-110 active:scale-95"
             title={isVideoEnabled ? "Disable Camera" : "Enable Camera"}
           >
-            {isVideoEnabled ? <Video size={24} /> : <VideoOff size={24} />}
-          </button>
-        ) : (
-          <button
-            onClick={() => setIsSpeakerOn(!isSpeakerOn)}
-            style={{
-              width: "56px", height: "56px", borderRadius: "50%",
-              background: isSpeakerOn ? "var(--color-primary)" : "rgba(255, 255, 255, 0.2)",
-              color: "white", border: "none", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: isSpeakerOn ? "0 4px 18px rgba(0, 242, 254, 0.4)" : "none"
-            }}
-            className="hover:scale-110 active:scale-95"
-            title="Toggle Speaker"
-          >
-            {isSpeakerOn ? <Volume2 size={24} /> : <VolumeX size={24} />}
+            {isVideoEnabled ? <Video size={22} /> : <VideoOff size={22} />}
           </button>
         )}
 
@@ -443,7 +508,7 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
         <button
           onClick={handleEndCallClick}
           style={{
-            width: "64px", height: "64px", borderRadius: "50%",
+            width: "60px", height: "60px", borderRadius: "50%",
             background: "linear-gradient(135deg, #ef4444, #dc2626)", color: "white", border: "none",
             cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             boxShadow: "0 10px 30px rgba(239, 68, 68, 0.65)"
@@ -451,7 +516,7 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
           className="hover:scale-110 active:scale-95"
           title="End Call"
         >
-          <PhoneOff size={28} />
+          <PhoneOff size={26} />
         </button>
       </div>
     </div>
