@@ -151,9 +151,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       setIsMicActive(true);
       setShowMicHelpModal(false);
 
-      if (peerConnectionRef.current) {
+      const pc = peerConnectionRef.current;
+      if (pc && (pc as any).signalingState !== "closed") {
         stream.getTracks().forEach(track => {
-          peerConnectionRef.current?.addTrack(track, stream);
+          try {
+            pc.addTrack(track, stream);
+          } catch (e) {}
         });
       }
       if (localVideoRef.current) {
@@ -238,7 +241,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     // Send Local ICE Candidates
     pc.onicecandidate = (event) => {
-      if (event.candidate) {
+      if (event.candidate && (pc as any).signalingState !== "closed") {
         fetch("/api/calls/signal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -249,6 +252,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     async function initMedia() {
       try {
+        if ((pc as any).signalingState === "closed") return;
+
         const stream = await requestUserMediaStream({
           video: session.callType === "video",
           audio: {
@@ -260,7 +265,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         }) || await requestUserMediaStream({ audio: true });
 
-        if (!stream) {
+        if (!stream || (pc as any).signalingState === "closed") {
           setIsMicActive(false);
           return;
         }
@@ -271,7 +276,11 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         localMediaStreamRef.current = stream;
 
         stream.getTracks().forEach(track => {
-          pc.addTrack(track, stream);
+          if ((pc as any).signalingState !== "closed") {
+            try {
+              pc.addTrack(track, stream);
+            } catch (err) {}
+          }
         });
 
         if (localVideoRef.current) {
@@ -332,18 +341,20 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         } catch (e) {}
 
         // If caller: Send WebRTC SDP Offer with forced Audio Recv
-        if (isCaller) {
+        if (isCaller && (pc as any).signalingState !== "closed") {
           const offer = await pc.createOffer({
             offerToReceiveAudio: true,
             offerToReceiveVideo: session.callType === "video"
           });
-          await pc.setLocalDescription(offer);
+          if ((pc as any).signalingState !== "closed") {
+            await pc.setLocalDescription(offer);
 
-          fetch("/api/calls/signal", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "SDP_OFFER", sdp: offer })
-          }).catch(() => {});
+            fetch("/api/calls/signal", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "SDP_OFFER", sdp: offer })
+            }).catch(() => {});
+          }
         }
       } catch (e) {
         console.error("Init call media error:", e);
@@ -401,33 +412,37 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       if (activeStream) {
         activeStream.getTracks().forEach(track => track.stop());
       }
-      pc.close();
+      try { pc.close(); } catch (e) {}
     };
   }, [session.callType, isCaller, isConnected, isMuted]);
 
   // Exchange WebRTC SDP Answer & ICE Candidates
   useEffect(() => {
     const pc = peerConnectionRef.current;
-    if (!pc) return;
+    if (!pc || (pc as any).signalingState === "closed") return;
 
     async function handleSignalingExchange() {
       const pc = peerConnectionRef.current;
-      if (!pc) return;
+      if (!pc || (pc as any).signalingState === "closed") return;
       try {
         // Recipient handles SDP Offer ONLY after explicitly accepting call (status === CONNECTED)
         if (!isCaller && session.status === "CONNECTED" && session.sdpOffer && !pc.remoteDescription) {
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
-          const answer = await pc.createAnswer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: session.callType === "video"
-          });
-          await pc.setLocalDescription(answer);
+          if ((pc as any).signalingState !== "closed") {
+            const answer = await pc.createAnswer({
+              offerToReceiveAudio: true,
+              offerToReceiveVideo: session.callType === "video"
+            });
+            if ((pc as any).signalingState !== "closed") {
+              await pc.setLocalDescription(answer);
 
-          fetch("/api/calls/signal", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
-          }).catch(() => {});
+              fetch("/api/calls/signal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
+              }).catch(() => {});
+            }
+          }
         }
 
         // Caller handles SDP Answer
@@ -437,7 +452,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
         // Process Candidates
         const candidates = !isCaller ? session.callerCandidates : session.recipientCandidates;
-        if (candidates && candidates.length > 0) {
+        if (candidates && candidates.length > 0 && (pc as any).signalingState !== "closed") {
           for (const cand of candidates) {
             const candStr = JSON.stringify(cand);
             if (!processedIceCandidatesRef.current.has(candStr)) {
