@@ -198,10 +198,12 @@ function MessagesContent() {
     } catch (e) {}
   };
 
-  const filteredConvs = conversations.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    c.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredConvs = conversations.filter(c => {
+    const nameStr = (c.name || c.username || "User").toLowerCase();
+    const usernameStr = (c.username || "").toLowerCase();
+    const query = (searchQuery || "").toLowerCase();
+    return nameStr.includes(query) || usernameStr.includes(query);
+  });
 
   return (
     <AppLayout fullWidth>
@@ -245,8 +247,8 @@ function MessagesContent() {
                 >
                   <div className={styles.avatarWrapper}>
                     <img
-                      src={conv.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(conv.name)}`}
-                      alt={conv.name}
+                      src={conv.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(conv.name || conv.username || "User")}`}
+                      alt={conv.name || conv.username || "User"}
                       style={{ width: "48px", height: "48px", borderRadius: "50%", objectFit: "cover" }}
                     />
                     {conv.isOnline && <div className={styles.onlineBadge} />}
@@ -255,7 +257,7 @@ function MessagesContent() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
                       <span style={{ fontWeight: 800, color: "#ffffff", fontSize: "0.95rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {conv.name}
+                        {conv.name || conv.username || "User"}
                       </span>
                       <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>
                         {conv.lastTime}
