@@ -2,15 +2,15 @@
 
 import { useEffect } from "react";
 import { Phone, PhoneOff, Video, Shield } from "lucide-react";
-import { CallSignal } from "@/lib/callSignalStore";
+import { CallSession } from "@/lib/callSignalStore";
 
 interface IncomingCallModalProps {
-  signal: CallSignal;
+  session: CallSession;
   onAccept: () => void;
   onDecline: () => void;
 }
 
-export function IncomingCallModal({ signal, onAccept, onDecline }: IncomingCallModalProps) {
+export function IncomingCallModal({ session, onAccept, onDecline }: IncomingCallModalProps) {
   // Web Audio Ringing Chime for incoming call
   useEffect(() => {
     let timer: any = null;
@@ -80,11 +80,11 @@ export function IncomingCallModal({ signal, onAccept, onDecline }: IncomingCallM
           borderRadius: "9999px", color: "#00f2fe", fontSize: "0.85rem", fontWeight: 800,
           border: "1px solid rgba(0, 242, 254, 0.3)"
         }}>
-          <Shield size={16} /> Incoming {signal.callType === "voice" ? "Voice" : "Video"} Call
+          <Shield size={16} /> Incoming {session.callType === "voice" ? "Voice" : "Video"} Call
         </div>
 
         <h2 style={{ fontSize: "2rem", fontWeight: 900, color: "#ffffff", margin: "16px 0 4px 0" }}>
-          {signal.fromUserName}
+          {session.callerName}
         </h2>
         <span style={{ fontSize: "1.05rem", color: "#10b981", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
           <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981" }} className="animate-ping" />
@@ -106,8 +106,8 @@ export function IncomingCallModal({ signal, onAccept, onDecline }: IncomingCallM
         }} />
 
         <img
-          src={signal.fromUserAvatar}
-          alt={signal.fromUserName}
+          src={session.callerAvatar}
+          alt={session.callerName}
           style={{
             width: "140px", height: "140px", borderRadius: "50%", objectFit: "cover",
             border: "4px solid #00f2fe", boxShadow: "0 0 50px rgba(0, 242, 254, 0.5)",
@@ -147,7 +147,7 @@ export function IncomingCallModal({ signal, onAccept, onDecline }: IncomingCallM
           className="hover:scale-110 active:scale-95 transition-all animate-bounce"
           title="Accept Call"
         >
-          {signal.callType === "video" ? <Video size={34} /> : <Phone size={34} />}
+          {session.callType === "video" ? <Video size={34} /> : <Phone size={34} />}
         </button>
       </div>
     </div>

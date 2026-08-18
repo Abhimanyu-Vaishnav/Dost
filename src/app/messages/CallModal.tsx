@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   PhoneOff, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, 
-  Shield, PhoneCall, Sparkles
+  Shield, PhoneCall
 } from "lucide-react";
 
 interface CallModalProps {
@@ -48,29 +48,32 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
     }
   }, [isIncomingAccepted, contact, type]);
 
-  // Poll for call status updates (ANSWER / REJECT)
+  // Poll for active call session status updates at 250ms high-frequency stream
   useEffect(() => {
     const signalInterval = setInterval(async () => {
       try {
         const res = await fetch("/api/messages/calls/signal");
         if (res.ok) {
           const data = await res.json();
-          if (data.signal) {
-            if (data.signal.action === "ANSWER") {
+          if (data.session) {
+            if (data.session.status === "CONNECTED") {
               setCallState("connected");
-            } else if (data.signal.action === "REJECT" || data.signal.action === "END") {
+            } else if (data.session.status === "REJECTED" || data.session.status === "ENDED") {
               setCallState("declined");
               setTimeout(() => {
                 onEndCall();
-              }, 1500);
+              }, 400);
             }
+          } else if (!isIncomingAccepted) {
+            // Session closed on other side
+            onEndCall();
           }
         }
       } catch (e) {}
-    }, 1000);
+    }, 250);
 
     return () => clearInterval(signalInterval);
-  }, [onEndCall]);
+  }, [isIncomingAccepted, onEndCall]);
 
   // Initialize Real Camera & Mic MediaStream
   useEffect(() => {
@@ -135,13 +138,12 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(track => track.stop());
     }
-    if (contact.id) {
-      fetch("/api/messages/calls/signal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "END", toUserId: contact.id })
-      }).catch(() => {});
-    }
+    fetch("/api/messages/calls/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "END" })
+    }).catch(() => {});
+
     onEndCall();
   };
 
