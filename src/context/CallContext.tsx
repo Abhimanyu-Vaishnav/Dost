@@ -46,7 +46,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     }
   }, [currentUserId]);
 
-  // Poll call signaling status at 100ms ultra-high speed
+  // Poll call signaling status at 100ms ultra-high speed with instant 0ms hangup sync
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -61,7 +61,13 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               stopAllRingtones();
               notifiedSessionIdRef.current = null;
             } else {
-              setActiveSession(sess);
+              setActiveSession(prev => {
+                // Keep connected status optimistic state
+                if (prev && prev.status === "CONNECTED" && sess.status === "RINGING") {
+                  return { ...sess, status: "CONNECTED" };
+                }
+                return sess;
+              });
 
               // Trigger WhatsApp-style device vibration & system notification for recipient
               const isRecipient = sess.status === "RINGING" && myUserId && (
@@ -74,7 +80,8 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
                 triggerSystemNotification(sess.callerName, sess.callType);
               }
             }
-          } else if (Date.now() - callStartedTimeRef.current > 5000) {
+          } else {
+            // When server returns session: null, instantly close call screen on both ends!
             setActiveSession(null);
             stopAllRingtones();
             notifiedSessionIdRef.current = null;
@@ -88,7 +95,12 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
 
   const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice", targetName?: string, targetAvatar?: string) => {
     try {
+      // 1. Mobile Mic & Audio Context Unlock directly on click
       getOrCreateAudioContext();
+      if (typeof window !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+      }
+
       callStartedTimeRef.current = Date.now();
 
       const displayName = targetName || targetUserId;
@@ -129,8 +141,17 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
 
   const acceptCall = async () => {
     try {
+      // 1. Mobile Mic & Audio Context Unlock directly on user touch event
       getOrCreateAudioContext();
+      if (typeof window !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+      }
+
       stopAllRingtones();
+
+      // 2. 0ms Optimistic Accept state change
+      setActiveSession(prev => prev ? { ...prev, status: "CONNECTED" } : null);
+
       const res = await fetch("/api/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -138,7 +159,9 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.session) setActiveSession(data.session);
+        if (data.session) {
+          setActiveSession({ ...data.session, status: "CONNECTED" });
+        }
       }
     } catch (e) {
       console.error("Accept call error:", e);
