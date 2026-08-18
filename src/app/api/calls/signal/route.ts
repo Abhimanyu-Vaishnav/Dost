@@ -25,7 +25,9 @@ export async function POST(req: NextRequest) {
     if (action === "REJECT" || action === "END") {
       let targetSession: CallSessionData | undefined = undefined;
 
-      const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
+      const allSessions = Array.from(CALL_STATE_STORE.sessions.values())
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
       for (const sess of allSessions) {
         const cId = sess.callerId?.toLowerCase();
         const cName = sess.callerName?.replace("@", "").toLowerCase();
@@ -54,12 +56,10 @@ export async function POST(req: NextRequest) {
         if (targetSession.recipientName) pushSSEEventToUser(targetSession.recipientName, payload);
 
         const sessId = targetSession.sessionId;
-        setTimeout(() => {
-          CALL_STATE_STORE.sessions.delete(sessId);
-          Array.from(CALL_STATE_STORE.userSessionMap.entries()).forEach(([k, v]) => {
-            if (v === sessId) CALL_STATE_STORE.userSessionMap.delete(k);
-          });
-        }, 15000);
+        CALL_STATE_STORE.sessions.delete(sessId);
+        Array.from(CALL_STATE_STORE.userSessionMap.entries()).forEach(([k, v]) => {
+          if (v === sessId) CALL_STATE_STORE.userSessionMap.delete(k);
+        });
 
         return NextResponse.json({ success: true, session: targetSession }, { status: 200 });
       }
@@ -67,10 +67,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, session: null }, { status: 200 });
     }
 
+    // Find the latest active session (excluding ENDED/REJECTED)
     let session: CallSessionData | undefined = undefined;
-    const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
-    for (const sess of allSessions) {
-      if (sess.status === "ENDED" || sess.status === "REJECTED") continue;
+    const activeSessions = Array.from(CALL_STATE_STORE.sessions.values())
+      .filter(s => s.status !== "ENDED" && s.status !== "REJECTED")
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    for (const sess of activeSessions) {
       const cId = sess.callerId?.toLowerCase();
       const cName = sess.callerName?.replace("@", "").toLowerCase();
       const rId = sess.recipientId?.toLowerCase();
@@ -109,6 +112,16 @@ export async function POST(req: NextRequest) {
       const targetUsername = targetUser?.username ? targetUser.username.replace("@", "") : cleanTarget;
       const targetDisplayName = targetUser?.name || targetUsername;
       const targetAvatarUrl = targetUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(targetDisplayName)}&background=00f2fe&color=ffffff`;
+
+      // DELETE STALE SESSIONS BEFORE CREATING NEW ONE
+      const allEntries = Array.from(CALL_STATE_STORE.sessions.entries());
+      for (const [sId, s] of allEntries) {
+        const cId = s.callerId?.toLowerCase();
+        const rId = s.recipientId?.toLowerCase();
+        if (cId === currentUserId || rId === currentUserId || cId === targetGuid.toLowerCase() || rId === targetGuid.toLowerCase()) {
+          CALL_STATE_STORE.sessions.delete(sId);
+        }
+      }
 
       const sessionId = `call_${currentUserId}_${targetGuid}_${Date.now()}`;
       const newSession: CallSessionData = {
@@ -223,9 +236,11 @@ export async function GET(req: NextRequest) {
     const currentUsername = typeof userPayload.username === "string" ? userPayload.username.replace("@", "").toLowerCase() : "";
 
     let session: CallSessionData | null = null;
-    const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
+    const activeSessions = Array.from(CALL_STATE_STORE.sessions.values())
+      .filter(s => s.status !== "ENDED" && s.status !== "REJECTED")
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-    for (const sess of allSessions) {
+    for (const sess of activeSessions) {
       const cId = sess.callerId?.toLowerCase();
       const cName = sess.callerName?.replace("@", "").toLowerCase();
       const rId = sess.recipientId?.toLowerCase();
