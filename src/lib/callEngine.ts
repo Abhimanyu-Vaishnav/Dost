@@ -24,6 +24,7 @@ const globalForCalls = globalThis as unknown as {
   callSessionsMap?: Map<string, CallSessionData>;
   userSessionMap?: Map<string, string>;
   sseControllers?: Map<string, ReadableStreamDefaultController>;
+  globalAudioElement?: HTMLAudioElement | null;
 };
 
 export const CALL_STATE_STORE = {
@@ -51,7 +52,7 @@ export function pushSSEEventToUser(userIdOrName?: string | null, data?: any) {
   return false;
 }
 
-// --- HD Ringtone & Web Audio Synthesizer ---
+// --- HD Audio Pipeline & Global Audio Playback ---
 let activeAudioContext: AudioContext | null = null;
 let activeToneOsc1: OscillatorNode | null = null;
 let activeToneOsc2: OscillatorNode | null = null;
@@ -75,11 +76,71 @@ export function getOrCreateAudioContext(): AudioContext | null {
   }
 }
 
-// Global Touch Listener to unlock AudioContext on mobile Chrome / Safari
+// Play Remote Audio Stream via DOM Audio Element & Web Audio Pipeline
+export function playRemoteAudioStream(stream: MediaStream, isSpeaker: boolean = true) {
+  console.log("[AudioEngine] Remote audio track received. Tracks count:", stream.getAudioTracks().length);
+  
+  if (typeof window === "undefined") return;
+
+  try {
+    stream.getAudioTracks().forEach(track => {
+      track.enabled = true;
+    });
+
+    let audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
+    if (!audioEl) {
+      audioEl = document.createElement("audio");
+      audioEl.id = "global_webrtc_remote_audio";
+      audioEl.autoplay = true;
+      (audioEl as any).playsInline = true;
+      audioEl.style.position = "fixed";
+      audioEl.style.bottom = "0px";
+      audioEl.style.right = "0px";
+      audioEl.style.width = "1px";
+      audioEl.style.height = "1px";
+      audioEl.style.opacity = "0.001";
+      audioEl.style.pointerEvents = "none";
+      document.body.appendChild(audioEl);
+    }
+
+    audioEl.muted = false;
+    audioEl.volume = isSpeaker ? 1.0 : 0.15;
+    audioEl.srcObject = stream;
+
+    const playPromise = audioEl.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          console.log("[AudioEngine] Audio play() resolved successfully!");
+        })
+        .catch(err => {
+          console.warn("[AudioEngine] Audio play() blocked by browser autoplay policy:", err);
+        });
+    }
+
+    const ctx = getOrCreateAudioContext();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+  } catch (e) {
+    console.error("[AudioEngine] Error playing remote audio stream:", e);
+  }
+}
+
+// Global Touch Listener to unlock AudioContext and HTML Audio on Mobile Chrome/Safari
 if (typeof window !== "undefined") {
   const unlockCtx = () => {
     if (activeAudioContext && activeAudioContext.state === "suspended") {
-      activeAudioContext.resume().catch(() => {});
+      activeAudioContext.resume().then(() => {
+        console.log("[AudioEngine] AudioContext resumed via user gesture!");
+      }).catch(() => {});
+    }
+    const audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
+    if (audioEl) {
+      audioEl.muted = false;
+      audioEl.play().then(() => {
+        console.log("[AudioEngine] Remote HTML Audio played via user gesture!");
+      }).catch(() => {});
     }
   };
   window.addEventListener("click", unlockCtx, { capture: true });

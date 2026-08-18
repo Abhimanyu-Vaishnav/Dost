@@ -8,7 +8,7 @@ import {
 import { 
   CallSessionData, startOutgoingRingbackSound, 
   startIncomingCallerTuneSound, stopAllRingtones, getOrCreateAudioContext,
-  claimSystemAudioSession, releaseSystemAudioSession
+  claimSystemAudioSession, releaseSystemAudioSession, playRemoteAudioStream
 } from "@/lib/callEngine";
 
 interface CallOverlayProps {
@@ -57,48 +57,33 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   // Audio Context Gesture Unlock Helper
   const unlockAudioPipeline = async () => {
     try {
+      console.log("[CallOverlay] Unlocking audio pipeline via user touch...");
       const ctx = getOrCreateAudioContext();
       if (ctx && ctx.state === "suspended") {
         await ctx.resume();
       }
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.15;
-        await remoteAudioRef.current.play().catch(() => {});
+      if (remoteStream) {
+        playRemoteAudioStream(remoteStream, isSpeakerOn);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("[CallOverlay] Audio unlock error:", e);
+    }
   };
 
-  // Bind Remote Stream to HTML Audio Tag & Web Audio Destination Graph
+  // Bind Remote Stream to Audio Engines
   useEffect(() => {
     unlockAudioPipeline();
 
     if (remoteStream) {
+      console.log("[CallOverlay] Binding remote stream to Audio Engine. Audio tracks:", remoteStream.getAudioTracks().length);
+      playRemoteAudioStream(remoteStream, isSpeakerOn);
+
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = remoteStream;
         remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.play().catch(() => {});
+        remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.15;
+        remoteAudioRef.current.play().catch(e => console.warn("[CallOverlay] Local audio element play error:", e));
       }
-
-      try {
-        const ctx = getOrCreateAudioContext();
-        if (ctx) {
-          if (ctx.state === "suspended") ctx.resume().catch(() => {});
-          const audioTrack = remoteStream.getAudioTracks()[0];
-          if (audioTrack) {
-            audioTrack.enabled = true;
-            const audioStream = new MediaStream([audioTrack]);
-            const source = ctx.createMediaStreamSource(audioStream);
-            const gainNode = ctx.createGain();
-            
-            // 5.0x Gain Boost for Loudspeaker, 0.2x for Earpiece
-            gainNode.gain.value = isSpeakerOn ? 5.0 : 0.2;
-
-            source.connect(gainNode);
-            gainNode.connect(ctx.destination);
-          }
-        }
-      } catch (e) {}
     }
   }, [remoteStream, isConnected, isSpeakerOn]);
 
@@ -118,6 +103,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     // If recipient is in RINGING state, DO NOT start media or auto-accept!
     if (isRecipient && isRinging) return;
 
+    console.log("[CallOverlay] Initializing WebRTC Peer Connection...");
     let localStream: MediaStream | null = null;
     let animFrame: number;
 
@@ -135,11 +121,15 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     // Handle Remote Track Received via WebRTC
     pc.ontrack = (event) => {
+      console.log("[CallOverlay] pc.ontrack event received! Track kind:", event.track.kind);
       const stream = event.streams[0] || new MediaStream([event.track]);
       setRemoteStream(stream);
 
+      playRemoteAudioStream(stream, isSpeakerOn);
+
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = stream;
+        remoteAudioRef.current.muted = false;
         remoteAudioRef.current.play().catch(() => {});
       }
 
@@ -151,6 +141,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     // Send Local ICE Candidates
     pc.onicecandidate = (event) => {
       if (event.candidate && (pc as any).signalingState !== "closed") {
+        console.log("[CallOverlay] ICE Candidate generated, sending to peer...");
         fetch("/api/calls/signal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -163,7 +154,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       try {
         if ((pc as any).signalingState === "closed") return;
 
-        // Request HD Microphone & Full HD Video Camera
+        console.log("[CallOverlay] Requesting getUserMedia...");
+        // Request Microphone & Video Camera
         const constraints: MediaStreamConstraints = {
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 },
           video: session.callType === "video" ? {
@@ -174,11 +166,13 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         };
 
         const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(async () => {
+          console.warn("[CallOverlay] Video constraint failed, falling back to audio only");
           return await navigator.mediaDevices.getUserMedia({ audio: true });
         });
 
         if (!stream || (pc as any).signalingState === "closed") return;
 
+        console.log("[CallOverlay] Local media stream captured successfully. Audio tracks:", stream.getAudioTracks().length);
         localStream = stream;
         localMediaStreamRef.current = stream;
 
@@ -186,7 +180,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         stream.getTracks().forEach(track => {
           track.enabled = true;
           if ((pc as any).signalingState !== "closed") {
-            try { pc.addTrack(track, stream); } catch (e) {}
+            try { 
+              pc.addTrack(track, stream); 
+              console.log("[CallOverlay] Added local track to PC:", track.kind);
+            } catch (e) {}
           }
         });
 
@@ -219,6 +216,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
         // Caller SDP Offer
         if (isCaller && (pc as any).signalingState !== "closed") {
+          console.log("[CallOverlay] Creating SDP Offer...");
           const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
           if ((pc as any).signalingState !== "closed") {
             await pc.setLocalDescription(offer);
@@ -230,7 +228,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         }
       } catch (e) {
-        console.error("Start media error:", e);
+        console.error("[CallOverlay] Start media error:", e);
       }
     }
 
@@ -238,6 +236,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     // CLEANUP ON UNMOUNT OR END CALL
     return () => {
+      console.log("[CallOverlay] Cleaning up WebRTC PeerConnection and media tracks...");
       stopAllRingtones();
       if (animFrame) cancelAnimationFrame(animFrame);
       if (localStream) {
@@ -270,6 +269,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       try {
         // Recipient sets remote SDP offer and creates SDP answer after Accepting call
         if (!isCaller && (session.status === "CONNECTED" || session.sdpOffer) && session.sdpOffer && !pc.remoteDescription) {
+          console.log("[CallOverlay] Recipient setting remote SDP Offer and creating Answer...");
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
           if ((pc as any).signalingState !== "closed") {
             const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
@@ -286,6 +286,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
         // Caller receives SDP answer from recipient and connects instantly (< 10ms)
         if (isCaller && session.sdpAnswer && (pc.signalingState === "have-local-offer" || !pc.remoteDescription)) {
+          console.log("[CallOverlay] Caller setting remote SDP Answer from recipient...");
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
         }
 
@@ -300,7 +301,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             }
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error("[CallOverlay] Exchange signals error:", e);
+      }
     }
 
     exchangeSignals();
@@ -345,6 +348,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     unlockAudioPipeline();
     const nextSpeaker = !isSpeakerOn;
     setIsSpeakerOn(nextSpeaker);
+    if (remoteStream) {
+      playRemoteAudioStream(remoteStream, nextSpeaker);
+    }
     if (remoteAudioRef.current) {
       remoteAudioRef.current.volume = nextSpeaker ? 1.0 : 0.15;
     }
