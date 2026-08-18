@@ -19,15 +19,20 @@ interface CallOverlayProps {
 }
 
 export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }: CallOverlayProps) {
-  const normUid = (currentUserId || "").toLowerCase().replace("@", "");
-  const normCallerId = (session.callerId || "").toLowerCase().replace("@", "");
-  const normCallerName = (session.callerName || "").toLowerCase().replace("@", "");
-  const normRecipId = (session.recipientId || "").toLowerCase().replace("@", "");
-  const normRecipName = (session.recipientName || "").toLowerCase().replace("@", "");
+  const normUid = (currentUserId || "").toLowerCase().replace("@", "").trim();
+  const normCallerId = (session.callerId || "").toLowerCase().replace("@", "").trim();
+  const normCallerName = (session.callerName || "").toLowerCase().replace("@", "").trim();
+  const normRecipId = (session.recipientId || "").toLowerCase().replace("@", "").trim();
+  const normRecipName = (session.recipientName || "").toLowerCase().replace("@", "").trim();
 
-  const isRecipient = Boolean(normUid && (normUid === normRecipId || normUid === normRecipName));
-  const isCaller = Boolean(normUid && (normUid === normCallerId || normUid === normCallerName)) || (!isRecipient && (session.callerId === "me" || session.callerName === "me"));
+  // Role resolution
+  const isExplicitRecipient = Boolean(normUid && (normUid === normRecipId || normUid === normRecipName));
+  const isExplicitCaller = Boolean(normUid && (normUid === normCallerId || normUid === normCallerName)) || (session.callerId === "me" || session.callerName === "me");
   
+  // Is Caller default fallback
+  const isCaller = isExplicitCaller || !isExplicitRecipient;
+  const isRecipient = isExplicitRecipient || !isCaller;
+
   const isRinging = session.status === "RINGING";
   const isConnected = session.status === "CONNECTED";
 
@@ -474,9 +479,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         } catch (e) {}
 
         // CALLER: Create SDP Offer immediately after adding local tracks
-        if (isCaller && !isOfferSentRef.current && (pc as any).signalingState !== "closed") {
+        if (!isOfferSentRef.current && (pc as any).signalingState !== "closed") {
           isOfferSentRef.current = true;
-          console.log("[CallOverlay] Caller creating SDP Offer after tracks attached...");
+          console.log("[CallOverlay] Creating SDP Offer after tracks attached...");
           const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
           await pc.setLocalDescription(offer);
           await fetch("/api/calls/signal", {
@@ -493,12 +498,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }
 
     captureMedia();
-  }, [isRecipient, isRinging, isCaller, session.callType]);
+  }, [isRecipient, isRinging, session.callType]);
 
-  // DIRECT SIGNALING POLLER FOR CALLER (Guarantees sdpAnswer application on Caller PC in < 200ms!)
+  // DIRECT POLLER: APPLIES SDP ANSWER FOR ANY PEER WITH LOCAL OFFER
   useEffect(() => {
-    if (!isCaller) return;
-
     const poller = setInterval(async () => {
       const pc = peerConnectionRef.current;
       if (!pc || pc.remoteDescription || (pc as any).signalingState === "closed") return;
@@ -509,12 +512,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           const data = await res.json();
           const sess = data.session;
           if (sess && sess.sdpAnswer && !pc.remoteDescription && (pc as any).signalingState !== "closed") {
-            console.log("[CallOverlay Direct Poller] Caller PC applying sdpAnswer!");
+            console.log("[CallOverlay Direct Poller] Applying sdpAnswer!");
             try {
               const answerObj = typeof sess.sdpAnswer === "string" ? { type: "answer", sdp: sess.sdpAnswer } : sess.sdpAnswer;
               await pc.setRemoteDescription(new RTCSessionDescription(answerObj));
               await flushPendingIceCandidates();
-              console.log("[CallOverlay Direct Poller] SUCCESS: Caller PC Signaling State is now:", pc.signalingState);
+              console.log("[CallOverlay Direct Poller] SUCCESS: PC Signaling State is now:", pc.signalingState);
               setSignalingError("");
             } catch (err: any) {
               console.error("[CallOverlay Direct Poller] setRemoteDescription error:", err);
@@ -526,9 +529,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }, 200);
 
     return () => clearInterval(poller);
-  }, [isCaller]);
+  }, []);
 
-  // DECOUPLED REACTIVE SIGNALING LISTENER (HANDLES sdpOffer AND sdpAnswer REACTION INSTANTLY)
+  // DECOUPLED REACTIVE SIGNALING LISTENER (ROBUST OFFER / ANSWER / ICE PROCESSOR)
   useEffect(() => {
     const pc = peerConnectionRef.current;
     if (!pc || (pc as any).signalingState === "closed") return;
@@ -538,9 +541,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       if (!pc || (pc as any).signalingState === "closed") return;
 
       try {
-        // RECIPIENT: When sdpOffer is present AND remoteDescription is not set yet
-        if (!isCaller && session.sdpOffer && !pc.remoteDescription && pc.signalingState !== "closed") {
-          console.log("[WebRTC Handshake] Recipient processing sdpOffer! Setting Remote Description & Creating Answer...");
+        // ANY PEER THAT DOES NOT HAVE LOCAL DESCRIPTION RECEIVES SDP OFFER -> CREATES ANSWER
+        if (session.sdpOffer && !pc.localDescription && !pc.remoteDescription && pc.signalingState !== "closed") {
+          console.log("[WebRTC Handshake] Processing sdpOffer! Setting Remote Description & Creating Answer...");
           try {
             const offerObj = typeof session.sdpOffer === "string" ? { type: "offer", sdp: session.sdpOffer } : session.sdpOffer;
             await pc.setRemoteDescription(new RTCSessionDescription(offerObj));
@@ -555,35 +558,35 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
                 });
-                console.log("[WebRTC Handshake] Recipient sent SDP Answer to server!");
+                console.log("[WebRTC Handshake] Sent SDP Answer to server!");
                 setSignalingError("");
               }
             }
           } catch (err: any) {
-            console.error("[WebRTC Handshake] Recipient setRemoteDescription error:", err);
+            console.error("[WebRTC Handshake] setRemoteDescription offer error:", err);
             setSignalingError(err?.message || "SDP Offer Format Error");
           }
         }
 
-        // CALLER: When sdpAnswer is present AND remoteDescription is not set yet
-        if (isCaller && session.sdpAnswer && !pc.remoteDescription && pc.signalingState !== "closed") {
-          console.log("[WebRTC Handshake] Caller processing sdpAnswer! Setting Remote Description -> Transitioning to STABLE!");
+        // ANY PEER THAT ALREADY HAS LOCAL OFFER RECEIVES SDP ANSWER -> TRANSITIONS TO STABLE
+        if (session.sdpAnswer && pc.localDescription && !pc.remoteDescription && pc.signalingState !== "closed") {
+          console.log("[WebRTC Handshake] Processing sdpAnswer! Setting Remote Description -> Transitioning to STABLE!");
           try {
             const answerObj = typeof session.sdpAnswer === "string" ? { type: "answer", sdp: session.sdpAnswer } : session.sdpAnswer;
             await pc.setRemoteDescription(new RTCSessionDescription(answerObj));
             await flushPendingIceCandidates();
-            console.log("[WebRTC Handshake] SUCCESS: Caller PC Signaling State is now:", pc.signalingState);
+            console.log("[WebRTC Handshake] SUCCESS: PC Signaling State is now:", pc.signalingState);
             setSignalingError("");
           } catch (err: any) {
-            console.error("[WebRTC Handshake] Caller setRemoteDescription error:", err);
+            console.error("[WebRTC Handshake] setRemoteDescription answer error:", err);
             setSignalingError(err?.message || "SDP Answer Format Error");
           }
         }
 
-        // ICE Candidates Process: Caller receives recipientCandidates, Recipient receives callerCandidates
-        const candidates = isCaller ? session.recipientCandidates : session.callerCandidates;
-        if (candidates && candidates.length > 0 && (pc as any).signalingState !== "closed") {
-          for (const cand of candidates) {
+        // Process Candidates from both candidate pools safely
+        const allCandidates = [...(session.callerCandidates || []), ...(session.recipientCandidates || [])];
+        if (allCandidates.length > 0 && (pc as any).signalingState !== "closed") {
+          for (const cand of allCandidates) {
             const candStr = JSON.stringify(cand);
             if (!processedIceCandidatesRef.current.has(candStr)) {
               processedIceCandidatesRef.current.add(candStr);
@@ -597,7 +600,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }
 
     handleSignaling();
-  }, [session.sdpOffer, session.sdpAnswer, session.callerCandidates, session.recipientCandidates, isCaller, session.status]);
+  }, [session.sdpOffer, session.sdpAnswer, session.callerCandidates, session.recipientCandidates, session.status]);
 
   // Call Duration Counter
   useEffect(() => {
@@ -607,7 +610,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     } else {
       setCallDuration(0);
     }
-    return () => { if (timer) clearTimeout(timer); };
+    return () => { if (timer) clearInterval(timer); };
   }, [isConnected]);
 
   // Toggle Mute
