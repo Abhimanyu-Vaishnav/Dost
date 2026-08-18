@@ -14,8 +14,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const currentUserId = String(userPayload.userId);
-    const currentUsername = typeof userPayload.username === "string" ? userPayload.username.replace("@", "") : "";
+    const currentUserId = String(userPayload.userId).toLowerCase();
+    const currentUsername = typeof userPayload.username === "string" ? userPayload.username.replace("@", "").toLowerCase() : "";
     const body = await req.json();
     const { action, toUserId, callType, callerName, callerAvatar, sdp, candidate } = body;
 
@@ -27,10 +27,13 @@ export async function POST(req: NextRequest) {
 
       const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
       for (const sess of allSessions) {
-        const isMatch = sess.callerId === currentUserId || 
-                        sess.recipientId === currentUserId ||
-                        sess.callerName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase() ||
-                        sess.recipientName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase();
+        const cId = sess.callerId?.toLowerCase();
+        const cName = sess.callerName?.replace("@", "").toLowerCase();
+        const rId = sess.recipientId?.toLowerCase();
+        const rName = sess.recipientName?.replace("@", "").toLowerCase();
+
+        const isMatch = cId === currentUserId || rId === currentUserId ||
+                        (currentUsername && (cName === currentUsername || rName === currentUsername));
         if (isMatch) {
           targetSession = sess;
           break;
@@ -68,10 +71,13 @@ export async function POST(req: NextRequest) {
     const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
     for (const sess of allSessions) {
       if (sess.status === "ENDED" || sess.status === "REJECTED") continue;
-      const isMatch = sess.callerId === currentUserId || 
-                      sess.recipientId === currentUserId ||
-                      sess.callerName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase() ||
-                      sess.recipientName?.replace("@", "").toLowerCase() === currentUsername.toLowerCase();
+      const cId = sess.callerId?.toLowerCase();
+      const cName = sess.callerName?.replace("@", "").toLowerCase();
+      const rId = sess.recipientId?.toLowerCase();
+      const rName = sess.recipientName?.replace("@", "").toLowerCase();
+
+      const isMatch = cId === currentUserId || rId === currentUserId ||
+                      (currentUsername && (cName === currentUsername || rName === currentUsername));
       if (isMatch) {
         session = sess;
         break;
@@ -173,7 +179,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "ICE_CANDIDATE" && session && candidate) {
-      const isCaller = currentUserId === session.callerId || currentUsername === session.callerName;
+      const cId = session.callerId?.toLowerCase();
+      const cName = session.callerName?.replace("@", "").toLowerCase();
+
+      const isCaller = cId === currentUserId || (currentUsername && cName === currentUsername);
+
       if (isCaller) {
         if (!session.callerCandidates) session.callerCandidates = [];
         session.callerCandidates.push(candidate);
@@ -198,7 +208,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/calls/signal - State Query Endpoint (Returns ENDED/REJECTED sessions too so clients see termination status!)
+// GET /api/calls/signal - State Query Endpoint
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;

@@ -19,8 +19,15 @@ interface CallOverlayProps {
 }
 
 export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }: CallOverlayProps) {
-  const isRecipient = Boolean(currentUserId && (currentUserId === session.recipientId || currentUserId === session.recipientName));
-  const isCaller = session.callerId === "me" || session.callerName === "me" || (!isRecipient && (currentUserId ? (currentUserId === session.callerId || currentUserId === session.callerName) : true));
+  const normUid = (currentUserId || "").toLowerCase().replace("@", "");
+  const normCallerId = (session.callerId || "").toLowerCase().replace("@", "");
+  const normCallerName = (session.callerName || "").toLowerCase().replace("@", "");
+  const normRecipId = (session.recipientId || "").toLowerCase().replace("@", "");
+  const normRecipName = (session.recipientName || "").toLowerCase().replace("@", "");
+
+  const isRecipient = Boolean(normUid && (normUid === normRecipId || normUid === normRecipName));
+  const isCaller = Boolean(normUid && (normUid === normCallerId || normUid === normCallerName)) || (!isRecipient && (session.callerId === "me" || session.callerName === "me"));
+  
   const isRinging = session.status === "RINGING";
   const isConnected = session.status === "CONNECTED";
 
@@ -32,7 +39,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const [voiceVolume, setVoiceVolume] = useState<number>(0);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
-  const [debugLogText, setDebugLogText] = useState<string>("");
 
   // Live Detailed Diagnostic State
   const [diag, setDiag] = useState({
@@ -119,14 +125,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     if (localMediaStreamRef.current) {
       localMediaStreamRef.current.getAudioTracks().forEach(t => {
         t.enabled = true;
-        console.log("[Local Track Forced Enabled]:", t.label);
       });
     }
 
     if (remoteStream) {
       remoteStream.getAudioTracks().forEach(t => {
         t.enabled = true;
-        console.log("[Remote Track Forced Enabled]:", t.label);
       });
     }
 
@@ -146,7 +150,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     setIsMuted(false);
   };
 
-  // Real-time Live Diagnostic Telemetry Monitor (Updates every 500ms)
+  // Real-time Live Diagnostic Telemetry Monitor (Updates every 400ms)
   useEffect(() => {
     const monitor = setInterval(() => {
       const pc = peerConnectionRef.current;
@@ -201,7 +205,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         sigState,
         lastMsg: isConnected ? "Call Connected & Live" : "Signaling Handshake in Progress"
       });
-    }, 500);
+    }, 400);
 
     return () => clearInterval(monitor);
   }, [remoteStream, isConnected]);
@@ -209,14 +213,13 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   // Bind Remote Stream to Audio Engines
   useEffect(() => {
     if (remoteStream) {
-      console.log("[CallOverlay] Binding remoteStream to Audio Engine. Audio tracks count:", remoteStream.getAudioTracks().length);
       playRemoteAudioStream(remoteStream, isSpeakerOn);
 
       if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== remoteStream) {
         remoteAudioRef.current.srcObject = remoteStream;
         remoteAudioRef.current.muted = false;
         remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
-        remoteAudioRef.current.play().catch(e => console.warn("[CallOverlay] Local audio element play error:", e));
+        remoteAudioRef.current.play().catch(() => {});
       }
     }
   }, [remoteStream, isSpeakerOn]);
@@ -271,6 +274,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         { urls: "stun:stun2.l.google.com:19302" },
         { urls: "stun:stun3.l.google.com:19302" },
         { urls: "stun:stun4.l.google.com:19302" },
+        { urls: "stun:global.stun.twilio.com:3478" },
+        { urls: "stun:stun.services.mozilla.com" },
         {
           urls: "turn:openrelay.metered.ca:80",
           username: "openrelayproject",
@@ -392,7 +397,6 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           if ((pc as any).signalingState !== "closed") {
             try { 
               pc.addTrack(track, stream); 
-              console.log("[CallOverlay] Added local track to PC:", track.kind);
             } catch (e) {}
           }
         });
@@ -482,8 +486,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           console.log("[WebRTC Handshake] SUCCESS: Caller PC Signaling State is now:", pc.signalingState);
         }
 
-        // ICE Candidates Process
-        const candidates = !isCaller ? session.callerCandidates : session.recipientCandidates;
+        // ICE Candidates Process: Caller receives recipientCandidates, Recipient receives callerCandidates
+        const candidates = isCaller ? session.recipientCandidates : session.callerCandidates;
         if (candidates && candidates.length > 0 && (pc as any).signalingState !== "closed") {
           for (const cand of candidates) {
             const candStr = JSON.stringify(cand);
@@ -509,7 +513,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     } else {
       setCallDuration(0);
     }
-    return () => { if (timer) clearInterval(timer); };
+    return () => { if (timer) clearTimeout(timer); };
   }, [isConnected]);
 
   // Toggle Mute
