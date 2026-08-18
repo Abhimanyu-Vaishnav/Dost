@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   Phone, PhoneOff, Mic, MicOff, Volume2, Video, VideoOff, 
-  Shield, PhoneCall, MicOff as MicMutedIcon, Smartphone, Headphones, AlertTriangle
+  Shield, PhoneCall, MicOff as MicMutedIcon, Smartphone, Headphones, Play
 } from "lucide-react";
 import { 
   CallSessionData, startOutgoingRingbackSound, 
@@ -18,38 +18,6 @@ interface CallOverlayProps {
   onAcceptCall: () => void;
 }
 
-// Universal getUserMedia helper supporting legacy mobile WebViews & HTTP IP origins with 48kHz HD Audio Constraints
-async function requestUserMediaStream(constraints: MediaStreamConstraints): Promise<MediaStream | null> {
-  try {
-    if (typeof window === "undefined") return null;
-
-    if (navigator.mediaDevices?.getUserMedia) {
-      return await navigator.mediaDevices.getUserMedia(constraints);
-    }
-
-    const legacyFn = (navigator as any).webkitGetUserMedia || 
-                     (navigator as any).mozGetUserMedia || 
-                     (navigator as any).getUserMedia;
-
-    if (legacyFn) {
-      return new Promise((resolve) => {
-        legacyFn.call(
-          navigator,
-          constraints,
-          (stream: MediaStream) => resolve(stream),
-          (err: any) => {
-            console.error("Legacy getUserMedia error:", err);
-            resolve(null);
-          }
-        );
-      });
-    }
-  } catch (e) {
-    console.error("requestUserMediaStream error:", e);
-  }
-  return null;
-}
-
 export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }: CallOverlayProps) {
   const isRecipient = Boolean(currentUserId && (currentUserId === session.recipientId || currentUserId === session.recipientName));
   const isCaller = session.callerId === "me" || session.callerName === "me" || (!isRecipient && (currentUserId ? (currentUserId === session.callerId || currentUserId === session.callerName) : true));
@@ -59,12 +27,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [isEarpieceMode, setIsEarpieceMode] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-  const [isNearEarMode, setIsNearEarMode] = useState(false);
   const [voiceVolume, setVoiceVolume] = useState<number>(0);
-  const [isMicActive, setIsMicActive] = useState<boolean>(false);
-  const [showMicHelpModal, setShowMicHelpModal] = useState<boolean>(false);
+  const [audioNeedsTap, setAudioNeedsTap] = useState<boolean>(false);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -84,96 +49,39 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     };
   }, [otherPersonName, session.callType]);
 
-  // Global Audio Unlocker & Explicit Loudspeaker Hardware Target Router
-  const unlockAndPlayAudio = async () => {
+  // User Tap Audio Unlocker (Bypasses iOS/Android Autoplay Restriction)
+  const unlockAudio = async () => {
     try {
       const ctx = getOrCreateAudioContext();
-      if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+      if (ctx && ctx.state === "suspended") await ctx.resume();
       if (remoteAudioRef.current) {
         remoteAudioRef.current.muted = false;
         remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
-
-        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-          try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const speakerDev = devices.find(d => 
-              d.kind === "audiooutput" && (
-                d.label.toLowerCase().includes("speaker") || 
-                d.label.toLowerCase().includes("loudspeaker") || 
-                d.deviceId === "default"
-              )
-            );
-            if (speakerDev && (remoteAudioRef.current as any).setSinkId) {
-              await (remoteAudioRef.current as any).setSinkId(speakerDev.deviceId);
-            }
-          } catch (e) {}
-        }
-
-        remoteAudioRef.current.play().catch(() => {});
+        await remoteAudioRef.current.play().catch(() => {
+          setAudioNeedsTap(true);
+        });
+        setAudioNeedsTap(false);
       }
     } catch (e) {}
   };
 
-  // Manage Ringtone Sound Engine
+  // Ringtone Management
   useEffect(() => {
     if (isRinging) {
-      if (isCaller) {
-        startOutgoingRingbackSound();
-      } else {
-        startIncomingCallerTuneSound();
-      }
+      if (isCaller) startOutgoingRingbackSound();
+      else startIncomingCallerTuneSound();
     } else {
       stopAllRingtones();
     }
-
-    return () => {
-      stopAllRingtones();
-    };
+    return () => stopAllRingtones();
   }, [isRinging, isCaller]);
 
-  // Request Microphone Stream manually on user touch
-  const handleRequestMicPermission = async () => {
-    unlockAndPlayAudio();
-    const stream = await requestUserMediaStream({
-      video: session.callType === "video",
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        sampleRate: 48000,
-        channelCount: 2
-      }
-    }) || await requestUserMediaStream({ audio: true });
-
-    if (stream) {
-      stream.getAudioTracks().forEach(t => { t.enabled = true; });
-      localMediaStreamRef.current = stream;
-      setIsMicActive(true);
-      setShowMicHelpModal(false);
-
-      const pc = peerConnectionRef.current;
-      if (pc && (pc as any).signalingState !== "closed") {
-        stream.getTracks().forEach(track => {
-          try {
-            pc.addTrack(track, stream);
-          } catch (e) {}
-        });
-      }
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.muted = true;
-      }
-    } else {
-      setShowMicHelpModal(true);
-    }
-  };
-
-  // Manage WebRTC P2P Peer Connection, Media Streams & Raw PCM Audio Relay Fallback
+  // WebRTC & Audio Relay Core Engine
   useEffect(() => {
-    let activeStream: MediaStream | null = null;
+    let localStream: MediaStream | null = null;
     let animFrame: number;
-    let scriptProcessor: ScriptProcessorNode | null = null;
-    let chunkInterval: any = null;
+    let mediaRecorder: MediaRecorder | null = null;
+    let pollInterval: any = null;
 
     const configuration: RTCConfiguration = {
       iceServers: [
@@ -188,10 +96,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     const pc = new RTCPeerConnection(configuration);
     peerConnectionRef.current = pc;
 
-    // Handle Remote Audio/Video Track Received
+    // Handle Remote Track Received via WebRTC
     pc.ontrack = (event) => {
       const remoteStream = event.streams[0] || new MediaStream([event.track]);
-
+      
       if (event.track.kind === "video" && remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = remoteStream;
       }
@@ -200,43 +108,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         remoteAudioRef.current.srcObject = remoteStream;
         remoteAudioRef.current.muted = false;
         remoteAudioRef.current.volume = isSpeakerOn ? 1.0 : 0.2;
-        
-        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-          navigator.mediaDevices.enumerateDevices().then(devices => {
-            const speakerDev = devices.find(d => 
-              d.kind === "audiooutput" && (
-                d.label.toLowerCase().includes("speaker") || 
-                d.label.toLowerCase().includes("loudspeaker") || 
-                d.deviceId === "default"
-              )
-            );
-            if (speakerDev && (remoteAudioRef.current as any).setSinkId) {
-              (remoteAudioRef.current as any).setSinkId(speakerDev.deviceId).catch(() => {});
-            }
-          }).catch(() => {});
-        }
-
-        remoteAudioRef.current.play().catch(() => {});
+        remoteAudioRef.current.play().catch(() => setAudioNeedsTap(true));
       }
-
-      // Direct Web Audio Clean Gain Destination Bridge
-      try {
-        const ctx = getOrCreateAudioContext();
-        if (ctx) {
-          if (ctx.state === "suspended") ctx.resume().catch(() => {});
-          const audioTrack = remoteStream.getAudioTracks()[0];
-          if (audioTrack) {
-            audioTrack.enabled = true;
-            const audioStream = new MediaStream([audioTrack]);
-            const source = ctx.createMediaStreamSource(audioStream);
-            const gainNode = ctx.createGain();
-            gainNode.gain.value = isSpeakerOn ? 3.0 : 0.4;
-
-            source.connect(gainNode);
-            gainNode.connect(ctx.destination);
-          }
-        }
-      } catch (e) {}
     };
 
     // Send Local ICE Candidates
@@ -250,36 +123,30 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
     };
 
-    async function initMedia() {
+    async function startMedia() {
       try {
         if ((pc as any).signalingState === "closed") return;
 
-        const stream = await requestUserMediaStream({
-          video: session.callType === "video",
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            sampleRate: 48000,
-            channelCount: 2
-          }
-        }) || await requestUserMediaStream({ audio: true });
+        // Request HD Microphone & Camera
+        const constraints: MediaStreamConstraints = {
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: session.callType === "video" ? { width: { ideal: 640 }, height: { ideal: 480 } } : false
+        };
 
-        if (!stream || (pc as any).signalingState === "closed") {
-          setIsMicActive(false);
-          return;
-        }
+        const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(async () => {
+          return await navigator.mediaDevices.getUserMedia({ audio: true });
+        });
 
-        stream.getAudioTracks().forEach(t => { t.enabled = true; });
-        setIsMicActive(true);
-        activeStream = stream;
+        if (!stream || (pc as any).signalingState === "closed") return;
+
+        localStream = stream;
         localMediaStreamRef.current = stream;
 
+        // Add Tracks to WebRTC Peer Connection
         stream.getTracks().forEach(track => {
+          track.enabled = true;
           if ((pc as any).signalingState !== "closed") {
-            try {
-              pc.addTrack(track, stream);
-            } catch (err) {}
+            try { pc.addTrack(track, stream); } catch (e) {}
           }
         });
 
@@ -288,14 +155,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           localVideoRef.current.muted = true;
         }
 
-        // Live mic equalizer & Raw Headerless PCM Audio Sampler (2048 PCM Float32 samples)
+        // Live Voice Visualizer Analyser
         try {
           const ctx = getOrCreateAudioContext();
           if (ctx) {
             if (ctx.state === "suspended") ctx.resume().catch(() => {});
             const source = ctx.createMediaStreamSource(stream);
-
-            // Equalizer Analyser
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 64;
             source.connect(analyser);
@@ -305,50 +170,46 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               analyser.getByteFrequencyData(dataArray);
               let sum = 0;
               for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-              const avg = sum / dataArray.length;
-              setVoiceVolume(Math.min(100, Math.round((avg / 128) * 100)));
+              setVoiceVolume(Math.min(100, Math.round((sum / dataArray.length / 128) * 100)));
               animFrame = requestAnimationFrame(updateVolume);
             };
             updateVolume();
-
-            // Raw PCM Script Processor Sampler (2048 float samples per slice)
-            scriptProcessor = ctx.createScriptProcessor(2048, 1, 1);
-            let pcmBufferAcc: number[] = [];
-
-            scriptProcessor.onaudioprocess = (e) => {
-              if (isMuted) return;
-              const inputData = e.inputBuffer.getChannelData(0);
-              // Downsample to 24kHz for ultra-fast network relay
-              for (let i = 0; i < inputData.length; i += 2) {
-                pcmBufferAcc.push(Math.round(inputData[i] * 1000) / 1000);
-              }
-
-              if (pcmBufferAcc.length >= 1024) {
-                const chunkToSend = pcmBufferAcc.slice(0, 1024);
-                pcmBufferAcc = [];
-
-                fetch("/api/messages/calls/audio-chunk", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ sessionId: session.sessionId, pcmData: chunkToSend })
-                }).catch(() => {});
-              }
-            };
-
-            source.connect(scriptProcessor);
-            scriptProcessor.connect(ctx.destination);
           }
         } catch (e) {}
 
-        // If caller: Send WebRTC SDP Offer with forced Audio Recv
+        // HTTP Audio Chunk Recorder (1-second full valid WebM/MP4 slices)
+        try {
+          let mime = "audio/webm";
+          if (typeof MediaRecorder !== "undefined") {
+            if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) mime = "audio/webm;codecs=opus";
+            else if (MediaRecorder.isTypeSupported("audio/mp4")) mime = "audio/mp4";
+
+            mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+            mediaRecorder.ondataavailable = async (e) => {
+              if (e.data && e.data.size > 0) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  const base64 = (reader.result as string)?.split(",")[1];
+                  if (base64) {
+                    fetch("/api/messages/calls/audio-chunk", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ sessionId: session.sessionId, mime, blobBase64: base64 })
+                    }).catch(() => {});
+                  }
+                };
+                reader.readAsDataURL(e.data);
+              }
+            };
+            mediaRecorder.start(1000);
+          }
+        } catch (e) {}
+
+        // Caller creates SDP Offer
         if (isCaller && (pc as any).signalingState !== "closed") {
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: session.callType === "video"
-          });
+          const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
           if ((pc as any).signalingState !== "closed") {
             await pc.setLocalDescription(offer);
-
             fetch("/api/calls/signal", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -357,85 +218,61 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         }
       } catch (e) {
-        console.error("Init call media error:", e);
+        console.error("Start media error:", e);
       }
     }
 
-    initMedia();
+    startMedia();
 
-    // Poll HTTP Raw PCM Float32 Audio Slices with Direct Web Audio PCM Buffer Playback
-    chunkInterval = setInterval(async () => {
+    // HTTP Audio Chunk Player (Polls 1-second audio slices if WebRTC is blocked)
+    pollInterval = setInterval(async () => {
       if (!isConnected) return;
       try {
         const res = await fetch(`/api/messages/calls/audio-chunk?sessionId=${encodeURIComponent(session.sessionId)}`);
         if (res.ok) {
           const data = await res.json();
           if (data.chunks && Array.isArray(data.chunks)) {
-            const ctx = getOrCreateAudioContext();
-            if (ctx) {
-              if (ctx.state === "suspended") ctx.resume().catch(() => {});
-
-              for (const chunk of data.chunks) {
-                if (chunk.pcmData && Array.isArray(chunk.pcmData) && chunk.pcmData.length > 0) {
-                  try {
-                    const sampleRate = 24000;
-                    const audioBuffer = ctx.createBuffer(1, chunk.pcmData.length, sampleRate);
-                    const channelData = audioBuffer.getChannelData(0);
-                    for (let i = 0; i < chunk.pcmData.length; i++) {
-                      channelData[i] = chunk.pcmData[i];
-                    }
-
-                    const src = ctx.createBufferSource();
-                    src.buffer = audioBuffer;
-
-                    const gainNode = ctx.createGain();
-                    gainNode.gain.value = isSpeakerOn ? 3.5 : 0.5; // 3.5x Loudspeaker Volume
-
-                    src.connect(gainNode);
-                    gainNode.connect(ctx.destination);
-                    src.start(0);
-                  } catch (err) {}
-                }
+            for (const chunk of data.chunks) {
+              if (chunk.blobBase64) {
+                const audio = new Audio(`data:${chunk.mime || "audio/webm"};base64,${chunk.blobBase64}`);
+                audio.volume = isSpeakerOn ? 1.0 : 0.2;
+                audio.play().catch(() => {});
               }
             }
           }
         }
       } catch (e) {}
-    }, 120);
+    }, 1000);
 
     return () => {
       if (animFrame) cancelAnimationFrame(animFrame);
-      if (chunkInterval) clearInterval(chunkInterval);
-      if (scriptProcessor) {
-        try { scriptProcessor.disconnect(); } catch (e) {}
+      if (pollInterval) clearInterval(pollInterval);
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        try { mediaRecorder.stop(); } catch (e) {}
       }
-      if (activeStream) {
-        activeStream.getTracks().forEach(track => track.stop());
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
       }
       try { pc.close(); } catch (e) {}
     };
-  }, [session.callType, isCaller, isConnected, isMuted]);
+  }, [session.callType, isCaller, isConnected]);
 
-  // Exchange WebRTC SDP Answer & ICE Candidates
+  // Handle Signaling Exchange (Recipient SDP Answer & ICE Candidates)
   useEffect(() => {
     const pc = peerConnectionRef.current;
     if (!pc || (pc as any).signalingState === "closed") return;
 
-    async function handleSignalingExchange() {
+    async function exchangeSignals() {
       const pc = peerConnectionRef.current;
       if (!pc || (pc as any).signalingState === "closed") return;
       try {
-        // Recipient handles SDP Offer ONLY after explicitly accepting call (status === CONNECTED)
+        // Recipient sets SDP Offer & creates SDP Answer
         if (!isCaller && session.status === "CONNECTED" && session.sdpOffer && !pc.remoteDescription) {
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
           if ((pc as any).signalingState !== "closed") {
-            const answer = await pc.createAnswer({
-              offerToReceiveAudio: true,
-              offerToReceiveVideo: session.callType === "video"
-            });
+            const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
             if ((pc as any).signalingState !== "closed") {
               await pc.setLocalDescription(answer);
-
               fetch("/api/calls/signal", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -445,12 +282,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         }
 
-        // Caller handles SDP Answer
+        // Caller sets SDP Answer
         if (isCaller && session.sdpAnswer && pc.signalingState === "have-local-offer") {
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpAnswer));
         }
 
-        // Process Candidates
+        // Exchange ICE Candidates
         const candidates = !isCaller ? session.callerCandidates : session.recipientCandidates;
         if (candidates && candidates.length > 0 && (pc as any).signalingState !== "closed") {
           for (const cand of candidates) {
@@ -464,61 +301,45 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       } catch (e) {}
     }
 
-    handleSignalingExchange();
-  }, [session.sdpOffer, session.sdpAnswer, session.callerCandidates, session.recipientCandidates, isCaller]);
+    exchangeSignals();
+  }, [session.sdpOffer, session.sdpAnswer, session.callerCandidates, session.recipientCandidates, isCaller, session.status]);
 
-  // Call Duration Timer
+  // Call Duration Counter
   useEffect(() => {
     let timer: any;
     if (isConnected) {
-      timer = setInterval(() => {
-        setCallDuration(prev => prev + 1);
-      }, 1000);
+      timer = setInterval(() => setCallDuration(prev => prev + 1), 1000);
     } else {
       setCallDuration(0);
     }
-
-    return () => {
-      if (timer) clearInterval(timer);
-    };
+    return () => { if (timer) clearInterval(timer); };
   }, [isConnected]);
 
-  // Toggle Mic Mute
+  // Toggle Mute
   const handleToggleMute = () => {
-    unlockAndPlayAudio();
+    unlockAudio();
     if (localMediaStreamRef.current) {
-      const audioTracks = localMediaStreamRef.current.getAudioTracks();
-      audioTracks.forEach(t => {
-        t.enabled = isMuted;
-      });
+      localMediaStreamRef.current.getAudioTracks().forEach(t => t.enabled = isMuted);
       setIsMuted(!isMuted);
     }
   };
 
-  // Toggle Camera Video
+  // Toggle Video
   const handleToggleVideo = () => {
-    unlockAndPlayAudio();
+    unlockAudio();
     if (localMediaStreamRef.current) {
-      const videoTracks = localMediaStreamRef.current.getVideoTracks();
-      videoTracks.forEach(t => {
-        t.enabled = !isVideoEnabled;
-      });
+      localMediaStreamRef.current.getVideoTracks().forEach(t => t.enabled = !isVideoEnabled);
       setIsVideoEnabled(!isVideoEnabled);
     }
   };
 
-  // Toggle Speaker / Earpiece Audio Route
+  // Toggle Speaker / Earpiece
   const handleToggleSpeaker = () => {
-    unlockAndPlayAudio();
-    const nextSpeaker = !isSpeakerOn;
-    setIsSpeakerOn(nextSpeaker);
-    setIsEarpieceMode(!nextSpeaker);
-
+    unlockAudio();
+    const next = !isSpeakerOn;
+    setIsSpeakerOn(next);
     if (remoteAudioRef.current) {
-      remoteAudioRef.current.volume = nextSpeaker ? 1.0 : 0.2;
-      if ((remoteAudioRef.current as any).setSinkId) {
-        (remoteAudioRef.current as any).setSinkId(nextSpeaker ? "default" : "").catch(() => {});
-      }
+      remoteAudioRef.current.volume = next ? 1.0 : 0.2;
     }
   };
 
@@ -530,75 +351,54 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
   return (
     <div 
-      onClick={unlockAndPlayAudio}
+      onClick={unlockAudio}
       style={{
         position: "fixed", inset: 0, zIndex: 99999,
-        backgroundColor: isNearEarMode ? "rgba(0, 0, 0, 0.99)" : "rgba(0, 0, 0, 0.92)",
-        backdropFilter: isNearEarMode ? "none" : "blur(36px)",
+        backgroundColor: "rgba(0, 0, 0, 0.94)",
+        backdropFilter: "blur(40px)",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "space-between", padding: "48px 24px", overflow: "hidden"
       }}
       className="animate-fade-in"
     >
-      {/* Active Remote Voice Audio Element in DOM */}
+      {/* Visible High-Priority Audio Player */}
       <audio 
         ref={remoteAudioRef} 
         autoPlay 
         playsInline 
-        style={{ width: "1px", height: "1px", opacity: 0.01, pointerEvents: "none" }} 
+        controls
+        style={{
+          position: "fixed", bottom: "12px", right: "12px", zIndex: 100000,
+          width: "180px", height: "40px", opacity: isConnected ? 0.9 : 0.01,
+          background: "#000", borderRadius: "12px"
+        }}
       />
 
-      {/* Mic Access Help Modal if Browser Blocked HTTP Permission */}
-      {showMicHelpModal && (
+      {/* Autoplay Tap Unlock Banner */}
+      {audioNeedsTap && (
         <div 
+          onClick={unlockAudio}
           style={{
-            position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 10000,
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "24px", textAlign: "center", color: "#ffffff"
+            position: "absolute", top: "20px", zIndex: 100001,
+            background: "#00f2fe", color: "#000", fontWeight: 900,
+            padding: "10px 24px", borderRadius: "9999px", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 0 20px #00f2fe"
           }}
         >
-          <AlertTriangle size={48} style={{ color: "#f59e0b", marginBottom: "16px" }} />
-          <h3 style={{ fontSize: "1.3rem", fontWeight: 800, margin: "0 0 8px 0" }}>Microphone Access Required</h3>
-          <p style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.8)", maxWidth: "340px", lineHeight: 1.5, margin: "0 0 20px 0" }}>
-            Microphone access is not active. Please allow permission to start talking!
-          </p>
-          <button
-            onClick={handleRequestMicPermission}
-            style={{
-              background: "#00f2fe", border: "none", color: "#000000", fontWeight: 800,
-              padding: "12px 28px", borderRadius: "9999px", cursor: "pointer", fontSize: "0.95rem"
-            }}
-          >
-            🎙️ Tap to Grant Microphone Access Now
-          </button>
+          <Play size={18} /> Tap Here to Hear Partner Voice Sound!
         </div>
       )}
 
-      {/* Near Ear Black Screen Overlay */}
-      {isNearEarMode && (
-        <div 
-          onClick={() => setIsNearEarMode(false)}
-          style={{
-            position: "absolute", inset: 0, background: "#000000", zIndex: 9999,
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            color: "rgba(255, 255, 255, 0.4)", gap: "12px", cursor: "pointer"
-          }}
-        >
-          <Smartphone size={32} />
-          <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>Proximity Screen Lock • Tap anywhere to wake screen</span>
-        </div>
-      )}
-
-      {/* Ambient Artwork */}
+      {/* Background Artwork */}
       <div 
         style={{
           position: "absolute", inset: 0, backgroundImage: `url(${otherPersonAvatar})`,
           backgroundSize: "cover", backgroundPosition: "center",
-          filter: "blur(65px) brightness(0.22)", opacity: 0.65, transform: "scale(1.1)", zIndex: 0
+          filter: "blur(70px) brightness(0.2)", opacity: 0.6, transform: "scale(1.1)", zIndex: 0
         }} 
       />
 
-      {/* Header Info */}
+      {/* Top Bar Header */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", zIndex: 2 }}>
         <div style={{
           display: "flex", alignItems: "center", gap: "6px",
@@ -606,7 +406,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           borderRadius: "9999px", color: "white", fontSize: "0.85rem", fontWeight: 800,
           border: "1px solid rgba(255, 255, 255, 0.2)", backdropFilter: "blur(12px)"
         }}>
-          <Shield size={16} style={{ color: "#10b981" }} /> End-to-End Encrypted HD {session.callType === "voice" ? "Voice" : "Video"} Call
+          <Shield size={16} style={{ color: "#10b981" }} /> End-to-End Encrypted HD Voice Call
         </div>
 
         <h2 style={{ fontSize: "2.2rem", fontWeight: 900, color: "#ffffff", margin: "14px 0 2px 0", textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
@@ -626,22 +426,9 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             `Connected • ${formatTimer(callDuration)}`
           )}
         </span>
-
-        {!isMicActive && isConnected && (
-          <button
-            onClick={handleRequestMicPermission}
-            style={{
-              marginTop: "6px", background: "rgba(245, 158, 11, 0.25)", border: "1px solid #f59e0b",
-              color: "#f59e0b", fontSize: "0.78rem", fontWeight: 800, padding: "4px 14px",
-              borderRadius: "9999px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px"
-            }}
-          >
-            <MicOff size={14} /> 🎙️ Tap to Enable Phone Mic Access
-          </button>
-        )}
       </div>
 
-      {/* Center Display / Equalizer */}
+      {/* Avatar Visualizer */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", position: "relative", width: "100%", maxHeight: "520px", flex: 1, zIndex: 2 }}>
         {session.callType === "voice" ? (
           <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -683,12 +470,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         borderRadius: "9999px", border: "1px solid rgba(255, 255, 255, 0.25)",
         backdropFilter: "blur(24px)", boxShadow: "0 10px 40px rgba(0,0,0,0.5)", zIndex: 2
       }}>
-        {/* If Recipient & Ringing: Show Green Accept & Red Decline */}
+        {/* Recipient Ringing Controls */}
         {isRecipient && isRinging ? (
           <>
             <button
               onClick={() => {
-                unlockAndPlayAudio();
+                unlockAudio();
                 onAcceptCall();
               }}
               style={{
@@ -733,7 +520,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
             </button>
 
-            {/* Speaker / Earpiece Toggle */}
+            {/* Speaker Toggle */}
             <button
               onClick={handleToggleSpeaker}
               style={{
@@ -744,12 +531,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                 cursor: "pointer", transition: "all 0.2s ease"
               }}
               className="hover:scale-105 active:scale-95"
-              title={isSpeakerOn ? "Speaker ON (Loudspeaker)" : "Earpiece Mode"}
+              title={isSpeakerOn ? "Speaker ON" : "Earpiece Mode"}
             >
               {isSpeakerOn ? <Volume2 size={22} /> : <Headphones size={22} />}
             </button>
 
-            {/* Video Toggle (if Video Call) */}
+            {/* Video Toggle */}
             {session.callType === "video" && (
               <button
                 onClick={handleToggleVideo}
@@ -767,22 +554,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               </button>
             )}
 
-            {/* Proximity Ear Screen Lock Button */}
-            <button
-              onClick={() => setIsNearEarMode(true)}
-              style={{
-                width: "52px", height: "52px", borderRadius: "50%",
-                background: "rgba(255, 255, 255, 0.2)", border: "none", color: "white",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", transition: "all 0.2s ease"
-              }}
-              className="hover:scale-105 active:scale-95"
-              title="Ear Proximity Lock"
-            >
-              <Smartphone size={22} />
-            </button>
-
-            {/* Red End Call Button */}
+            {/* End Call */}
             <button
               onClick={onEndCall}
               style={{
