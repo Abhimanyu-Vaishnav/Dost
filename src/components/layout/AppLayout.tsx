@@ -5,9 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { 
   Home, User, Search, LogOut, Bell, Mail, Bookmark, MoreHorizontal, EyeOff, Plus, MessageSquare, Shield, ShieldAlert,
-  Settings as SettingsIcon, List, Users, CheckCircle2, TrendingUp, BarChart3, HelpCircle, Command, Palette, Edit3, Camera, Sparkles, Feather, X,
-  Flame, UserPlus, Video
+  Settings as SettingsIcon, List, Users, CheckCircle2, TrendingUp, BarChart3, HelpCircle, Command, Palette, Edit3, Camera, Sparkles, Flame, UserPlus, Video, X
 } from "lucide-react";
+import { CallProvider } from "@/context/CallContext";
 import styles from "./AppLayout.module.css";
 import { CreatePostModal } from "@/features/posts/components/CreatePostModal";
 import { CreateStoryModal } from "@/features/stories/components/CreateStoryModal";
@@ -291,7 +291,8 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   const isMessagesPage = pathname?.startsWith("/messages");
 
   return (
-    <div className={styles.layoutContainer}>
+    <CallProvider currentUserId={user?.userId || user?.username || undefined}>
+      <div className={styles.layoutContainer}>
       {/* Mobile Top Navigation Header */}
       <header className={styles.mobileHeader}>
         <div 
@@ -785,6 +786,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
           isIncomingAccepted={true}
         />
       )}
-    </div>
+      </div>
+    </CallProvider>
   );
 }

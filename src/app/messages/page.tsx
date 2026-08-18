@@ -12,6 +12,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import styles from "./messages.module.css";
 import { CallModal } from "./CallModal";
 import { uploadMediaFile } from "@/lib/upload";
+import { useCall } from "@/context/CallContext";
 
 interface ChatMessage {
   id: string;
@@ -136,6 +137,7 @@ function MessagesContent() {
   const [fullEmojiPickerMsgId, setFullEmojiPickerMsgId] = useState<string | null>(null);
 
   // 3-Dots Menu & In-Chat Search States
+  const { startCall } = useCall();
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [inChatSearch, setInChatSearch] = useState("");
   const [showInChatSearch, setShowInChatSearch] = useState(false);
@@ -1020,7 +1022,7 @@ function MessagesContent() {
 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <button 
-                    onClick={() => setActiveCall({ type: "voice", contact: { ...activeConv, id: activeConv.partnerId || activeConv.username } })}
+                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.id, "voice")}
                     style={{ background: "rgba(29, 155, 240, 0.12)", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Voice Call"
@@ -1028,7 +1030,7 @@ function MessagesContent() {
                     <Phone size={17} />
                   </button>
                   <button 
-                    onClick={() => setActiveCall({ type: "video", contact: { ...activeConv, id: activeConv.partnerId || activeConv.username } })}
+                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.id, "video")}
                     style={{ background: "rgba(168, 85, 247, 0.12)", border: "none", color: "#a855f7", cursor: "pointer", padding: "8px", borderRadius: "50%" }} 
                     className="hover:scale-105 active:scale-95"
                     title="Start Video Call"
