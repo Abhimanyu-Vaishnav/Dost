@@ -151,22 +151,7 @@
 }
 
 .postBtnCollapsed {
-  display: none;
-  width: 46px;
-  height: 46px;
-  min-width: 46px;
-  min-height: 46px;
-  aspect-ratio: 1 / 1;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #00f2fe 0%, #7b2cbf 100%);
-  color: white;
-  align-items: center;
-  justify-content: center;
-  margin-top: 10px;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 242, 254, 0.4);
-  flex-shrink: 0;
-  box-sizing: border-box;
+  display: none !important;
 }
 
 /* Bottom Left Profile Pill */

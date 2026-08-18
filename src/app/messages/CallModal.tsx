@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   PhoneOff, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, 
-  Shield, PhoneCall, MicOff as MicMutedIcon, Volume1
+  Shield, PhoneCall, MicOff as MicMutedIcon
 } from "lucide-react";
 
 interface CallModalProps {
@@ -33,10 +33,11 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Send OFFER signal to target user on mount (if caller)
+  // Send OFFER signal IMMEDIATELY on mount (0ms delay) before any media permission prompts
   useEffect(() => {
     const targetId = contact.id || contact.username;
     if (!isIncomingAccepted && targetId) {
+      // Fire signaling OFFER immediately
       fetch("/api/messages/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -65,7 +66,7 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
               setCallState("declined");
               setTimeout(() => {
                 onEndCall();
-              }, 400);
+              }, 300);
             }
           } else if (!isIncomingAccepted) {
             onEndCall();
@@ -77,17 +78,25 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
     return () => clearInterval(signalInterval);
   }, [isIncomingAccepted, onEndCall]);
 
-  // Initialize Microphone & Camera MediaStream + Pipe to Hidden Audio Element
+  // Initialize Microphone & Camera MediaStream inside non-blocking try/catch
   useEffect(() => {
     let activeStream: MediaStream | null = null;
     let animFrame: number;
 
     async function initMediaCall() {
       try {
+        if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: type === "video",
           audio: true
+        }).catch(async (e) => {
+          // Fallback to audio-only if camera is blocked/unavailable
+          return await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
         });
+
+        if (!stream) return;
+
         activeStream = stream;
         mediaStreamRef.current = stream;
 

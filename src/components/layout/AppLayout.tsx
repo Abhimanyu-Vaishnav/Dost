@@ -549,9 +549,6 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
           <button onClick={() => setShowCreateModal(true)} className={styles.postBtnFull}>
             Post
           </button>
-          <button onClick={() => setShowCreateModal(true)} className={styles.postBtnCollapsed}>
-            <Feather size={20} />
-          </button>
         </div>
 
         {/* Bottom Left Profile Pill */}
