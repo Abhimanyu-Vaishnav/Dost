@@ -152,6 +152,31 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
             })
           }).catch(err => console.error("Send call offer error:", err));
         }
+        // Set up MediaRecorder fallback for guaranteed 300ms audio chunk transmission
+        try {
+          const audioTracks = stream.getAudioTracks();
+          if (audioTracks.length > 0 && typeof MediaRecorder !== "undefined") {
+            const audioStream = new MediaStream([audioTracks[0]]);
+            const mediaRecorder = new MediaRecorder(audioStream);
+            mediaRecorder.ondataavailable = async (e) => {
+              if (e.data && e.data.size > 0) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  const base64data = reader.result as string;
+                  const targetId = contact.id || contact.username;
+                  const sessId = `call_${targetId}`;
+                  fetch("/api/messages/calls/audio-chunk", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sessionId: sessId, blobBase64: base64data })
+                  }).catch(() => {});
+                };
+                reader.readAsDataURL(e.data);
+              }
+            };
+            mediaRecorder.start(300);
+          }
+        } catch (e) {}
       } catch (err) {
         console.error("Camera/Mic access error:", err);
       }
@@ -159,7 +184,26 @@ export function CallModal({ type, contact, onEndCall, isIncomingAccepted = false
 
     initMediaCall();
 
+    // Poll for audio chunks every 300ms as secondary audio fallback engine
+    const chunkInterval = setInterval(async () => {
+      try {
+        const targetId = contact.id || contact.username;
+        const res = await fetch(`/api/messages/calls/audio-chunk?sessionId=call_${targetId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.chunks && data.chunks.length > 0) {
+            for (const chunk of data.chunks) {
+              const audio = new Audio(chunk.blobBase64);
+              audio.volume = isSpeakerOn ? 1.0 : 0.3;
+              audio.play().catch(() => {});
+            }
+          }
+        }
+      } catch (e) {}
+    }, 300);
+
     return () => {
+      clearInterval(chunkInterval);
       if (animFrame) cancelAnimationFrame(animFrame);
       if (audioContextRef.current) {
         audioContextRef.current.close().catch(() => {});

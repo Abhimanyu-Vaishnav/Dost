@@ -56,68 +56,90 @@ export function IncomingCallModal({ session, onAccept, onDecline }: IncomingCall
     };
   }, []);
 
+  const handleAcceptClick = () => {
+    try {
+      const unlockAudio = new Audio();
+      unlockAudio.play().catch(() => {});
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        ctx.resume().catch(() => {});
+      }
+    } catch (e) {}
+    onAccept();
+  };
+
   return (
     <div 
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 999999,
-        background: "rgba(0, 0, 0, 0.88)",
-        backdropFilter: "blur(28px)",
+        zIndex: 99999,
+        backgroundColor: "rgba(0, 0, 0, 0.90)",
+        backdropFilter: "blur(32px)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "48px 24px"
-      }}
+        padding: "60px 24px",
+        overflow: "hidden"
+      }} 
       className="animate-fade-in"
     >
-      {/* Header Info */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+      {/* Ambient Blurred Avatar Background */}
+      <div 
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: `url(${session.callerAvatar})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          filter: "blur(60px) brightness(0.25)",
+          opacity: 0.7,
+          transform: "scale(1.1)",
+          zIndex: 0
+        }} 
+      />
+
+      {/* Top Security Pill */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", zIndex: 2 }}>
         <div style={{
           display: "flex", alignItems: "center", gap: "6px",
-          background: "rgba(0, 242, 254, 0.15)", padding: "6px 18px",
-          borderRadius: "9999px", color: "#00f2fe", fontSize: "0.85rem", fontWeight: 800,
-          border: "1px solid rgba(0, 242, 254, 0.3)"
+          background: "rgba(255, 255, 255, 0.12)", padding: "6px 18px",
+          borderRadius: "9999px", color: "white", fontSize: "0.85rem", fontWeight: 800,
+          border: "1px solid rgba(255, 255, 255, 0.2)", backdropFilter: "blur(12px)"
         }}>
-          <Shield size={16} /> Incoming {session.callType === "voice" ? "Voice" : "Video"} Call
+          <Shield size={16} style={{ color: "#10b981" }} /> Incoming End-to-End Encrypted {session.callType === "voice" ? "Voice" : "Video"} Call
         </div>
 
-        <h2 style={{ fontSize: "2rem", fontWeight: 900, color: "#ffffff", margin: "16px 0 4px 0" }}>
+        <h2 style={{ fontSize: "2.2rem", fontWeight: 900, color: "#ffffff", margin: "16px 0 2px 0" }}>
           {session.callerName}
         </h2>
-        <span style={{ fontSize: "1.05rem", color: "#10b981", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981" }} className="animate-ping" />
-          Ringing...
+        <span style={{ fontSize: "1.05rem", color: "#00f2fe", fontWeight: 800 }} className="animate-pulse">
+          Is calling you live...
         </span>
       </div>
 
-      {/* Center Avatar with Pulsing Rings */}
-      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {/* Center Caller Avatar Display */}
+      <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{
-          position: "absolute", width: "200px", height: "200px", borderRadius: "50%",
-          border: "3px solid rgba(0, 242, 254, 0.6)",
+          position: "absolute", width: "210px", height: "210px", borderRadius: "50%",
+          border: "3px solid rgba(0, 242, 254, 0.6)", boxShadow: "0 0 40px rgba(0, 242, 254, 0.4)",
           animation: "ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite"
         }} />
-        <div style={{
-          position: "absolute", width: "250px", height: "250px", borderRadius: "50%",
-          border: "2px solid rgba(168, 85, 247, 0.4)",
-          animation: "ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite"
-        }} />
-
         <img
           src={session.callerAvatar}
           alt={session.callerName}
           style={{
-            width: "140px", height: "140px", borderRadius: "50%", objectFit: "cover",
+            width: "160px", height: "160px", borderRadius: "50%", objectFit: "cover",
             border: "4px solid #00f2fe", boxShadow: "0 0 50px rgba(0, 242, 254, 0.5)",
             zIndex: 2
           }}
         />
       </div>
 
-      {/* Action Buttons: Accept & Decline */}
-      <div style={{ display: "flex", alignItems: "center", gap: "40px" }}>
+      {/* Action Buttons: Accept / Decline */}
+      <div style={{ display: "flex", alignItems: "center", gap: "40px", zIndex: 2 }}>
         {/* Decline Button */}
         <button
           onClick={onDecline}
@@ -136,7 +158,7 @@ export function IncomingCallModal({ session, onAccept, onDecline }: IncomingCall
 
         {/* Accept Button */}
         <button
-          onClick={onAccept}
+          onClick={handleAcceptClick}
           style={{
             width: "76px", height: "76px", borderRadius: "50%",
             background: "linear-gradient(135deg, #10b981, #059669)",
