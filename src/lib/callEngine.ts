@@ -19,10 +19,15 @@ export interface CallSessionData {
   updatedAt: number;
 }
 
-// In-memory active call state store
+// In-memory active call state store (Attached to globalThis for Next.js API route singleton persistence)
+const globalForCalls = globalThis as unknown as {
+  callSessionsMap?: Map<string, CallSessionData>;
+  userSessionMap?: Map<string, string>;
+};
+
 export const CALL_STATE_STORE = {
-  sessions: new Map<string, CallSessionData>(),
-  userSessionMap: new Map<string, string>()
+  sessions: globalForCalls.callSessionsMap || (globalForCalls.callSessionsMap = new Map<string, CallSessionData>()),
+  userSessionMap: globalForCalls.userSessionMap || (globalForCalls.userSessionMap = new Map<string, string>())
 };
 
 // --- Continuous HD Ringtone Audio Synthesizer Engine ---

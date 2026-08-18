@@ -15,26 +15,38 @@ export async function POST(req: NextRequest) {
     }
 
     const currentUserId = String(userPayload.userId);
-    const currentUsername = typeof userPayload.username === "string" ? userPayload.username : "";
+    const currentUsername = typeof userPayload.username === "string" ? userPayload.username.replace("@", "") : "";
     const body = await req.json();
     const { action, toUserId, callType, callerName, callerAvatar, sdp, candidate } = body;
 
     if (!action) return NextResponse.json({ error: "Missing action" }, { status: 400 });
 
-    let existingSessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
+    let existingSessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || 
+                           (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
     let session = existingSessionId ? CALL_STATE_STORE.sessions.get(existingSessionId) : undefined;
 
     if (action === "OFFER") {
       if (!toUserId) return NextResponse.json({ error: "Target required" }, { status: 400 });
 
+      const rawTarget = String(toUserId);
+      const cleanTarget = rawTarget.replace("@", "").trim();
+
       // Universal Recipient Lookup in Prisma DB
       const targetUser = await prisma.user.findFirst({
-        where: { OR: [{ id: String(toUserId) }, { username: String(toUserId) }, { email: String(toUserId) }] },
+        where: { 
+          OR: [
+            { id: rawTarget },
+            { id: cleanTarget },
+            { username: cleanTarget },
+            { username: rawTarget },
+            { email: cleanTarget }
+          ] 
+        },
         select: { id: true, username: true, name: true, avatar: true }
       });
 
-      const targetGuid = targetUser?.id || String(toUserId);
-      const targetUsername = targetUser?.username || String(toUserId);
+      const targetGuid = targetUser?.id || cleanTarget;
+      const targetUsername = targetUser?.username ? targetUser.username.replace("@", "") : cleanTarget;
 
       const sessionId = `call_${currentUserId}_${targetGuid}_${Date.now()}`;
       const newSession: CallSessionData = {
@@ -56,8 +68,8 @@ export async function POST(req: NextRequest) {
 
       CALL_STATE_STORE.sessions.set(sessionId, newSession);
 
-      // Map ALL potential keys (GUID, username, raw target string) to session
-      [currentUserId, currentUsername, targetGuid, targetUsername, String(toUserId)].forEach(k => {
+      // Map ALL potential keys (GUID, username with/without @, raw target string) to session
+      [currentUserId, currentUsername, targetGuid, targetUsername, rawTarget, cleanTarget].forEach(k => {
         if (k) CALL_STATE_STORE.userSessionMap.set(k, sessionId);
       });
 
@@ -127,7 +139,7 @@ export async function GET(req: NextRequest) {
     }
 
     const currentUserId = String(userPayload.userId);
-    const currentUsername = typeof userPayload.username === "string" ? userPayload.username : "";
+    const currentUsername = typeof userPayload.username === "string" ? userPayload.username.replace("@", "") : "";
 
     // 1. First check direct map
     let sessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
@@ -135,12 +147,22 @@ export async function GET(req: NextRequest) {
 
     // 2. Universal Scan: If direct map was missing, scan active sessions for recipient match!
     if (!session) {
-      for (const sess of Array.from(CALL_STATE_STORE.sessions.values())) {
-        const isRecipientMatch = sess.recipientId === currentUserId || 
-                                sess.recipientName === currentUsername || 
-                                sess.recipientId === currentUsername ||
-                                (currentUsername && sess.recipientName?.toLowerCase() === currentUsername.toLowerCase());
-        const isCallerMatch = sess.callerId === currentUserId || sess.callerName === currentUsername;
+      const allSessions = Array.from(CALL_STATE_STORE.sessions.values());
+      for (const sess of allSessions) {
+        const cleanRecipientName = sess.recipientName?.replace("@", "").toLowerCase();
+        const cleanRecipientId = sess.recipientId?.replace("@", "").toLowerCase();
+        const cleanCurrentUsername = currentUsername.toLowerCase();
+        const cleanCurrentUserId = currentUserId.toLowerCase();
+
+        const isRecipientMatch = 
+          cleanRecipientId === cleanCurrentUserId ||
+          cleanRecipientId === cleanCurrentUsername ||
+          cleanRecipientName === cleanCurrentUsername ||
+          cleanRecipientName === cleanCurrentUserId;
+
+        const isCallerMatch = 
+          sess.callerId === currentUserId || 
+          sess.callerName?.replace("@", "").toLowerCase() === cleanCurrentUsername;
 
         if (isRecipientMatch || isCallerMatch) {
           session = sess;
