@@ -3,7 +3,7 @@ import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CALL_STATE_STORE, CallSessionData } from "@/lib/callEngine";
 
-// POST /api/calls/signal - High-Speed 0ms Call Signaling Router
+// POST /api/calls/signal - Universal Sub-100ms Call Signaling Router
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -27,8 +27,9 @@ export async function POST(req: NextRequest) {
     if (action === "OFFER") {
       if (!toUserId) return NextResponse.json({ error: "Target required" }, { status: 400 });
 
+      // Universal Recipient Lookup in Prisma DB
       const targetUser = await prisma.user.findFirst({
-        where: { OR: [{ id: String(toUserId) }, { username: String(toUserId) }] },
+        where: { OR: [{ id: String(toUserId) }, { username: String(toUserId) }, { email: String(toUserId) }] },
         select: { id: true, username: true, name: true, avatar: true }
       });
 
@@ -54,7 +55,9 @@ export async function POST(req: NextRequest) {
       if (sdp) newSession.sdpOffer = sdp;
 
       CALL_STATE_STORE.sessions.set(sessionId, newSession);
-      [currentUserId, currentUsername, targetGuid, targetUsername].forEach(k => {
+
+      // Map ALL potential keys (GUID, username, raw target string) to session
+      [currentUserId, currentUsername, targetGuid, targetUsername, String(toUserId)].forEach(k => {
         if (k) CALL_STATE_STORE.userSessionMap.set(k, sessionId);
       });
 
@@ -112,7 +115,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/calls/signal - High-Frequency Poll
+// GET /api/calls/signal - Universal Sub-100ms Recipient Polling
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -126,8 +129,27 @@ export async function GET(req: NextRequest) {
     const currentUserId = String(userPayload.userId);
     const currentUsername = typeof userPayload.username === "string" ? userPayload.username : "";
 
-    const sessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
-    const session = sessionId ? CALL_STATE_STORE.sessions.get(sessionId) || null : null;
+    // 1. First check direct map
+    let sessionId = CALL_STATE_STORE.userSessionMap.get(currentUserId) || (currentUsername ? CALL_STATE_STORE.userSessionMap.get(currentUsername) : undefined);
+    let session = sessionId ? CALL_STATE_STORE.sessions.get(sessionId) || null : null;
+
+    // 2. Universal Scan: If direct map was missing, scan active sessions for recipient match!
+    if (!session) {
+      for (const sess of Array.from(CALL_STATE_STORE.sessions.values())) {
+        const isRecipientMatch = sess.recipientId === currentUserId || 
+                                sess.recipientName === currentUsername || 
+                                sess.recipientId === currentUsername ||
+                                (currentUsername && sess.recipientName?.toLowerCase() === currentUsername.toLowerCase());
+        const isCallerMatch = sess.callerId === currentUserId || sess.callerName === currentUsername;
+
+        if (isRecipientMatch || isCallerMatch) {
+          session = sess;
+          CALL_STATE_STORE.userSessionMap.set(currentUserId, sess.sessionId);
+          if (currentUsername) CALL_STATE_STORE.userSessionMap.set(currentUsername, sess.sessionId);
+          break;
+        }
+      }
+    }
 
     if (session && Date.now() - session.updatedAt > 60000) {
       CALL_STATE_STORE.sessions.delete(session.sessionId);

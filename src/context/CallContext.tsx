@@ -1,7 +1,10 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
-import { CallSessionData, stopAllRingtones, getOrCreateAudioContext } from "@/lib/callEngine";
+import { 
+  CallSessionData, stopAllRingtones, getOrCreateAudioContext, 
+  triggerDeviceVibration, triggerSystemNotification 
+} from "@/lib/callEngine";
 import { CallOverlay } from "@/components/calls/CallOverlay";
 
 interface CallContextType {
@@ -23,8 +26,9 @@ export const useCall = () => useContext(CallContext);
 export function CallProvider({ children, currentUserId }: { children: React.ReactNode; currentUserId?: string }) {
   const [activeSession, setActiveSession] = useState<CallSessionData | null>(null);
   const callStartedTimeRef = useRef<number>(0);
+  const notifiedSessionIdRef = useRef<string | null>(null);
 
-  // Poll call signaling status every 150ms (with 5s grace period for instant call initiation)
+  // Poll call signaling status at 100ms ultra-high speed for instant sub-100ms call delivery
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -32,30 +36,43 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
         if (res.ok) {
           const data = await res.json();
           const sess: CallSessionData | null = data.session || null;
+
           if (sess) {
             if (sess.status === "REJECTED" || sess.status === "ENDED") {
               setActiveSession(null);
               stopAllRingtones();
+              notifiedSessionIdRef.current = null;
             } else {
               setActiveSession(sess);
+
+              // Trigger WhatsApp-style device vibration & system notification for recipient
+              const isRecipient = sess.status === "RINGING" && currentUserId && (
+                sess.recipientId === currentUserId || sess.recipientName === currentUserId
+              );
+
+              if (isRecipient && notifiedSessionIdRef.current !== sess.sessionId) {
+                notifiedSessionIdRef.current = sess.sessionId;
+                triggerDeviceVibration();
+                triggerSystemNotification(sess.callerName, sess.callType);
+              }
             }
           } else if (Date.now() - callStartedTimeRef.current > 5000) {
             setActiveSession(null);
             stopAllRingtones();
+            notifiedSessionIdRef.current = null;
           }
         }
       } catch (e) {}
-    }, 150);
+    }, 100);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [currentUserId]);
 
   const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice", targetName?: string, targetAvatar?: string) => {
     try {
       getOrCreateAudioContext();
       callStartedTimeRef.current = Date.now();
 
-      // Instant 0ms optimistic session setup so CallOverlay opens IMMEDIATELY
       const displayName = targetName || targetUserId;
       const displayAvatar = targetAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=a855f7&color=ffffff`;
 
@@ -95,6 +112,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
   const acceptCall = async () => {
     try {
       getOrCreateAudioContext();
+      stopAllRingtones();
       const res = await fetch("/api/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -114,6 +132,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       stopAllRingtones();
       setActiveSession(null);
       callStartedTimeRef.current = 0;
+      notifiedSessionIdRef.current = null;
       await fetch("/api/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

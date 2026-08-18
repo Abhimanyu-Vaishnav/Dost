@@ -1,4 +1,4 @@
-// Complete Ground-Up WebRTC Call Engine & HD Audio Synthesizer
+// Complete Ground-Up WebRTC Call Engine & Continuous HD Audio Synthesizer
 
 export type CallState = "IDLE" | "OUTGOING_RINGING" | "INCOMING_RINGING" | "CONNECTED" | "DECLINED" | "ENDED";
 
@@ -25,10 +25,12 @@ export const CALL_STATE_STORE = {
   userSessionMap: new Map<string, string>()
 };
 
-// --- HD Ringtone Audio Synthesizer Engine ---
+// --- Continuous HD Ringtone Audio Synthesizer Engine ---
 let activeAudioContext: AudioContext | null = null;
-let outgoingInterval: any = null;
-let incomingInterval: any = null;
+let activeToneOsc1: OscillatorNode | null = null;
+let activeToneOsc2: OscillatorNode | null = null;
+let activeGainNode: GainNode | null = null;
+let vibrationInterval: any = null;
 
 export function getOrCreateAudioContext(): AudioContext | null {
   try {
@@ -47,94 +49,160 @@ export function getOrCreateAudioContext(): AudioContext | null {
   }
 }
 
-// Play Outgoing Ringback Tone ("tuuuun... tuuuun...") for Caller
+// Play Continuous Outgoing Ringback Tone ("tuuuun... tuuuun...") for Caller
 export function startOutgoingRingbackSound() {
   stopAllRingtones();
   if (typeof window === "undefined") return;
 
-  const playTone = () => {
-    try {
-      const ctx = getOrCreateAudioContext();
-      if (!ctx) return;
-      const now = ctx.currentTime;
+  try {
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
 
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const gain = ctx.createGain();
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
 
-      osc1.type = "sine";
-      osc2.type = "sine";
-      osc1.frequency.setValueAtTime(440, now); // 440Hz Standard Dial Tone
-      osc2.frequency.setValueAtTime(480, now); // 480Hz Harmonic Dual Tone
+    osc1.type = "sine";
+    osc2.type = "sine";
+    osc1.frequency.setValueAtTime(440, ctx.currentTime);
+    osc2.frequency.setValueAtTime(480, ctx.currentTime);
 
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.setValueAtTime(0.12, now + 1.8);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.0);
+    // Continuous 2s on, 1.5s subtle modulation cycle without full silence gaps
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    
+    // LFO gain modulation for continuous tone loop
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.frequency.setValueAtTime(0.25, ctx.currentTime); // 4-second cycle
+    lfoGain.gain.setValueAtTime(0.08, ctx.currentTime);
 
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(ctx.destination);
+    lfo.connect(lfoGain);
+    lfoGain.connect(gain.gain);
+    lfo.start();
 
-      osc1.start(now);
-      osc2.start(now);
-      osc1.stop(now + 2.0);
-      osc2.stop(now + 2.0);
-    } catch (e) {}
-  };
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
 
-  playTone();
-  outgoingInterval = setInterval(playTone, 3500);
+    osc1.start();
+    osc2.start();
+
+    activeToneOsc1 = osc1;
+    activeToneOsc2 = osc2;
+    activeGainNode = gain;
+  } catch (e) {}
 }
 
-// Play Incoming Caller Tune ("trrrring... trrrring...") for Recipient
+// Play Continuous Incoming Caller Tune ("trrrring... trrrring...") & Trigger Device Vibration
 export function startIncomingCallerTuneSound() {
   stopAllRingtones();
   if (typeof window === "undefined") return;
 
-  const playChime = () => {
+  try {
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = "sine";
+    osc2.type = "triangle";
+
+    osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+    osc2.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.frequency.setValueAtTime(0.4, ctx.currentTime);
+    lfoGain.gain.setValueAtTime(0.12, ctx.currentTime);
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(gain.gain);
+    lfo.start();
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start();
+    osc2.start();
+
+    activeToneOsc1 = osc1;
+    activeToneOsc2 = osc2;
+    activeGainNode = gain;
+
+    // Trigger Physical Device Haptic Vibration (WhatsApp style call pulse)
+    triggerDeviceVibration();
+  } catch (e) {}
+}
+
+// Trigger WhatsApp-Style Device Vibration
+export function triggerDeviceVibration() {
+  if (typeof window === "undefined" || !("vibrate" in navigator)) return;
+
+  const doVibrate = () => {
     try {
-      const ctx = getOrCreateAudioContext();
-      if (!ctx) return;
-      const now = ctx.currentTime;
-
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc1.type = "sine";
-      osc2.type = "triangle";
-
-      osc1.frequency.setValueAtTime(523.25, now); // C5 Note
-      osc1.frequency.exponentialRampToValueAtTime(659.25, now + 0.3); // E5 Note
-      osc2.frequency.setValueAtTime(659.25, now + 0.3);
-      osc2.frequency.exponentialRampToValueAtTime(783.99, now + 0.8); // G5 Note
-
-      gain.gain.setValueAtTime(0.25, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
-
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc1.start(now);
-      osc2.start(now + 0.3);
-      osc1.stop(now + 1.4);
-      osc2.stop(now + 1.4);
+      navigator.vibrate([600, 300, 600, 300, 600]);
     } catch (e) {}
   };
 
-  playChime();
-  incomingInterval = setInterval(playChime, 2200);
+  doVibrate();
+  if (!vibrationInterval) {
+    vibrationInterval = setInterval(doVibrate, 2500);
+  }
 }
 
-// Stop All Ringtone Sounds
+// Trigger Browser Native System Notification
+export function triggerSystemNotification(callerName: string, callType: string = "voice") {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+
+  try {
+    if (Notification.permission === "granted") {
+      new Notification(`📞 Incoming ${callType === "voice" ? "Voice" : "Video"} Call`, {
+        body: `${callerName} is calling you live. Tap to answer!`,
+        icon: `https://ui-avatars.com/api/?name=${encodeURIComponent(callerName)}&background=00f2fe&color=ffffff`,
+        requireInteraction: true
+      });
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          new Notification(`📞 Incoming ${callType === "voice" ? "Voice" : "Video"} Call`, {
+            body: `${callerName} is calling you live. Tap to answer!`,
+            icon: `https://ui-avatars.com/api/?name=${encodeURIComponent(callerName)}&background=00f2fe&color=ffffff`,
+            requireInteraction: true
+          });
+        }
+      });
+    }
+  } catch (e) {}
+}
+
+// Stop All Ringtone Sounds & Vibration
 export function stopAllRingtones() {
-  if (outgoingInterval) {
-    clearInterval(outgoingInterval);
-    outgoingInterval = null;
-  }
-  if (incomingInterval) {
-    clearInterval(incomingInterval);
-    incomingInterval = null;
-  }
+  try {
+    if (activeToneOsc1) {
+      activeToneOsc1.stop();
+      activeToneOsc1.disconnect();
+      activeToneOsc1 = null;
+    }
+    if (activeToneOsc2) {
+      activeToneOsc2.stop();
+      activeToneOsc2.disconnect();
+      activeToneOsc2 = null;
+    }
+    if (activeGainNode) {
+      activeGainNode.disconnect();
+      activeGainNode = null;
+    }
+    if (vibrationInterval) {
+      clearInterval(vibrationInterval);
+      vibrationInterval = null;
+    }
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(0); // Stop physical vibration
+    }
+  } catch (e) {}
 }
