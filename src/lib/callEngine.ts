@@ -1,4 +1,4 @@
-// Complete Ground-Up WebRTC Call Engine & Robust HD Audio Synthesizer
+// Complete Production WebRTC Call Engine & Mobile Audio Synthesizer
 
 export type CallState = "IDLE" | "OUTGOING_RINGING" | "INCOMING_RINGING" | "CONNECTED" | "DECLINED" | "ENDED";
 
@@ -19,7 +19,7 @@ export interface CallSessionData {
   updatedAt: number;
 }
 
-// In-memory active call state store (Attached to globalThis for Next.js API route singleton persistence)
+// In-memory active call state store (Attached to globalThis for Next.js singleton persistence)
 const globalForCalls = globalThis as unknown as {
   callSessionsMap?: Map<string, CallSessionData>;
   userSessionMap?: Map<string, string>;
@@ -31,11 +31,10 @@ export const CALL_STATE_STORE = {
   userSessionMap: globalForCalls.userSessionMap || (globalForCalls.userSessionMap = new Map<string, string>())
 };
 
-// Global SSE Connections Registry for Instant <50ms Ringing
+// Global SSE Connections Registry for Sub-50ms Instant Ringing
 export const SSE_CONTROLLERS = globalForCalls.sseControllers || 
   (globalForCalls.sseControllers = new Map<string, ReadableStreamDefaultController>());
 
-// Helper to push real-time event to a specific user's SSE stream in < 5ms
 export function pushSSEEventToUser(userIdOrName?: string | null, data?: any) {
   if (!userIdOrName) return false;
   const key = String(userIdOrName).toLowerCase().replace("@", "").trim();
@@ -52,7 +51,7 @@ export function pushSSEEventToUser(userIdOrName?: string | null, data?: any) {
   return false;
 }
 
-// --- HD Ringtone Audio Synthesizer Engine ---
+// --- HD Ringtone & Web Audio Synthesizer ---
 let activeAudioContext: AudioContext | null = null;
 let activeToneOsc1: OscillatorNode | null = null;
 let activeToneOsc2: OscillatorNode | null = null;
@@ -76,7 +75,18 @@ export function getOrCreateAudioContext(): AudioContext | null {
   }
 }
 
-// Claim System Audio Session (Pauses background Spotify, YouTube, Videos, etc.)
+// Global Touch Listener to unlock AudioContext on mobile Chrome / Safari
+if (typeof window !== "undefined") {
+  const unlockCtx = () => {
+    if (activeAudioContext && activeAudioContext.state === "suspended") {
+      activeAudioContext.resume().catch(() => {});
+    }
+  };
+  window.addEventListener("click", unlockCtx, { capture: true });
+  window.addEventListener("touchstart", unlockCtx, { capture: true });
+  window.addEventListener("touchend", unlockCtx, { capture: true });
+}
+
 export function claimSystemAudioSession(callerName: string, callType: string) {
   try {
     if (typeof window !== "undefined" && "mediaSession" in navigator) {
@@ -99,7 +109,6 @@ export function releaseSystemAudioSession() {
   } catch (e) {}
 }
 
-// Start Incoming Phone Caller Tune Sound
 export function startIncomingCallerTuneSound() {
   stopAllRingtones();
   const ctx = getOrCreateAudioContext();
@@ -132,7 +141,6 @@ export function startIncomingCallerTuneSound() {
   } catch (e) {}
 }
 
-// Start Outgoing Phone Ringback Sound
 export function startOutgoingRingbackSound() {
   stopAllRingtones();
   const ctx = getOrCreateAudioContext();
@@ -165,7 +173,6 @@ export function startOutgoingRingbackSound() {
   } catch (e) {}
 }
 
-// Stop All Ringtone Sounds
 export function stopAllRingtones() {
   try {
     if (activeToneOsc1) { activeToneOsc1.stop(); activeToneOsc1.disconnect(); activeToneOsc1 = null; }
@@ -178,7 +185,6 @@ export function stopAllRingtones() {
   } catch (e) {}
 }
 
-// Trigger Phone Vibration pattern
 export function triggerDeviceVibration() {
   try {
     if (typeof window !== "undefined" && navigator.vibrate) {
@@ -187,7 +193,6 @@ export function triggerDeviceVibration() {
   } catch (e) {}
 }
 
-// Trigger System Native Notification
 export function triggerSystemNotification(callerName: string, callType: string) {
   try {
     if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {

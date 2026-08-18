@@ -91,8 +91,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             const source = ctx.createMediaStreamSource(audioStream);
             const gainNode = ctx.createGain();
             
-            // 4.0x Gain Boost for Loudspeaker, 0.2x for Earpiece
-            gainNode.gain.value = isSpeakerOn ? 4.0 : 0.2;
+            // 5.0x Gain Boost for Loudspeaker, 0.2x for Earpiece
+            gainNode.gain.value = isSpeakerOn ? 5.0 : 0.2;
 
             source.connect(gainNode);
             gainNode.connect(ctx.destination);
@@ -518,14 +518,14 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         )}
       </div>
 
-      {/* Bottom Control Bar */}
+      {/* Bottom Control Bar with ALL 6 FEATURES VISIBLE & FUNCTIONAL */}
       <div style={{
-        display: "flex", alignItems: "center", gap: "20px",
-        background: "rgba(255, 255, 255, 0.14)", padding: "14px 28px",
+        display: "flex", alignItems: "center", gap: "16px",
+        background: "rgba(255, 255, 255, 0.14)", padding: "14px 24px",
         borderRadius: "9999px", border: "1px solid rgba(255, 255, 255, 0.25)",
         backdropFilter: "blur(24px)", boxShadow: "0 10px 40px rgba(0,0,0,0.5)", zIndex: 2
       }}>
-        {/* Recipient Ringing Controls (MUST REQUIRE MANUAL TAP TO ACCEPT) */}
+        {/* Recipient Ringing Controls (MANUAL TAP TO ACCEPT REQUIRED) */}
         {isRecipient && isRinging ? (
           <>
             <button
@@ -560,11 +560,11 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           </>
         ) : (
           <>
-            {/* Mute Mic */}
+            {/* 1. Mute Mic */}
             <button
               onClick={handleToggleMute}
               style={{
-                width: "52px", height: "52px", borderRadius: "50%",
+                width: "48px", height: "48px", borderRadius: "50%",
                 background: isMuted ? "#ef4444" : "rgba(255, 255, 255, 0.2)",
                 border: "none", color: "white", display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: "pointer", transition: "all 0.2s ease"
@@ -572,65 +572,76 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               className="hover:scale-105 active:scale-95"
               title={isMuted ? "Unmute Mic" : "Mute Mic"}
             >
-              {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
+              {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
             </button>
 
-            {/* Loudspeaker / Earpiece Toggle Button */}
+            {/* 2. Loudspeaker / Earpiece Toggle Button */}
             <button
               onClick={handleToggleSpeaker}
               style={{
-                width: "52px", height: "52px", borderRadius: "50%",
+                width: "48px", height: "48px", borderRadius: "50%",
                 background: isSpeakerOn ? "rgba(0, 242, 254, 0.3)" : "rgba(255, 255, 255, 0.2)",
                 border: "none", color: isSpeakerOn ? "#00f2fe" : "white",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: "pointer", transition: "all 0.2s ease"
               }}
               className="hover:scale-105 active:scale-95"
-              title={isSpeakerOn ? "Loudspeaker Mode (Main Bottom Speaker)" : "Earpiece Mode (Top Receiver)"}
+              title={isSpeakerOn ? "Loudspeaker Mode (Main Speaker)" : "Earpiece Mode (Top Receiver)"}
             >
-              {isSpeakerOn ? <Volume2 size={22} /> : <Headphones size={22} />}
+              {isSpeakerOn ? <Volume2 size={20} /> : <Headphones size={20} />}
             </button>
 
-            {/* Video Toggle */}
-            {session.callType === "video" && (
-              <>
-                <button
-                  onClick={handleToggleVideo}
-                  style={{
-                    width: "52px", height: "52px", borderRadius: "50%",
-                    background: isVideoEnabled ? "rgba(168, 85, 247, 0.3)" : "rgba(255, 255, 255, 0.2)",
-                    border: "none", color: isVideoEnabled ? "#a855f7" : "white",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer", transition: "all 0.2s ease"
-                  }}
-                  className="hover:scale-105 active:scale-95"
-                  title={isVideoEnabled ? "Turn Video Off" : "Turn Video On"}
-                >
-                  {isVideoEnabled ? <Video size={22} /> : <VideoOff size={22} />}
-                </button>
+            {/* 3. Video Toggle */}
+            <button
+              onClick={handleToggleVideo}
+              style={{
+                width: "48px", height: "48px", borderRadius: "50%",
+                background: isVideoEnabled ? "rgba(168, 85, 247, 0.3)" : "rgba(255, 255, 255, 0.2)",
+                border: "none", color: isVideoEnabled ? "#a855f7" : "white",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", transition: "all 0.2s ease"
+              }}
+              className="hover:scale-105 active:scale-95"
+              title={isVideoEnabled ? "Turn Video Off" : "Turn Video On"}
+            >
+              {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
+            </button>
 
-                {/* Flip Camera Button */}
-                <button
-                  onClick={handleFlipCamera}
-                  style={{
-                    width: "52px", height: "52px", borderRadius: "50%",
-                    background: "rgba(255, 255, 255, 0.2)", border: "none", color: "white",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer", transition: "all 0.2s ease"
-                  }}
-                  className="hover:scale-105 active:scale-95"
-                  title="Flip Camera (Front / Back)"
-                >
-                  <RefreshCw size={22} />
-                </button>
-              </>
-            )}
+            {/* 4. Flip Camera Button (Front / Rear) */}
+            <button
+              onClick={handleFlipCamera}
+              style={{
+                width: "48px", height: "48px", borderRadius: "50%",
+                background: "rgba(255, 255, 255, 0.2)", border: "none", color: "white",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", transition: "all 0.2s ease"
+              }}
+              className="hover:scale-105 active:scale-95"
+              title="Flip Camera (Front / Back)"
+            >
+              <RefreshCw size={20} />
+            </button>
 
-            {/* End Call */}
+            {/* 5. Minimize to Floating Pill Button */}
+            <button
+              onClick={() => setIsMinimized(true)}
+              style={{
+                width: "48px", height: "48px", borderRadius: "50%",
+                background: "rgba(255, 255, 255, 0.2)", border: "none", color: "white",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", transition: "all 0.2s ease"
+              }}
+              className="hover:scale-105 active:scale-95"
+              title="Minimize to Floating Pill"
+            >
+              <Minimize2 size={20} />
+            </button>
+
+            {/* 6. End Call Button */}
             <button
               onClick={onEndCall}
               style={{
-                width: "56px", height: "56px", borderRadius: "50%",
+                width: "52px", height: "52px", borderRadius: "50%",
                 background: "#ef4444", border: "none", color: "white",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: "pointer", boxShadow: "0 0 25px rgba(239, 68, 68, 0.7)"
@@ -638,7 +649,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               className="hover:scale-110 active:scale-95 transition-all"
               title="End Call"
             >
-              <PhoneOff size={26} />
+              <PhoneOff size={24} />
             </button>
           </>
         )}
