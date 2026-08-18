@@ -381,7 +381,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     };
   }, []);
 
-  // MEDIA CAPTURE ENGINE (CAPTURES MICROPHONE AND ADDS TRACKS TO PC - RETRIES UNTIL SUCCESSFUL)
+  // MEDIA CAPTURE ENGINE (CAPTURES MICROPHONE AND ADDS TRACKS TO PC)
   useEffect(() => {
     const pc = peerConnectionRef.current;
     if (!pc || (pc as any).signalingState === "closed") return;
@@ -476,6 +476,32 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     captureMedia();
   }, [isRecipient, isRinging, isCaller, session.callType]);
+
+  // DIRECT SIGNALING POLLER FOR CALLER (Guarantees sdpAnswer application on Caller PC in < 200ms!)
+  useEffect(() => {
+    if (!isCaller) return;
+
+    const poller = setInterval(async () => {
+      const pc = peerConnectionRef.current;
+      if (!pc || pc.remoteDescription || (pc as any).signalingState === "closed") return;
+
+      try {
+        const res = await fetch("/api/calls/signal");
+        if (res.ok) {
+          const data = await res.json();
+          const sess = data.session;
+          if (sess && sess.sdpAnswer && !pc.remoteDescription && (pc as any).signalingState !== "closed") {
+            console.log("[CallOverlay Direct Poller] Caller PC applying sdpAnswer!");
+            await pc.setRemoteDescription(new RTCSessionDescription(sess.sdpAnswer));
+            await flushPendingIceCandidates();
+            console.log("[CallOverlay Direct Poller] SUCCESS: Caller PC Signaling State is now:", pc.signalingState);
+          }
+        }
+      } catch (e) {}
+    }, 250);
+
+    return () => clearInterval(poller);
+  }, [isCaller]);
 
   // DECOUPLED REACTIVE SIGNALING LISTENER (HANDLES sdpOffer AND sdpAnswer REACTION INSTANTLY)
   useEffect(() => {

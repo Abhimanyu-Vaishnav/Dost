@@ -98,7 +98,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       };
     } catch (e) {}
 
-    // Rapid Polling Fallback every 400ms (Guarantees state sync across Cloudflare Tunnel)
+    // Rapid Polling Fallback every 300ms
     const interval = setInterval(async () => {
       try {
         const res = await fetch("/api/calls/signal");
@@ -117,8 +117,8 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
                 if (
                   !prev ||
                   prev.status !== sess.status ||
-                  prev.sdpAnswer !== sess.sdpAnswer ||
-                  prev.sdpOffer !== sess.sdpOffer ||
+                  JSON.stringify(prev.sdpAnswer) !== JSON.stringify(sess.sdpAnswer) ||
+                  JSON.stringify(prev.sdpOffer) !== JSON.stringify(sess.sdpOffer) ||
                   (sess.callerCandidates?.length || 0) !== (prev.callerCandidates?.length || 0) ||
                   (sess.recipientCandidates?.length || 0) !== (prev.recipientCandidates?.length || 0)
                 ) {
@@ -129,10 +129,9 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               });
             }
           }
-          // DO NOT WIPE OUT activeSession ON TRANSIENT NULL POLING RESPONSES!
         }
       } catch (e) {}
-    }, 400);
+    }, 300);
 
     return () => {
       if (eventSource) eventSource.close();
