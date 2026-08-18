@@ -32,8 +32,7 @@ export default function Home() {
   const { theme, setTheme, accentColor, setAccentColor } = useTheme();
 
   // Auth Form State
-  const [authMode, setAuthMode] = useState<"login" | "register">("register");
-  const [registerStep, setRegisterStep] = useState(1);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -46,17 +45,6 @@ export default function Home() {
   // Sample Poll Option Selected State for interactive preview
   const [pollVotedOption, setPollVotedOption] = useState<number | null>(0);
 
-  const handleNextStep = () => {
-    if (email && password.length >= 6) {
-      setError("");
-      setRegisterStep(2);
-    } else if (password.length < 6) {
-      setError("Password must be at least 6 characters long");
-    } else {
-      setError("Please fill in all fields");
-    }
-  };
-
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -64,7 +52,7 @@ export default function Home() {
 
     try {
       const endpoint = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
-      const payload = authMode === "login" ? { email, password } : { email, password, name };
+      const payload = authMode === "login" ? { email, password } : { email, password, name: name || email.split("@")[0] };
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -91,9 +79,6 @@ export default function Home() {
       router.refresh();
     } catch (err: any) {
       setError(err.message);
-      if (authMode === "register") {
-        setRegisterStep(1);
-      }
     } finally {
       setIsLoading(false);
     }
@@ -101,12 +86,12 @@ export default function Home() {
 
   const scrollToAuth = (mode: "login" | "register") => {
     setAuthMode(mode);
-    if (mode === "register") setRegisterStep(1);
     setError("");
     const el = document.getElementById("auth-card");
     if (el) {
       try {
-        el.scrollIntoView({ behavior: "smooth" });
+        const topPos = el.getBoundingClientRect().top + window.pageYOffset - 20;
+        window.scrollTo({ top: topPos, behavior: "smooth" });
       } catch (e) {
         el.scrollIntoView();
       }
@@ -399,17 +384,6 @@ export default function Home() {
             <div className={styles.authTabs}>
               <button
                 type="button"
-                className={`${styles.tabBtn} ${authMode === "register" ? styles.activeTab : ""}`}
-                onClick={() => {
-                  setAuthMode("register");
-                  setRegisterStep(1);
-                  setError("");
-                }}
-              >
-                Create Account
-              </button>
-              <button
-                type="button"
                 className={`${styles.tabBtn} ${authMode === "login" ? styles.activeTab : ""}`}
                 onClick={() => {
                   setAuthMode("login");
@@ -418,22 +392,26 @@ export default function Home() {
               >
                 Sign In
               </button>
+              <button
+                type="button"
+                className={`${styles.tabBtn} ${authMode === "register" ? styles.activeTab : ""}`}
+                onClick={() => {
+                  setAuthMode("register");
+                  setError("");
+                }}
+              >
+                Create Account
+              </button>
             </div>
 
             <div className={styles.authFormWrapper}>
               <h2 className={styles.authTitle}>
-                {authMode === "register"
-                  ? registerStep === 1
-                    ? "Join DOST Today"
-                    : "Tell us your name"
-                  : "Welcome Back"}
+                {authMode === "login" ? "Welcome Back" : "Join DOST Today"}
               </h2>
               <p className={styles.authSubtitle}>
-                {authMode === "register"
-                  ? registerStep === 1
-                    ? "Get started with your free social account."
-                    : "Enter your full display name."
-                  : "Access your feed, stories & messages."}
+                {authMode === "login"
+                  ? "Access your feed, stories & messages."
+                  : "Get started with your free social account."}
               </p>
 
               {error && (
@@ -443,7 +421,7 @@ export default function Home() {
               )}
 
               <form onSubmit={handleAuthSubmit} className={styles.formElement}>
-                {authMode === "register" && registerStep === 2 ? (
+                {authMode === "register" && (
                   <div className={styles.inputField}>
                     <label htmlFor="name">Full Name</label>
                     <div className={styles.inputWrapper}>
@@ -451,7 +429,7 @@ export default function Home() {
                       <input
                         id="name"
                         type="text"
-                        placeholder="John Doe"
+                        placeholder="e.g. John Doe"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         required
@@ -459,71 +437,52 @@ export default function Home() {
                       />
                     </div>
                   </div>
-                ) : (
-                  <>
-                    <div className={styles.inputField}>
-                      <label htmlFor="email">Email Address</label>
-                      <div className={styles.inputWrapper}>
-                        <Mail size={18} className={styles.inputIcon} />
-                        <input
-                          id="email"
-                          type="email"
-                          placeholder="name@example.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          required
-                          className={styles.textInput}
-                        />
-                      </div>
-                    </div>
-
-                    <div className={styles.inputField}>
-                      <label htmlFor="password">Password</label>
-                      <div className={styles.inputWrapper}>
-                        <Lock size={18} className={styles.inputIcon} />
-                        <input
-                          id="password"
-                          type="password"
-                          placeholder="••••••••"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          required
-                          className={styles.textInput}
-                        />
-                      </div>
-                    </div>
-                  </>
                 )}
 
-                {/* Form Action Buttons */}
-                {authMode === "register" && registerStep === 1 ? (
-                  <button
-                    type="button"
-                    onClick={handleNextStep}
-                    disabled={!email || password.length < 6}
-                    className={styles.submitBtn}
-                  >
-                    <span>Continue</span>
-                    <ArrowRight size={18} />
-                  </button>
-                ) : (
-                  <button type="submit" disabled={isLoading} className={styles.submitBtn}>
-                    {isLoading ? (
-                      <Loader2 className={styles.spinner} size={20} />
-                    ) : (
-                      <>
-                        <span>{authMode === "login" ? "Sign In" : "Get Started"}</span>
-                        <ArrowRight size={18} />
-                      </>
-                    )}
-                  </button>
-                )}
+                <div className={styles.inputField}>
+                  <label htmlFor="email">
+                    {authMode === "login" ? "Email or Username" : "Email Address"}
+                  </label>
+                  <div className={styles.inputWrapper}>
+                    <Mail size={18} className={styles.inputIcon} />
+                    <input
+                      id="email"
+                      type={authMode === "login" ? "text" : "email"}
+                      placeholder={authMode === "login" ? "e.g. sumit or sumit@gmail.com" : "name@example.com"}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className={styles.textInput}
+                    />
+                  </div>
+                </div>
 
-                {authMode === "register" && registerStep === 2 && (
-                  <button type="button" onClick={() => setRegisterStep(1)} className={styles.backStepBtn}>
-                    ← Back to step 1
-                  </button>
-                )}
+                <div className={styles.inputField}>
+                  <label htmlFor="password">Password</label>
+                  <div className={styles.inputWrapper}>
+                    <Lock size={18} className={styles.inputIcon} />
+                    <input
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className={styles.textInput}
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" disabled={isLoading} className={styles.submitBtn}>
+                  {isLoading ? (
+                    <Loader2 className={styles.spinner} size={20} />
+                  ) : (
+                    <>
+                      <span>{authMode === "login" ? "Sign In" : "Get Started"}</span>
+                      <ArrowRight size={18} />
+                    </>
+                  )}
+                </button>
 
                 <div className={styles.authToggleFooter}>
                   {authMode === "login" ? (
@@ -533,7 +492,6 @@ export default function Home() {
                         type="button"
                         onClick={() => {
                           setAuthMode("register");
-                          setRegisterStep(1);
                           setError("");
                         }}
                         className={styles.toggleTextLink}

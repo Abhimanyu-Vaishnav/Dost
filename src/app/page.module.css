@@ -1019,6 +1019,7 @@
   }
   .authCol {
     justify-content: center;
+    order: -1;
   }
   .authCard {
     max-width: 100%;
