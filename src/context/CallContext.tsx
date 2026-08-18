@@ -49,7 +49,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       .catch(() => {});
   }, [currentUserId]);
 
-  // Real-Time SSE Listener for Instant Call Signaling Synchronization
+  // Real-Time SSE Listener & Rapid Polling Synchronization
   useEffect(() => {
     let eventSource: EventSource | null = null;
 
@@ -62,6 +62,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
           
           // Handle CALL_TERMINATED Signal (Hangup / Decline)
           if (data.type === "CALL_TERMINATED") {
+            console.log("[CallContext SSE] Call terminated signal received");
             setActiveSession(null);
             stopAllRingtones();
             notifiedSessionIdRef.current = null;
@@ -69,23 +70,16 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
             return;
           }
 
-          // Handle CALL_ACCEPTED Signal
-          if (data.type === "CALL_ACCEPTED" && data.session) {
-            setActiveSession(data.session);
-            stopAllRingtones();
-            return;
-          }
-
-          // Handle CALL_SIGNAL (Offer / SDP / Candidate)
-          if (data.type === "CALL_SIGNAL" && data.session) {
+          // Handle CALL_ACCEPTED or CALL_SIGNAL Signal (ALWAYS UPDATE ACTIVE SESSION!)
+          if ((data.type === "CALL_ACCEPTED" || data.type === "CALL_SIGNAL") && data.session) {
             const sess: CallSessionData = data.session;
+            console.log("[CallContext SSE] Session update received:", data.type, sess.status, "sdpAnswer:", Boolean(sess.sdpAnswer));
 
             if (endedSessionIdsRef.current.has(sess.sessionId) || sess.status === "REJECTED" || sess.status === "ENDED") {
               setActiveSession(null);
               stopAllRingtones();
               notifiedSessionIdRef.current = null;
             } else {
-              // Keep incoming call in RINGING status! Do NOT auto-accept!
               setActiveSession(sess);
 
               // Ringtone & Vibration for Recipient
@@ -104,7 +98,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
       };
     } catch (e) {}
 
-    // Polling fallback every 600ms
+    // Rapid Polling Fallback every 400ms (Guarantees state sync across Cloudflare Tunnel)
     const interval = setInterval(async () => {
       try {
         const res = await fetch("/api/calls/signal");
@@ -117,8 +111,22 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
               setActiveSession(null);
               stopAllRingtones();
               notifiedSessionIdRef.current = null;
-            } else if (!activeSession) {
-              setActiveSession(sess);
+            } else {
+              // ALWAYS UPDATE ACTIVE SESSION IF STATUS, SDP, OR CANDIDATES CHANGED!
+              setActiveSession(prev => {
+                if (
+                  !prev ||
+                  prev.status !== sess.status ||
+                  prev.sdpAnswer !== sess.sdpAnswer ||
+                  prev.sdpOffer !== sess.sdpOffer ||
+                  (sess.callerCandidates?.length || 0) !== (prev.callerCandidates?.length || 0) ||
+                  (sess.recipientCandidates?.length || 0) !== (prev.recipientCandidates?.length || 0)
+                ) {
+                  console.log("[CallContext Polling] Session state changed! Updating activeSession to:", sess.status, "sdpAnswer:", Boolean(sess.sdpAnswer));
+                  return sess;
+                }
+                return prev;
+              });
             }
           } else if (activeSession) {
             setActiveSession(null);
@@ -127,7 +135,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
           }
         }
       } catch (e) {}
-    }, 600);
+    }, 400);
 
     return () => {
       if (eventSource) eventSource.close();
@@ -140,6 +148,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
     let timer: any;
     if (activeSession && activeSession.status === "RINGING") {
       timer = setTimeout(() => {
+        console.log("[CallContext] 45s Ringing timeout fired, ending call...");
         endCall();
       }, 45000);
     }
@@ -203,6 +212,7 @@ export function CallProvider({ children, currentUserId }: { children: React.Reac
   const acceptCall = async () => {
     if (!activeSession) return;
     try {
+      console.log("[CallContext] User tapped Accept Call!");
       stopAllRingtones();
       const ctx = getOrCreateAudioContext();
       if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
