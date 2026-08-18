@@ -5,8 +5,7 @@ interface AudioChunk {
   sessionId: string;
   senderId: string;
   senderName: string;
-  mime: string;
-  blobBase64: string;
+  pcmData: number[]; // Raw PCM Float32Array audio samples (Headerless, 100% playable)
   timestamp: number;
 }
 
@@ -18,7 +17,7 @@ const globalForAudioChunks = globalThis as unknown as {
 const AUDIO_CHUNK_BUFFER = globalForAudioChunks.audioChunkBufferMap || 
   (globalForAudioChunks.audioChunkBufferMap = new Map<string, AudioChunk[]>());
 
-// POST /api/messages/calls/audio-chunk - Push recorded mic audio chunk (300ms PCM/WebM/MP4 slice)
+// POST /api/messages/calls/audio-chunk - Push recorded mic PCM audio slice
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;
@@ -32,9 +31,9 @@ export async function POST(req: NextRequest) {
     const senderId = String(userPayload.userId);
     const senderName = typeof userPayload.username === "string" ? userPayload.username.replace("@", "") : "";
     const body = await req.json();
-    const { sessionId, mime, blobBase64 } = body;
+    const { sessionId, pcmData } = body;
 
-    if (!sessionId || !blobBase64) {
+    if (!sessionId || !pcmData || !Array.isArray(pcmData)) {
       return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
     }
 
@@ -48,14 +47,13 @@ export async function POST(req: NextRequest) {
       sessionId,
       senderId,
       senderName,
-      mime: mime || "audio/webm",
-      blobBase64,
+      pcmData,
       timestamp: Date.now()
     });
 
-    // Keep only last 30 chunks to prevent memory buildup
-    if (chunks.length > 30) {
-      AUDIO_CHUNK_BUFFER.set(chunkKey, chunks.slice(chunks.length - 30));
+    // Keep only last 40 chunks to prevent memory buildup
+    if (chunks.length > 40) {
+      AUDIO_CHUNK_BUFFER.set(chunkKey, chunks.slice(chunks.length - 40));
     }
 
     return NextResponse.json({ success: true }, { status: 200 });
@@ -65,7 +63,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/messages/calls/audio-chunk - Poll unread audio chunks for peer
+// GET /api/messages/calls/audio-chunk - Poll unread PCM audio chunks for peer
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get("auth_token")?.value;

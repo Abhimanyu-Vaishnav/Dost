@@ -165,11 +165,11 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }
   };
 
-  // Manage WebRTC P2P Peer Connection, Media Streams & HTTP Audio Relay Fallback
+  // Manage WebRTC P2P Peer Connection, Media Streams & Raw PCM Audio Relay Fallback
   useEffect(() => {
     let activeStream: MediaStream | null = null;
     let animFrame: number;
-    let mediaRecorder: MediaRecorder | null = null;
+    let scriptProcessor: ScriptProcessorNode | null = null;
     let chunkInterval: any = null;
 
     const configuration: RTCConfiguration = {
@@ -227,7 +227,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             const audioStream = new MediaStream([audioTrack]);
             const source = ctx.createMediaStreamSource(audioStream);
             const gainNode = ctx.createGain();
-            gainNode.gain.value = isSpeakerOn ? 2.5 : 0.3;
+            gainNode.gain.value = isSpeakerOn ? 3.0 : 0.4;
 
             source.connect(gainNode);
             gainNode.connect(ctx.destination);
@@ -279,12 +279,14 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           localVideoRef.current.muted = true;
         }
 
-        // Live mic equalizer wave frequency analyser
+        // Live mic equalizer & Raw Headerless PCM Audio Sampler (2048 PCM Float32 samples)
         try {
           const ctx = getOrCreateAudioContext();
           if (ctx) {
             if (ctx.state === "suspended") ctx.resume().catch(() => {});
             const source = ctx.createMediaStreamSource(stream);
+
+            // Equalizer Analyser
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 64;
             source.connect(analyser);
@@ -299,48 +301,42 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
               animFrame = requestAnimationFrame(updateVolume);
             };
             updateVolume();
+
+            // Raw PCM Script Processor Sampler (2048 float samples per slice)
+            scriptProcessor = ctx.createScriptProcessor(2048, 1, 1);
+            let pcmBufferAcc: number[] = [];
+
+            scriptProcessor.onaudioprocess = (e) => {
+              if (isMuted) return;
+              const inputData = e.inputBuffer.getChannelData(0);
+              // Downsample to 24kHz for ultra-fast network relay
+              for (let i = 0; i < inputData.length; i += 2) {
+                pcmBufferAcc.push(Math.round(inputData[i] * 1000) / 1000);
+              }
+
+              if (pcmBufferAcc.length >= 1024) {
+                const chunkToSend = pcmBufferAcc.slice(0, 1024);
+                pcmBufferAcc = [];
+
+                fetch("/api/messages/calls/audio-chunk", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ sessionId: session.sessionId, pcmData: chunkToSend })
+                }).catch(() => {});
+              }
+            };
+
+            source.connect(scriptProcessor);
+            scriptProcessor.connect(ctx.destination);
           }
         } catch (e) {}
 
-        // Cross-Platform MediaRecorder Audio Chunk Relay Fallback
-        try {
-          let mime = "";
-          if (typeof MediaRecorder !== "undefined") {
-            if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) mime = "audio/webm;codecs=opus";
-            else if (MediaRecorder.isTypeSupported("audio/webm")) mime = "audio/webm";
-            else if (MediaRecorder.isTypeSupported("audio/mp4")) mime = "audio/mp4";
-            else if (MediaRecorder.isTypeSupported("audio/aac")) mime = "audio/aac";
-
-            if (mime) {
-              mediaRecorder = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 128000 });
-
-              mediaRecorder.ondataavailable = async (e) => {
-                if (e.data && e.data.size > 0) {
-                  const reader = new FileReader();
-                  reader.onloadend = () => {
-                    const base64 = (reader.result as string)?.split(",")[1];
-                    if (base64) {
-                      fetch("/api/messages/calls/audio-chunk", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ sessionId: session.sessionId, mime, blobBase64: base64 })
-                      }).catch(() => {});
-                    }
-                  };
-                  reader.readAsDataURL(e.data);
-                }
-              };
-
-              try {
-                mediaRecorder.start(300);
-              } catch (err) {}
-            }
-          }
-        } catch (e) {}
-
-        // If caller: Send WebRTC SDP Offer
+        // If caller: Send WebRTC SDP Offer with forced Audio Recv
         if (isCaller) {
-          const offer = await pc.createOffer();
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: session.callType === "video"
+          });
           await pc.setLocalDescription(offer);
 
           fetch("/api/calls/signal", {
@@ -356,7 +352,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     initMedia();
 
-    // Poll HTTP Audio Chunks with Hybrid Web Audio PCM / Audio Element Playback
+    // Poll HTTP Raw PCM Float32 Audio Slices with Direct Web Audio PCM Buffer Playback
     chunkInterval = setInterval(async () => {
       if (!isConnected) return;
       try {
@@ -364,54 +360,50 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         if (res.ok) {
           const data = await res.json();
           if (data.chunks && Array.isArray(data.chunks)) {
-            for (const chunk of data.chunks) {
-              if (chunk.blobBase64) {
-                const chunkMime = chunk.mime || "audio/webm";
-                const audio = new Audio(`data:${chunkMime};base64,${chunk.blobBase64}`);
-                audio.volume = isSpeakerOn ? 1.0 : 0.2;
-                audio.play().catch(() => {
-                  // Web Audio Context decodeAudioData fallback
+            const ctx = getOrCreateAudioContext();
+            if (ctx) {
+              if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+              for (const chunk of data.chunks) {
+                if (chunk.pcmData && Array.isArray(chunk.pcmData) && chunk.pcmData.length > 0) {
                   try {
-                    const ctx = getOrCreateAudioContext();
-                    if (ctx) {
-                      if (ctx.state === "suspended") ctx.resume().catch(() => {});
-                      fetch(`data:${chunkMime};base64,${chunk.blobBase64}`)
-                        .then(r => r.arrayBuffer())
-                        .then(buf => ctx.decodeAudioData(buf))
-                        .then(audioBuffer => {
-                          const src = ctx.createBufferSource();
-                          src.buffer = audioBuffer;
-
-                          const gain = ctx.createGain();
-                          gain.gain.value = isSpeakerOn ? 2.5 : 0.3;
-
-                          src.connect(gain);
-                          gain.connect(ctx.destination);
-                          src.start(0);
-                        })
-                        .catch(() => {});
+                    const sampleRate = 24000;
+                    const audioBuffer = ctx.createBuffer(1, chunk.pcmData.length, sampleRate);
+                    const channelData = audioBuffer.getChannelData(0);
+                    for (let i = 0; i < chunk.pcmData.length; i++) {
+                      channelData[i] = chunk.pcmData[i];
                     }
+
+                    const src = ctx.createBufferSource();
+                    src.buffer = audioBuffer;
+
+                    const gainNode = ctx.createGain();
+                    gainNode.gain.value = isSpeakerOn ? 3.5 : 0.5; // 3.5x Loudspeaker Volume
+
+                    src.connect(gainNode);
+                    gainNode.connect(ctx.destination);
+                    src.start(0);
                   } catch (err) {}
-                });
+                }
               }
             }
           }
         }
       } catch (e) {}
-    }, 350);
+    }, 120);
 
     return () => {
       if (animFrame) cancelAnimationFrame(animFrame);
       if (chunkInterval) clearInterval(chunkInterval);
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        try { mediaRecorder.stop(); } catch (e) {}
+      if (scriptProcessor) {
+        try { scriptProcessor.disconnect(); } catch (e) {}
       }
       if (activeStream) {
         activeStream.getTracks().forEach(track => track.stop());
       }
       pc.close();
     };
-  }, [session.callType, isCaller, isConnected]);
+  }, [session.callType, isCaller, isConnected, isMuted]);
 
   // Exchange WebRTC SDP Answer & ICE Candidates
   useEffect(() => {
@@ -425,7 +417,10 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         // Recipient handles SDP Offer ONLY after explicitly accepting call (status === CONNECTED)
         if (!isCaller && session.status === "CONNECTED" && session.sdpOffer && !pc.remoteDescription) {
           await pc.setRemoteDescription(new RTCSessionDescription(session.sdpOffer));
-          const answer = await pc.createAnswer();
+          const answer = await pc.createAnswer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: session.callType === "video"
+          });
           await pc.setLocalDescription(answer);
 
           fetch("/api/calls/signal", {
