@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   Phone, PhoneOff, Mic, MicOff, Volume2, Video, VideoOff, 
-  Shield, PhoneCall, MicOff as MicMutedIcon, Smartphone, Headphones
+  Shield, PhoneCall, MicOff as MicMutedIcon, Smartphone, Headphones, AlertTriangle
 } from "lucide-react";
 import { 
   CallSessionData, startOutgoingRingbackSound, 
@@ -15,6 +15,38 @@ interface CallOverlayProps {
   currentUserId: string;
   onEndCall: () => void;
   onAcceptCall: () => void;
+}
+
+// Universal getUserMedia helper supporting legacy mobile WebViews & HTTP IP origins
+async function requestUserMediaStream(constraints: MediaStreamConstraints): Promise<MediaStream | null> {
+  try {
+    if (typeof window === "undefined") return null;
+
+    if (navigator.mediaDevices?.getUserMedia) {
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    }
+
+    const legacyFn = (navigator as any).webkitGetUserMedia || 
+                     (navigator as any).mozGetUserMedia || 
+                     (navigator as any).getUserMedia;
+
+    if (legacyFn) {
+      return new Promise((resolve) => {
+        legacyFn.call(
+          navigator,
+          constraints,
+          (stream: MediaStream) => resolve(stream),
+          (err: any) => {
+            console.error("Legacy getUserMedia error:", err);
+            resolve(null);
+          }
+        );
+      });
+    }
+  } catch (e) {
+    console.error("requestUserMediaStream error:", e);
+  }
+  return null;
 }
 
 export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }: CallOverlayProps) {
@@ -30,6 +62,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isNearEarMode, setIsNearEarMode] = useState(false);
   const [voiceVolume, setVoiceVolume] = useState<number>(0);
+  const [isMicActive, setIsMicActive] = useState<boolean>(false);
+  const [showMicHelpModal, setShowMicHelpModal] = useState<boolean>(false);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -57,6 +91,33 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       stopAllRingtones();
     };
   }, [isRinging, isCaller]);
+
+  // Request Microphone Stream manually on user touch
+  const handleRequestMicPermission = async () => {
+    getOrCreateAudioContext();
+    const stream = await requestUserMediaStream({
+      video: session.callType === "video",
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    }) || await requestUserMediaStream({ audio: true });
+
+    if (stream) {
+      localMediaStreamRef.current = stream;
+      setIsMicActive(true);
+      setShowMicHelpModal(false);
+
+      if (peerConnectionRef.current) {
+        stream.getTracks().forEach(track => {
+          peerConnectionRef.current?.addTrack(track, stream);
+        });
+      }
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.muted = true;
+      }
+    } else {
+      setShowMicHelpModal(true);
+    }
+  };
 
   // Manage WebRTC P2P Peer Connection, Media Streams & HTTP Audio Relay Fallback
   useEffect(() => {
@@ -107,21 +168,17 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
     async function initMedia() {
       try {
-        if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
-
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const stream = await requestUserMediaStream({
           video: session.callType === "video",
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        }).catch(async () => {
-          return await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
-        });
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        }) || await requestUserMediaStream({ audio: true });
 
-        if (!stream) return;
+        if (!stream) {
+          setIsMicActive(false);
+          return;
+        }
 
+        setIsMicActive(true);
         activeStream = stream;
         localMediaStreamRef.current = stream;
 
@@ -131,7 +188,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
 
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
-          localVideoRef.current.muted = true; // CRITICAL: Mute local preview to prevent echo!
+          localVideoRef.current.muted = true;
         }
 
         // Live mic equalizer wave frequency analyser
@@ -156,30 +213,35 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           }
         } catch (e) {}
 
-        // HTTP MediaRecorder Audio Chunk Relay Fallback (300ms Opus slices for 100% reliable voice transfer)
+        // HTTP MediaRecorder Audio Chunk Relay Fallback (300ms Opus slices)
         try {
-          const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
-          mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+          const mime = typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus") 
+            ? "audio/webm;codecs=opus" 
+            : "audio/webm";
+          
+          if (typeof MediaRecorder !== "undefined") {
+            mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
 
-          mediaRecorder.ondataavailable = async (e) => {
-            if (e.data && e.data.size > 0 && isConnected) {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64 = (reader.result as string)?.split(",")[1];
-                if (base64) {
-                  fetch("/api/messages/calls/audio-chunk", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ sessionId: session.sessionId, blobBase64: base64 })
-                  }).catch(() => {});
-                }
-              };
-              reader.readAsDataURL(e.data);
+            mediaRecorder.ondataavailable = async (e) => {
+              if (e.data && e.data.size > 0 && isConnected) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  const base64 = (reader.result as string)?.split(",")[1];
+                  if (base64) {
+                    fetch("/api/messages/calls/audio-chunk", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ sessionId: session.sessionId, blobBase64: base64 })
+                    }).catch(() => {});
+                  }
+                };
+                reader.readAsDataURL(e.data);
+              }
+            };
+
+            if (isConnected) {
+              mediaRecorder.start(300);
             }
-          };
-
-          if (isConnected) {
-            mediaRecorder.start(300);
           }
         } catch (e) {}
 
@@ -299,7 +361,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     if (localMediaStreamRef.current) {
       const audioTracks = localMediaStreamRef.current.getAudioTracks();
       audioTracks.forEach(t => {
-        t.enabled = isMuted; // Toggle enabled state
+        t.enabled = isMuted;
       });
       setIsMuted(!isMuted);
     }
@@ -344,13 +406,45 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }}
       className="animate-fade-in"
     >
-      {/* Remote Voice Audio Element (Positioned off-screen, NOT display:none so mobile browser plays sound!) */}
+      {/* Remote Voice Audio Element */}
       <audio 
         ref={remoteAudioRef} 
         autoPlay 
         playsInline 
         style={{ position: "fixed", top: "-9999px", opacity: 0, pointerEvents: "none" }} 
       />
+
+      {/* Mic Access Help Modal if Browser Blocked HTTP Permission */}
+      {showMicHelpModal && (
+        <div 
+          style={{
+            position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 10000,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            padding: "24px", textAlign: "center", color: "#ffffff"
+          }}
+        >
+          <AlertTriangle size={48} style={{ color: "#f59e0b", marginBottom: "16px" }} />
+          <h3 style={{ fontSize: "1.3rem", fontWeight: 800, margin: "0 0 8px 0" }}>Microphone Access Required</h3>
+          <p style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.8)", maxWidth: "340px", lineHeight: 1.5, margin: "0 0 20px 0" }}>
+            Your mobile browser blocked microphone access on local IP <code style={{ color: "#00f2fe" }}>http://192.168.1.202:3000</code>.
+          </p>
+          <div style={{ background: "rgba(255,255,255,0.1)", padding: "14px", borderRadius: "14px", textAlign: "left", fontSize: "0.82rem", maxWidth: "340px", marginBottom: "20px" }}>
+            <strong>How to Allow Mic on Android Chrome:</strong><br />
+            1. Tap the Tune / Lock icon next to the URL.<br />
+            2. Tap <b>Permissions</b> &rarr; <b>Microphone</b> &rarr; <b>Allow</b>.<br />
+            3. Tap the button below to start talking!
+          </div>
+          <button
+            onClick={handleRequestMicPermission}
+            style={{
+              background: "#00f2fe", border: "none", color: "#000000", fontWeight: 800,
+              padding: "12px 28px", borderRadius: "9999px", cursor: "pointer", fontSize: "0.95rem"
+            }}
+          >
+            🎙️ Request Microphone Access Now
+          </button>
+        </div>
+      )}
 
       {/* Near Ear Black Screen Overlay */}
       {isNearEarMode && (
@@ -404,6 +498,19 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
             `Connected • ${formatTimer(callDuration)}`
           )}
         </span>
+
+        {!isMicActive && isConnected && (
+          <button
+            onClick={handleRequestMicPermission}
+            style={{
+              marginTop: "6px", background: "rgba(245, 158, 11, 0.25)", border: "1px solid #f59e0b",
+              color: "#f59e0b", fontSize: "0.78rem", fontWeight: 800, padding: "4px 14px",
+              borderRadius: "9999px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px"
+            }}
+          >
+            <MicOff size={14} /> 🎙️ Tap to Enable Phone Mic Access
+          </button>
+        )}
       </div>
 
       {/* Center Display / Equalizer */}
