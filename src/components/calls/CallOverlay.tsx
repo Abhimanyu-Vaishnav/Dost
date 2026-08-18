@@ -60,7 +60,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const localMediaStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const processedIceCandidatesRef = useRef<Set<string>>(new Set());
-  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const pendingIceCandidatesRef = useRef<any[]>([]);
   const isMediaCapturedRef = useRef<boolean>(false);
   const isOfferSentRef = useRef<boolean>(false);
 
@@ -258,20 +258,41 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return () => stopAllRingtones();
   }, [isRinging, isCaller]);
 
+  // Helper to format ICE Candidate safely
+  const formatCandidate = (c: any): RTCIceCandidateInit | null => {
+    if (!c) return null;
+    let raw = c;
+    if (c.candidate && typeof c.candidate === "object") {
+      raw = c.candidate;
+    }
+    const candStr = typeof raw.candidate === "string" ? raw.candidate : (typeof raw === "string" ? raw : "");
+    if (!candStr) return null;
+
+    return {
+      candidate: candStr,
+      sdpMid: raw.sdpMid !== undefined && raw.sdpMid !== null ? String(raw.sdpMid) : "0",
+      sdpMLineIndex: raw.sdpMLineIndex !== undefined && raw.sdpMLineIndex !== null ? Number(raw.sdpMLineIndex) : 0,
+      usernameFragment: raw.usernameFragment
+    };
+  };
+
   // Helper to add candidate safely (only after remote description is set)
-  const addCandidateSafely = async (cand: RTCIceCandidateInit) => {
+  const addCandidateSafely = async (cand: any) => {
     const pc = peerConnectionRef.current;
     if (!pc || (pc as any).signalingState === "closed") return;
     
+    const formatted = formatCandidate(cand);
+    if (!formatted) return;
+
     if (pc.remoteDescription && pc.remoteDescription.type) {
       try {
-        await pc.addIceCandidate(new RTCIceCandidate(cand));
-        console.log("[WebRTC] Added ICE Candidate successfully!");
+        await pc.addIceCandidate(new RTCIceCandidate(formatted));
+        console.log("[WebRTC] Added ICE Candidate successfully! ICE State:", pc.iceConnectionState);
       } catch (e) {
-        console.warn("[WebRTC] ICE candidate add error:", e);
+        console.warn("[WebRTC] ICE candidate add warning:", e);
       }
     } else {
-      pendingIceCandidatesRef.current.push(cand);
+      pendingIceCandidatesRef.current.push(formatted);
     }
   };
 
@@ -285,6 +306,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       if (cand) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(cand));
+          console.log("[WebRTC] Flushed candidate added successfully!");
         } catch (e) {}
       }
     }
@@ -342,6 +364,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     pc.ontrack = (event) => {
       console.log("[CallOverlay] pc.ontrack event received! Track kind:", event.track.kind, "Streams count:", event.streams.length);
       event.track.enabled = true;
+
+      event.track.onunmute = () => {
+        console.log("[CallOverlay] Remote track onunmute event fired!");
+        event.track.enabled = true;
+      };
+
       const stream = event.streams[0] || new MediaStream([event.track]);
       
       setRemoteStream(stream);
@@ -358,13 +386,18 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       }
     };
 
-    // Send Local ICE Candidates
+    // Send Local ICE Candidates with Clean JSON Serialization
     pc.onicecandidate = (event) => {
       if (event.candidate && (pc as any).signalingState !== "closed") {
+        const candJson = event.candidate.toJSON ? event.candidate.toJSON() : {
+          candidate: event.candidate.candidate,
+          sdpMid: event.candidate.sdpMid,
+          sdpMLineIndex: event.candidate.sdpMLineIndex
+        };
         fetch("/api/calls/signal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "ICE_CANDIDATE", candidate: event.candidate })
+          body: JSON.stringify({ action: "ICE_CANDIDATE", candidate: candJson })
         }).catch(() => {});
       }
     };
