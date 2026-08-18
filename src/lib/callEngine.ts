@@ -1,4 +1,4 @@
-// Complete Ground-Up WebRTC Call Engine & Continuous HD Audio Synthesizer
+// Complete Ground-Up WebRTC Call Engine & Robust HD Audio Synthesizer
 
 export type CallState = "IDLE" | "OUTGOING_RINGING" | "INCOMING_RINGING" | "CONNECTED" | "DECLINED" | "ENDED";
 
@@ -30,7 +30,7 @@ export const CALL_STATE_STORE = {
   userSessionMap: globalForCalls.userSessionMap || (globalForCalls.userSessionMap = new Map<string, string>())
 };
 
-// --- Continuous HD Ringtone Audio Synthesizer Engine ---
+// --- HD Ringtone Audio Synthesizer Engine ---
 let activeAudioContext: AudioContext | null = null;
 let activeToneOsc1: OscillatorNode | null = null;
 let activeToneOsc2: OscillatorNode | null = null;
@@ -54,7 +54,7 @@ export function getOrCreateAudioContext(): AudioContext | null {
   }
 }
 
-// Play Continuous Outgoing Ringback Tone ("tuuuun... tuuuun...") for Caller
+// Play Outgoing Ringback Tone ("tuuuun... tuuuun...") for Caller
 export function startOutgoingRingbackSound() {
   stopAllRingtones();
   if (typeof window === "undefined") return;
@@ -72,18 +72,7 @@ export function startOutgoingRingbackSound() {
     osc1.frequency.setValueAtTime(440, ctx.currentTime);
     osc2.frequency.setValueAtTime(480, ctx.currentTime);
 
-    // Continuous 2s on, 1.5s subtle modulation cycle without full silence gaps
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    
-    // LFO gain modulation for continuous tone loop
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.frequency.setValueAtTime(0.25, ctx.currentTime); // 4-second cycle
-    lfoGain.gain.setValueAtTime(0.08, ctx.currentTime);
-
-    lfo.connect(lfoGain);
-    lfoGain.connect(gain.gain);
-    lfo.start();
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
 
     osc1.connect(gain);
     osc2.connect(gain);
@@ -98,7 +87,7 @@ export function startOutgoingRingbackSound() {
   } catch (e) {}
 }
 
-// Play Continuous Incoming Caller Tune ("trrrring... trrrring...") & Trigger Device Vibration
+// Play Incoming Caller Tune ("trrrring... trrrring...") & Trigger Device Vibration
 export function startIncomingCallerTuneSound() {
   stopAllRingtones();
   if (typeof window === "undefined") return;
@@ -119,15 +108,6 @@ export function startIncomingCallerTuneSound() {
 
     gain.gain.setValueAtTime(0.18, ctx.currentTime);
 
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.frequency.setValueAtTime(0.4, ctx.currentTime);
-    lfoGain.gain.setValueAtTime(0.12, ctx.currentTime);
-
-    lfo.connect(lfoGain);
-    lfoGain.connect(gain.gain);
-    lfo.start();
-
     osc1.connect(gain);
     osc2.connect(gain);
     gain.connect(ctx.destination);
@@ -139,7 +119,6 @@ export function startIncomingCallerTuneSound() {
     activeToneOsc2 = osc2;
     activeGainNode = gain;
 
-    // Trigger Physical Device Haptic Vibration (WhatsApp style call pulse)
     triggerDeviceVibration();
   } catch (e) {}
 }
@@ -207,7 +186,7 @@ export function stopAllRingtones() {
       vibrationInterval = null;
     }
     if (typeof window !== "undefined" && "vibrate" in navigator) {
-      navigator.vibrate(0); // Stop physical vibration
+      navigator.vibrate(0);
     }
   } catch (e) {}
 }
