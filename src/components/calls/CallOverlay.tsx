@@ -39,17 +39,18 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const [voiceVolume, setVoiceVolume] = useState<number>(0);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const [micStatusText, setMicStatusText] = useState<string>("Requesting Mic...");
 
   // Live Detailed Diagnostic State
   const [diag, setDiag] = useState({
-    localTracks: "0 (none)",
-    remoteTracks: "0 (none)",
+    localTracks: "0 (requesting...)",
+    remoteTracks: "0 (waiting)",
     audioEl: "none",
     audioCtx: "none",
     pcState: "NONE",
     iceState: "NONE",
     sigState: "NONE",
-    lastMsg: "Initializing real-time monitor..."
+    lastMsg: "Initializing media capture..."
   });
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -60,6 +61,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
   const processedIceCandidatesRef = useRef<Set<string>>(new Set());
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const isMediaCapturedRef = useRef<boolean>(false);
+  const isOfferSentRef = useRef<boolean>(false);
 
   // Clean Partner Name & Avatar Resolution
   const rawOtherName = isCaller ? (session.recipientName || session.recipientId) : (session.callerName || session.callerId);
@@ -117,10 +119,27 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     }
   };
 
-  // 2. BUTTON ACTION: FORCE ENABLE ALL TRACKS
-  const handleForceEnableAllTracks = () => {
+  // 2. BUTTON ACTION: FORCE ENABLE ALL TRACKS AND RE-CAPTURE MIC IF MISSING
+  const handleForceEnableAllTracks = async () => {
     console.log("[FORCE ENABLE ALL TRACKS] Diagnostic Button Tapped!");
     unlockAudioPipeline();
+
+    // If local tracks are missing, re-trigger getUserMedia
+    if (!localMediaStreamRef.current || localMediaStreamRef.current.getAudioTracks().length === 0) {
+      console.log("[FORCE RE-CAPTURE MIC] Requesting microphone permission...");
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localMediaStreamRef.current = s;
+        const pc = peerConnectionRef.current;
+        if (pc) {
+          s.getTracks().forEach(t => {
+            try { pc.addTrack(t, s); } catch (e) {}
+          });
+        }
+      } catch (e) {
+        console.error("Mic re-capture failed:", e);
+      }
+    }
 
     if (localMediaStreamRef.current) {
       localMediaStreamRef.current.getAudioTracks().forEach(t => {
@@ -150,7 +169,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     setIsMuted(false);
   };
 
-  // Real-time Live Diagnostic Telemetry Monitor (Updates every 400ms)
+  // Real-time Live Diagnostic Telemetry Monitor (Updates every 300ms)
   useEffect(() => {
     const monitor = setInterval(() => {
       const pc = peerConnectionRef.current;
@@ -159,7 +178,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
       const sigState = pc ? pc.signalingState : "NULL";
 
       // Local tracks info
-      let locInfo = "0 (none)";
+      let locInfo = "0 (requesting mic...)";
       if (localMediaStreamRef.current) {
         const trks = localMediaStreamRef.current.getAudioTracks();
         if (trks.length > 0) {
@@ -203,12 +222,12 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         pcState,
         iceState,
         sigState,
-        lastMsg: isConnected ? "Call Connected & Live" : "Signaling Handshake in Progress"
+        lastMsg: isConnected ? "Call Connected & Live" : micStatusText
       });
-    }, 400);
+    }, 300);
 
     return () => clearInterval(monitor);
-  }, [remoteStream, isConnected]);
+  }, [remoteStream, isConnected, micStatusText]);
 
   // Bind Remote Stream to Audio Engines
   useEffect(() => {
@@ -298,6 +317,11 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     const pc = new RTCPeerConnection(configuration);
     peerConnectionRef.current = pc;
 
+    // Add audio transceiver explicitly to ensure a=sendrecv in SDP!
+    try {
+      pc.addTransceiver("audio", { direction: "sendrecv" });
+    } catch (e) {}
+
     pc.onconnectionstatechange = () => {
       console.log("[WebRTC State] pc.connectionState changed to:", pc.connectionState);
     };
@@ -357,15 +381,15 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     };
   }, []);
 
-  // MEDIA CAPTURE ENGINE (CAPTURES MICROPHONE AND ADDS TRACKS TO PC)
+  // MEDIA CAPTURE ENGINE (CAPTURES MICROPHONE AND ADDS TRACKS TO PC - RETRIES UNTIL SUCCESSFUL)
   useEffect(() => {
     const pc = peerConnectionRef.current;
     if (!pc || (pc as any).signalingState === "closed") return;
     if (isRecipient && isRinging) return;
     if (isMediaCapturedRef.current) return;
 
-    isMediaCapturedRef.current = true;
     console.log("[CallOverlay] Capturing Local Media Stream...");
+    setMicStatusText("Capturing Microphone...");
 
     let animFrame: number;
 
@@ -383,13 +407,15 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           } : false
         };
 
-        const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(async () => {
-          console.warn("[CallOverlay] Video constraint failed, falling back to audio only");
+        const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(async (err) => {
+          console.warn("[CallOverlay] Fallback to basic audio getUserMedia due to:", err);
           return await navigator.mediaDevices.getUserMedia({ audio: true });
         });
 
         if (!stream || (pc as any).signalingState === "closed") return;
 
+        isMediaCapturedRef.current = true;
+        setMicStatusText("Microphone Active!");
         localMediaStreamRef.current = stream;
 
         stream.getTracks().forEach(track => {
@@ -397,6 +423,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
           if ((pc as any).signalingState !== "closed") {
             try { 
               pc.addTrack(track, stream); 
+              console.log("[CallOverlay] Added local track to PC:", track.kind);
             } catch (e) {}
           }
         });
@@ -429,7 +456,8 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         } catch (e) {}
 
         // CALLER: Create SDP Offer immediately after adding local tracks
-        if (isCaller && (pc as any).signalingState !== "closed") {
+        if (isCaller && !isOfferSentRef.current && (pc as any).signalingState !== "closed") {
+          isOfferSentRef.current = true;
           console.log("[CallOverlay] Caller creating SDP Offer after tracks attached...");
           const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
           await pc.setLocalDescription(offer);
@@ -442,6 +470,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
         }
       } catch (e) {
         console.error("[CallOverlay] Media capture error:", e);
+        setMicStatusText(`Mic Error: ${(e as any)?.message || "Permission Denied"}`);
       }
     }
 
@@ -513,7 +542,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     } else {
       setCallDuration(0);
     }
-    return () => { if (timer) clearTimeout(timer); };
+    return () => { if (timer) clearInterval(timer); };
   }, [isConnected]);
 
   // Toggle Mute
@@ -734,7 +763,7 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
                 display: "flex", alignItems: "center", justifyContent: "center", gap: "4px"
               }}
             >
-              <Zap size={14} /> ⚡ FORCE ENABLE ALL TRACKS
+              <Zap size={14} /> ⚡ FORCE ENABLE ALL TRACKS / RE-CAPTURE MIC
             </button>
           </div>
         </div>
