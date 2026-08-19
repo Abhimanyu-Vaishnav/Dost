@@ -277,9 +277,20 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing }: Profil
                   )}
                 </div>
                 <button
-                  onClick={() => {
-                    const handle = user.username || user.handle || user.id;
-                    router.push(`/messages?user=${encodeURIComponent(handle)}`);
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/conversations", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ targetUserId: user.id }),
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        router.push(`/messages/${data.conversation.id}`);
+                      }
+                    } catch (err) {
+                      console.error("Start chat error:", err);
+                    }
                   }}
                   style={{
                     width: "40px", height: "40px", borderRadius: "50%", border: "1px solid var(--color-border)",

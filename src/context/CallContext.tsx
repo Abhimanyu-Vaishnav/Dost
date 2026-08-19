@@ -1,261 +1,428 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
-import { 
-  CallSessionData, stopAllRingtones, getOrCreateAudioContext, 
-  triggerDeviceVibration, triggerSystemNotification 
-} from "@/lib/callEngine";
-import { CallOverlay } from "@/components/calls/CallOverlay";
+import { WebRTCService } from "@/lib/webrtc/webrtc-service";
+import { useSSEPresence } from "@/hooks/useSSEPresence";
 
-interface CallContextType {
-  activeSession: CallSessionData | null;
-  startCall: (targetUserId: string, callType?: "voice" | "video", targetName?: string, targetAvatar?: string) => Promise<void>;
-  endCall: () => Promise<void>;
-  acceptCall: () => Promise<void>;
+export type CallState = "IDLE" | "OUTGOING" | "INCOMING" | "CONNECTED" | "ENDED";
+export type CallType = "VOICE" | "VIDEO";
+
+export interface CallPartner {
+  id: string;
+  name: string;
+  avatar: string;
 }
 
-const CallContext = createContext<CallContextType>({
-  activeSession: null,
-  startCall: async () => {},
-  endCall: async () => {},
-  acceptCall: async () => {}
-});
+export interface CallContextType {
+  callState: CallState;
+  callType: CallType;
+  partner: CallPartner | null;
+  localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
+  callDuration: number;
+  isMuted: boolean;
+  isCameraOff: boolean;
+  isMinimized: boolean;
+  rtcService: WebRTCService;
+  startCall: (targetUser: CallPartner, type: CallType) => Promise<void>;
+  acceptCall: () => Promise<void>;
+  rejectCall: () => Promise<void>;
+  endCall: () => Promise<void>;
+  toggleMute: () => void;
+  toggleCamera: () => void;
+  toggleMinimize: () => void;
+  forcePlayAudio: () => void;
+  reattachRemoteStream: () => void;
+  enableAllTracks: () => void;
+}
 
-export const useCall = () => useContext(CallContext);
+const CallContext = createContext<CallContextType | null>(null);
 
-export function CallProvider({ children, currentUserId }: { children: React.ReactNode; currentUserId?: string }) {
-  const [activeSession, setActiveSession] = useState<CallSessionData | null>(null);
-  const [myUserId, setMyUserId] = useState<string | undefined>(currentUserId);
-  const [myProfile, setMyProfile] = useState<{ name: string; username: string; avatar: string } | null>(null);
+export function CallProvider({ children }: { children: React.ReactNode }) {
+  const [callState, setCallState] = useState<CallState>("IDLE");
+  const [callType, setCallType] = useState<CallType>("VOICE");
+  const [partner, setPartner] = useState<CallPartner | null>(null);
 
-  const callStartedTimeRef = useRef<number>(0);
-  const notifiedSessionIdRef = useRef<string | null>(null);
-  const endedSessionIdsRef = useRef<Set<string>>(new Set());
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
-  // Fetch current user profile
+  const [callDuration, setCallDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>();
+  const [pendingOffer, setPendingOffer] = useState<any | null>(null);
+
+  const rtcServiceRef = useRef<WebRTCService>(new WebRTCService());
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const activeCallIdRef = useRef<string | null>(null);
+
+  const { registerCallSignalListener } = useSSEPresence(currentUserId);
+
+  // Fetch current user details
   useEffect(() => {
     fetch("/api/users/profile")
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data.user) {
-          setMyUserId(data.user.id || data.user.username);
-          setMyProfile({
-            name: data.user.name || data.user.username || "User",
-            username: data.user.username ? data.user.username.replace("@", "") : "user",
-            avatar: data.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.user.name || "User")}`
-          });
+          setCurrentUserId(data.user.id);
         }
       })
       .catch(() => {});
-  }, [currentUserId]);
 
-  // Real-Time SSE Listener & Rapid Polling Synchronization
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission !== "granted") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  // Handle Tab Unload / Page Refresh Edge Case
   useEffect(() => {
-    let eventSource: EventSource | null = null;
+    const handleBeforeUnload = () => {
+      if (callState !== "IDLE" && partner?.id) {
+        const payload = JSON.stringify({
+          targetUserId: partner.id,
+          signalType: "call_end",
+          callType,
+          callId: activeCallIdRef.current,
+        });
+        navigator.sendBeacon("/api/calls/signal", payload);
+      }
+    };
 
-    try {
-      eventSource = new EventSource("/api/calls/sse");
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [callState, partner, callType]);
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          // Handle CALL_TERMINATED Signal (Hangup / Decline)
-          if (data.type === "CALL_TERMINATED") {
-            console.log("[CallContext SSE] Call terminated signal received");
-            setActiveSession(null);
-            stopAllRingtones();
-            notifiedSessionIdRef.current = null;
-            if (data.session?.sessionId) endedSessionIdsRef.current.add(data.session.sessionId);
-            return;
-          }
-
-          // Handle CALL_ACCEPTED or CALL_SIGNAL Signal (ALWAYS UPDATE ACTIVE SESSION!)
-          if ((data.type === "CALL_ACCEPTED" || data.type === "CALL_SIGNAL") && data.session) {
-            const sess: CallSessionData = data.session;
-            console.log("[CallContext SSE] Session update received:", data.type, sess.status, "sdpAnswer:", Boolean(sess.sdpAnswer));
-
-            if (endedSessionIdsRef.current.has(sess.sessionId) || sess.status === "REJECTED" || sess.status === "ENDED") {
-              setActiveSession(null);
-              stopAllRingtones();
-              notifiedSessionIdRef.current = null;
-            } else {
-              setActiveSession(sess);
-
-              // Ringtone & Vibration for Recipient
-              const isRecipient = sess.status === "RINGING" && myUserId && (
-                sess.recipientId === myUserId || sess.recipientName === myUserId
-              );
-
-              if (isRecipient && notifiedSessionIdRef.current !== sess.sessionId) {
-                notifiedSessionIdRef.current = sess.sessionId;
-                triggerDeviceVibration();
-                triggerSystemNotification(sess.callerName || "Friend", sess.callType);
-              }
-            }
-          }
-        } catch (e) {}
-      };
-    } catch (e) {}
-
-    // Rapid Polling Fallback every 300ms
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch("/api/calls/signal");
-        if (res.ok) {
-          const data = await res.json();
-          const sess: CallSessionData | null = data.session || null;
-
-          if (sess) {
-            if (endedSessionIdsRef.current.has(sess.sessionId) || sess.status === "REJECTED" || sess.status === "ENDED") {
-              setActiveSession(null);
-              stopAllRingtones();
-              notifiedSessionIdRef.current = null;
-            } else {
-              // ALWAYS UPDATE ACTIVE SESSION IF STATUS, SDP, OR CANDIDATES CHANGED!
-              setActiveSession(prev => {
-                if (
-                  !prev ||
-                  prev.status !== sess.status ||
-                  JSON.stringify(prev.sdpAnswer) !== JSON.stringify(sess.sdpAnswer) ||
-                  JSON.stringify(prev.sdpOffer) !== JSON.stringify(sess.sdpOffer) ||
-                  (sess.callerCandidates?.length || 0) !== (prev.callerCandidates?.length || 0) ||
-                  (sess.recipientCandidates?.length || 0) !== (prev.recipientCandidates?.length || 0)
-                ) {
-                  console.log("[CallContext Polling] Session state changed! Updating activeSession to:", sess.status, "sdpAnswer:", Boolean(sess.sdpAnswer));
-                  return sess;
-                }
-                return prev;
-              });
-            }
-          }
-        }
-      } catch (e) {}
-    }, 300);
+  // Duration Timer when call is CONNECTED
+  useEffect(() => {
+    if (callState === "CONNECTED") {
+      setCallDuration(0);
+      timerRef.current = setInterval(() => {
+        setCallDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
 
     return () => {
-      if (eventSource) eventSource.close();
-      clearInterval(interval);
+      if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [myUserId, activeSession]);
+  }, [callState]);
 
-  // Ringing 45-second Timeout Cleanup
+  // Listen for WebRTC SSE Signals
+  const callStateRef = useRef<CallState>("IDLE");
+  callStateRef.current = callState;
+
+  // Listen for WebRTC SSE Signals
   useEffect(() => {
-    let timer: any;
-    if (activeSession && activeSession.status === "RINGING") {
-      timer = setTimeout(() => {
-        console.log("[CallContext] 45s Ringing timeout fired, ending call...");
-        endCall();
-      }, 45000);
-    }
-    return () => { if (timer) clearTimeout(timer); };
-  }, [activeSession?.status, activeSession?.sessionId]);
+    if (!registerCallSignalListener) return;
 
-  const startCall = async (targetUserId: string, callType: "voice" | "video" = "voice", targetName?: string, targetAvatar?: string) => {
-    try {
-      getOrCreateAudioContext();
-      if (typeof window !== "undefined" && navigator.mediaDevices?.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+    const unbind = registerCallSignalListener((payload: any) => {
+      const { signalType, senderId, callType: incomingType, sdp, candidate, caller, callId } = payload;
+
+      console.log("[CallContext] Received SSE Signal:", signalType, "from:", senderId, "callId:", callId);
+
+      if (signalType === "call_offer") {
+        if (callStateRef.current !== "IDLE" && activeCallIdRef.current !== callId) {
+          console.log("[CallContext] Already in call, sending call_busy");
+          sendSignal("call_busy", senderId, incomingType, callId);
+          return;
+        }
+
+        activeCallIdRef.current = callId || `call_${Date.now()}`;
+        setCallType(incomingType || "VOICE");
+        const partnerObj = caller || {
+          id: senderId,
+          name: "Friend",
+          avatar: "https://ui-avatars.com/api/?name=Friend",
+        };
+        setPartner(partnerObj);
+        setPendingOffer(sdp);
+        setCallState("INCOMING");
+
+        // 1. Trigger Native Haptic Vibration Pattern
+        if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+          try {
+            navigator.vibrate([400, 200, 400, 200, 400, 200, 800]);
+          } catch (e) {}
+        }
+
+        // 2. Trigger System Push/Browser Notification
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          try {
+            new Notification(`Incoming ${incomingType === "VIDEO" ? "Video" : "Voice"} Call`, {
+              body: `${partnerObj.name} is calling you on DOST...`,
+              icon: partnerObj.avatar || "/icon.svg",
+              tag: "dost_incoming_call",
+            });
+          } catch (e) {}
+        }
       }
 
-      callStartedTimeRef.current = Date.now();
+      if (signalType === "call_answer") {
+        console.log("[CallContext] Received call_answer SDP from callee");
+        if (sdp) {
+          rtcServiceRef.current.handleAnswer(sdp).then(() => {
+            setCallState("CONNECTED");
+            console.log("[CallContext] Call CONNECTED successfully on caller side!");
+          }).catch(err => {
+            console.error("[CallContext] handleAnswer error:", err);
+          });
+        }
+      }
 
-      const displayName = targetName || targetUserId;
-      const displayAvatar = targetAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=00f2fe&color=ffffff`;
+      if (signalType === "ice_candidate") {
+        if (candidate) {
+          rtcServiceRef.current.addIceCandidate(candidate);
+        }
+      }
 
-      const callerRealName = myProfile?.name || myProfile?.username || "Friend";
-      const callerRealAvatar = myProfile?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(callerRealName)}`;
+      if (signalType === "call_end" || signalType === "call_reject" || signalType === "call_busy") {
+        console.log("[CallContext] Received termination signal:", signalType);
+        handleCleanupAndReset();
+      }
+    });
 
-      const optimisticSession: CallSessionData = {
-        sessionId: `call_${Date.now()}`,
-        callerId: myUserId || "me",
-        callerName: callerRealName,
-        callerAvatar: callerRealAvatar,
-        recipientId: targetUserId,
-        recipientName: displayName,
-        recipientAvatar: displayAvatar,
-        callType,
-        status: "RINGING",
-        updatedAt: Date.now()
-      };
+    return unbind;
+  }, [registerCallSignalListener]);
 
-      setActiveSession(optimisticSession);
-
-      const res = await fetch("/api/calls/signal", {
+  // Send Signal helper to /api/calls/signal
+  const sendSignal = async (
+    signalType: string,
+    targetUserId: string,
+    type: CallType,
+    callId?: string,
+    extra: any = {}
+  ) => {
+    try {
+      console.log("[CallContext] Sending signal:", signalType, "to:", targetUserId);
+      await fetch("/api/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "OFFER",
-          toUserId: targetUserId,
-          callType,
-          callerName: callerRealName,
-          callerAvatar: callerRealAvatar
-        })
+          targetUserId,
+          signalType,
+          callType: type,
+          callId: callId || activeCallIdRef.current,
+          ...extra,
+        }),
       });
+    } catch (err) {
+      console.error("[CallContext] sendSignal error:", err);
+    }
+  };
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.session) {
-          setActiveSession(data.session);
+  // 1. CALLER: Start Call
+  const startCall = async (targetUser: CallPartner, type: CallType) => {
+    try {
+      console.log("[CallContext] Starting call to:", targetUser.name);
+      setPartner(targetUser);
+      setCallType(type);
+      setCallState("OUTGOING");
+      setIsMuted(false);
+      setIsCameraOff(false);
+
+      const callId = `call_${Date.now()}`;
+      activeCallIdRef.current = callId;
+
+      // 1. Initialize peer connection
+      rtcServiceRef.current.initPeerConnection(
+        (candidate) => {
+          sendSignal("ice_candidate", targetUser.id, type, callId, { candidate });
+        },
+        (remoteStream) => {
+          console.log("[CallContext] Remote stream received in CallContext callback!");
+          setRemoteStream(remoteStream);
         }
-      }
-    } catch (e) {
-      console.error("Start call error:", e);
+      );
+
+      // 2. Get local stream & attach tracks BEFORE offer creation
+      const localMedia = await rtcServiceRef.current.getLocalStream(type === "VIDEO");
+      setLocalStream(localMedia);
+
+      // 3. Create Offer with local tracks attached
+      const offerSDP = await rtcServiceRef.current.createOffer();
+
+      // 4. Send call_offer instantly
+      await sendSignal("call_offer", targetUser.id, type, callId, {
+        sdp: offerSDP,
+        caller: {
+          id: currentUserId,
+          name: "DOST User",
+          avatar: "https://ui-avatars.com/api/?name=User",
+        },
+      });
+    } catch (err) {
+      console.error("[CallContext] startCall error:", err);
+      handleCleanupAndReset();
     }
   };
 
-  // ACCEPT CALL (Manual user tap required)
+  // 2. CALLEE: Accept Call
   const acceptCall = async () => {
-    if (!activeSession) return;
+    if (!partner) {
+      console.warn("[CallContext] Cannot accept call: missing partner");
+      return;
+    }
+
     try {
-      console.log("[CallContext] User tapped Accept Call!");
-      stopAllRingtones();
-      const ctx = getOrCreateAudioContext();
-      if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+      console.log("[CallContext] Accepting incoming call from:", partner.name);
+      setCallState("CONNECTED");
 
-      const updated = { ...activeSession, status: "CONNECTED" as const, updatedAt: Date.now() };
-      setActiveSession(updated);
+      // 1. Initialize callee peer connection FIRST
+      rtcServiceRef.current.initPeerConnection(
+        (candidate) => {
+          sendSignal("ice_candidate", partner.id, callType, activeCallIdRef.current!, { candidate });
+        },
+        (remoteStream) => {
+          console.log("[CallContext] Callee remote stream received!");
+          setRemoteStream(remoteStream);
+        }
+      );
 
-      await fetch("/api/calls/signal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "ANSWER" })
-      });
-    } catch (e) {
-      console.error("Accept call error:", e);
+      // 2. Get callee local media & attach tracks
+      try {
+        const localMedia = await rtcServiceRef.current.getLocalStream(callType === "VIDEO");
+        setLocalStream(localMedia);
+      } catch (mediaErr) {
+        console.warn("[CallContext] Media stream permission warning/fallback:", mediaErr);
+      }
+
+      // 3. Set remote offer & create answer if pendingOffer exists
+      if (pendingOffer) {
+        const answerSDP = await rtcServiceRef.current.handleOfferAndCreateAnswer(pendingOffer);
+
+        // 4. Send call_answer signal to caller
+        await sendSignal("call_answer", partner.id, callType, activeCallIdRef.current!, {
+          sdp: answerSDP,
+        });
+      }
+
+      setPendingOffer(null);
+      console.log("[CallContext] Callee call connected successfully!");
+    } catch (err) {
+      console.error("[CallContext] acceptCall error:", err);
     }
   };
 
-  const endCall = async () => {
-    if (!activeSession) return;
-    const sessId = activeSession.sessionId;
-    endedSessionIdsRef.current.add(sessId);
-    setActiveSession(null);
-    stopAllRingtones();
-    notifiedSessionIdRef.current = null;
-
-    try {
-      await fetch("/api/calls/signal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "END" })
-      });
-    } catch (e) {
-      console.error("End call error:", e);
+  // 3. CALLEE: Reject Call
+  const rejectCall = async () => {
+    if (partner) {
+      await sendSignal("call_reject", partner.id, callType, activeCallIdRef.current!);
     }
+    handleCleanupAndReset();
+  };
+
+  // 4. EITHER: End Call
+  const endCall = async () => {
+    if (partner) {
+      await sendSignal("call_end", partner.id, callType, activeCallIdRef.current!);
+    }
+    handleCleanupAndReset();
+  };
+
+  const handleCleanupAndReset = () => {
+    console.log("[CallContext] Cleaning up call session...");
+    setCallState("ENDED");
+    rtcServiceRef.current.closeConnection();
+    setLocalStream(null);
+    setRemoteStream(null);
+    setPendingOffer(null);
+    activeCallIdRef.current = null;
+
+    setTimeout(() => {
+      setCallState("IDLE");
+      setPartner(null);
+      setIsMinimized(false);
+    }, 1200);
+  };
+
+  // Controls
+  const toggleMute = () => {
+    const nextState = !isMuted;
+    rtcServiceRef.current.toggleMute(nextState);
+    setIsMuted(nextState);
+  };
+
+  const toggleCamera = () => {
+    const nextState = !isCameraOff;
+    rtcServiceRef.current.toggleCamera(nextState);
+    setIsCameraOff(nextState);
+  };
+
+  const toggleMinimize = () => {
+    setIsMinimized((prev) => !prev);
+  };
+
+  const forcePlayAudio = () => {
+    console.log("[CallContext] Manual Debug: forcePlayAudio triggered");
+    if (typeof window !== "undefined") {
+      const audioEl = document.getElementById("remoteAudio") as HTMLAudioElement | null;
+      if (audioEl) {
+        if (remoteStream) {
+          audioEl.srcObject = remoteStream;
+        }
+        audioEl.volume = 1.0;
+        audioEl.muted = false;
+        audioEl.play().then(() => console.log("[CallContext] Audio force played successfully!")).catch(e => console.error("Force play error:", e));
+      }
+    }
+  };
+
+  const reattachRemoteStream = () => {
+    console.log("[CallContext] Manual Debug: reattachRemoteStream triggered");
+    const stream = rtcServiceRef.current.getRemoteStream();
+    if (stream) {
+      setRemoteStream(null);
+      setTimeout(() => {
+        setRemoteStream(stream);
+      }, 50);
+    }
+  };
+
+  const enableAllTracks = () => {
+    console.log("[CallContext] Manual Debug: enableAllTracks triggered");
+    rtcServiceRef.current.forceEnableAllTracks();
   };
 
   return (
-    <CallContext.Provider value={{ activeSession, startCall, endCall, acceptCall }}>
+    <CallContext.Provider
+      value={{
+        callState,
+        callType,
+        partner,
+        localStream,
+        remoteStream,
+        callDuration,
+        isMuted,
+        isCameraOff,
+        isMinimized,
+        rtcService: rtcServiceRef.current,
+        startCall,
+        acceptCall,
+        rejectCall,
+        endCall,
+        toggleMute,
+        toggleCamera,
+        toggleMinimize,
+        forcePlayAudio,
+        reattachRemoteStream,
+        enableAllTracks,
+      }}
+    >
       {children}
-      {activeSession && myUserId && (
-        <CallOverlay
-          session={activeSession}
-          currentUserId={myUserId}
-          onEndCall={endCall}
-          onAcceptCall={acceptCall}
-        />
-      )}
+      <audio id="remoteAudio" autoPlay playsInline style={{ display: "none" }} />
     </CallContext.Provider>
   );
+}
+
+export function useCall() {
+  const context = useContext(CallContext);
+  if (!context) {
+    throw new Error("useCall must be used within a CallProvider");
+  }
+  return context;
 }

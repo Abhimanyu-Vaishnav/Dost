@@ -226,7 +226,7 @@ export function MessagesSidebar() {
         </div>
       </div>
 
-      {showNewChatModal && <NewChatModal onClose={() => setShowNewChatModal(false)} />}
+      {showNewChatModal && <NewChatModal isOpen={showNewChatModal} onClose={() => setShowNewChatModal(false)} />}
     </>
   );
 }

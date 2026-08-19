@@ -1,3 +1,7 @@
+"use client";
+
+import { AppLayout } from "@/components/layout/AppLayout";
+
 export default function MessagesLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return <AppLayout>{children}</AppLayout>;
 }

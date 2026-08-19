@@ -6,16 +6,22 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const currentUserId = user.userId as string;
 
     const count = await prisma.message.count({
       where: {
         conversation: {
           participants: {
-            some: { id: user.userId as string }
+            some: { userId: currentUserId }
           }
         },
-        senderId: { not: user.userId as string },
-        isRead: false
+        senderId: { not: currentUserId },
+        statuses: {
+          none: {
+            userId: currentUserId,
+            status: "READ"
+          }
+        }
       }
     });
 
@@ -23,11 +29,16 @@ export async function GET(request: NextRequest) {
       where: {
         conversation: {
           participants: {
-            some: { id: user.userId as string }
+            some: { userId: currentUserId }
           }
         },
-        senderId: { not: user.userId as string },
-        isRead: false
+        senderId: { not: currentUserId },
+        statuses: {
+          none: {
+            userId: currentUserId,
+            status: "READ"
+          }
+        }
       },
       orderBy: {
         createdAt: "desc"
@@ -44,7 +55,7 @@ export async function GET(request: NextRequest) {
       latestUnread: latestUnread ? {
         id: latestUnread.id,
         senderName: latestUnread.sender.name,
-        content: latestUnread.content || (latestUnread.messageType !== "TEXT" ? `Sent a ${latestUnread.messageType.toLowerCase()}` : ""),
+        content: latestUnread.content || (latestUnread.type !== "TEXT" ? `Sent a ${latestUnread.type.toLowerCase()}` : ""),
         conversationId: latestUnread.conversationId,
         createdAt: latestUnread.createdAt
       } : null 

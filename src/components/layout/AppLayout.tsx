@@ -7,15 +7,11 @@ import {
   Home, User, Search, LogOut, Bell, Mail, Bookmark, MoreHorizontal, EyeOff, Plus, MessageSquare, Shield, ShieldAlert,
   Settings as SettingsIcon, List, Users, CheckCircle2, TrendingUp, BarChart3, HelpCircle, Command, Palette, Edit3, Camera, Sparkles, Flame, UserPlus, Video, X
 } from "lucide-react";
-import { CallProvider } from "@/context/CallContext";
 import styles from "./AppLayout.module.css";
 import { CreatePostModal } from "@/features/posts/components/CreatePostModal";
 import { CreateStoryModal } from "@/features/stories/components/CreateStoryModal";
 import { ThemeModal } from "@/components/layout/ThemeModal";
 import { useTheme } from "@/context/ThemeContext";
-import { IncomingCallModal } from "@/app/messages/IncomingCallModal";
-import { CallModal } from "@/app/messages/CallModal";
-import { CallSession } from "@/lib/callSignalStore";
 
 let GLOBAL_USER_CACHE: any = null;
 let GLOBAL_UNREAD_NOTIF_CACHE: number = 0;
@@ -230,7 +226,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
   const isMessagesPage = pathname?.startsWith("/messages");
 
   return (
-    <div className={styles.layoutContainer}>
+    <div className={`${styles.layoutContainer} ${isMessagesPage ? styles.layoutContainerFull : ""}`}>
       {/* Mobile Top Navigation Header */}
       <header className={styles.mobileHeader}>
         <div 
@@ -369,7 +365,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
       )}
 
       {/* Main Sidebar for Desktop & 5-Icon Bottom Bar for Mobile */}
-      <aside className={`${styles.leftSidebar} ${isMessagesPage ? styles.leftSidebarCollapsed : ""}`}>
+      <aside className={styles.leftSidebar}>
         <div className={styles.topSection}>
           <div className={styles.logoContainer}>
             <div 
@@ -416,7 +412,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
                 <Link 
                   key={item.id} 
                   href={item.href} 
-                  className={`${styles.navItem} ${!isMobileBottomItem ? styles.desktopOnly : ""} ${active ? styles.navItemActive : ""}`}
+                  className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
                   onClick={(e) => {
                     if (item.id === "home" && (pathname === "/feed" || pathname === "/")) {
                       e.preventDefault();
@@ -465,17 +461,17 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             })}
 
             {/* Desktop More Menu Button */}
-            <div className={`${styles.navItem} ${styles.desktopOnly}`} onClick={() => setShowMore(!showMore)} style={{ cursor: "pointer", position: "relative" }}>
+            <div className={styles.navItem} onClick={() => setShowMore(!showMore)} style={{ cursor: "pointer", position: "relative" }}>
               <MoreHorizontal size={24} />
               <span className={styles.navLabel}>More</span>
               
               {showMore && (
                 <>
                   <div 
-                    style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }} 
+                    style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998 }} 
                     onClick={(e) => { e.stopPropagation(); setShowMore(false); }}
                   />
-                  <div className={`${styles.moreMenu} animate-scale-in`}>
+                  <div className={`${styles.moreMenu} animate-scale-in`} style={{ zIndex: 9999 }}>
                     {moreItems.map((item, idx) => (
                       item.href ? (
                         <Link key={idx} href={item.href} className={styles.moreMenuItem} onClick={() => setShowMore(false)}>
@@ -527,10 +523,10 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
             {showProfileMenu && (
               <>
                 <div 
-                  style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 190 }} 
+                  style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998 }} 
                   onClick={(e) => { e.stopPropagation(); setShowProfileMenu(false); }}
                 />
-                <div className={`${styles.moreMenu} animate-scale-in`} style={{ bottom: "60px", left: "0" }}>
+                <div className={`${styles.moreMenu} animate-scale-in`} style={{ bottom: "60px", left: "0", zIndex: 9999 }}>
                   <Link href={user?.username ? `/profile/${user.username}` : user?.userId ? `/profile/${user.userId}` : "/profile"} className={styles.moreMenuItem} onClick={() => setShowProfileMenu(false)}>
                     <User size={18} /> <span>View Profile</span>
                   </Link>
@@ -550,8 +546,10 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
       <main 
         className={styles.mainContent} 
         style={
-          pathname === "/shorts" || pathname?.startsWith("/messages")
+          pathname === "/shorts"
             ? { flex: 1, minWidth: 0, width: "auto", borderRight: "none", overflow: "hidden", padding: 0 } 
+            : pathname?.startsWith("/messages")
+            ? { flex: 1, minWidth: 0, width: "100%", borderRight: "none", overflow: "visible", padding: 0 }
             : fullWidth 
             ? { flex: 1, minWidth: 0, width: "auto", borderRight: "none", overflowY: "auto" } 
             : {}
@@ -565,6 +563,53 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
           {rightSidebar}
         </aside>
       )}
+
+      {/* MOBILE BOTTOM NAVIGATION BAR (Instagram / YouTube Style) */}
+      <nav className={styles.mobileBottomBar}>
+        {[
+          { href: "/feed", label: "Home", icon: <Home size={22} />, id: "home" },
+          { href: "/search", label: "Explore", icon: <Search size={22} />, id: "explore" },
+          { href: "/shorts", label: "Shorts", icon: <Video size={22} />, id: "shorts" },
+          { href: "/notifications", label: "Alerts", icon: <Bell size={22} />, id: "notifications" },
+          { href: "/messages", label: "Messages", icon: <Mail size={22} />, id: "messages" },
+        ].map((tab) => {
+          const active = isItemActive(tab.href);
+          return (
+            <Link
+              key={tab.id}
+              href={tab.href}
+              className={`${styles.mobileBottomTab} ${active ? styles.mobileBottomTabActive : ""}`}
+            >
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                {tab.icon}
+                {tab.id === "notifications" && unreadCount > 0 && (
+                  <div style={{
+                    position: "absolute", top: "-4px", right: "-6px",
+                    background: "var(--color-primary)", color: "white",
+                    borderRadius: "50%", width: "14px", height: "14px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "0.6rem", fontWeight: 800
+                  }}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </div>
+                )}
+                {tab.id === "messages" && unreadMessagesCount > 0 && (
+                  <div style={{
+                    position: "absolute", top: "-4px", right: "-6px",
+                    background: "var(--color-primary)", color: "white",
+                    borderRadius: "50%", width: "14px", height: "14px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "0.6rem", fontWeight: 800
+                  }}>
+                    {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
+                  </div>
+                )}
+              </div>
+              <span>{tab.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
 
       {/* Global Click Handler to close FAB menu */}
       {showFabMenu && (pathname === "/feed" || pathname === "/profile" || pathname.startsWith("/profile/")) && (

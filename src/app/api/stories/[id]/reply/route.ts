@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/auth";
+import { MessageType } from "@prisma/client";
 
 export async function POST(
   request: NextRequest,
@@ -38,8 +39,8 @@ export async function POST(
       where: {
         isGroup: false,
         AND: [
-          { participants: { some: { id: senderId } } },
-          { participants: { some: { id: targetUserId } } }
+          { participants: { some: { userId: senderId } } },
+          { participants: { some: { userId: targetUserId } } }
         ]
       }
     });
@@ -49,7 +50,10 @@ export async function POST(
         data: {
           isGroup: false,
           participants: {
-            connect: [{ id: senderId }, { id: targetUserId }]
+            create: [
+              { userId: senderId, role: "ADMIN" },
+              { userId: targetUserId, role: "MEMBER" }
+            ]
           }
         }
       });
@@ -62,8 +66,8 @@ export async function POST(
     const message = await prisma.message.create({
       data: {
         content: formattedContent,
-        messageType: "TEXT",
-        fileUrl: story.mediaUrl || null,
+        type: MessageType.TEXT,
+        mediaUrl: story.mediaUrl || null,
         senderId,
         conversationId: conversation.id
       }

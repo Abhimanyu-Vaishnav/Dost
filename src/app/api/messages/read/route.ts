@@ -13,12 +13,17 @@ export async function POST(request: NextRequest) {
 
     const currentUserId = userPayload.userId as string;
     const body = await request.json();
+    const { conversationId } = body;
 
-    const message = await MessageService.sendMessage(currentUserId, body);
+    if (!conversationId) {
+      return NextResponse.json({ error: "conversationId is required" }, { status: 400 });
+    }
 
-    return NextResponse.json({ success: true, message }, { status: 201 });
+    const result = await MessageService.markMessagesAsRead(currentUserId, conversationId);
+
+    return NextResponse.json({ success: true, ...result });
   } catch (error: any) {
-    console.error("POST /api/messages error:", error);
-    return NextResponse.json({ error: error.message || "Failed to send message" }, { status: 500 });
+    console.error("POST /api/messages/read error:", error);
+    return NextResponse.json({ error: error.message || "Failed to mark messages as read" }, { status: 500 });
   }
 }

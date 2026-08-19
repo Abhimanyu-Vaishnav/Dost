@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { CallProvider } from "@/context/CallContext";
+import { CallOverlay } from "@/components/calls/CallOverlay";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -46,9 +47,11 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="app-container mesh-gradient-bg">
+        <audio id="remoteAudio" autoPlay playsInline style={{ display: "none" }} />
         <ThemeProvider>
           <CallProvider>
             {children}
+            <CallOverlay />
           </CallProvider>
         </ThemeProvider>
         <Analytics />

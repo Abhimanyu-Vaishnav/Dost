@@ -1,401 +1,332 @@
 "use client";
 
-import { useState, useRef, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { 
-  Send, Image as ImageIcon, Smile, Mic, Phone, Video, 
-  Search, Plus, MoreVertical, CheckCheck, Sparkles, MessageCircle, X, ArrowLeft,
-  Square, Play, Pause, Trash2, User, Pin, BellOff, Bell, ShieldAlert, Check, Copy, Reply,
-  Mail, UserPlus
+import React, { useState, useEffect } from "react";
+import {
+  Search,
+  Plus,
+  MessageSquare,
+  Sparkles,
+  Zap,
+  Shield,
+  Phone,
+  Video,
 } from "lucide-react";
-import { AppLayout } from "@/components/layout/AppLayout";
+import { NewChatModal } from "@/features/messages/components/NewChatModal";
+import { useSSEPresence } from "@/hooks/useSSEPresence";
+import { useRouter } from "next/navigation";
 import styles from "./messages.module.css";
-import { uploadMediaFile } from "@/lib/upload";
-import { useCall } from "@/context/CallContext";
 
-interface ChatMessage {
-  id: string;
-  senderId: string;
-  senderName: string;
-  text: string;
-  audioUrl?: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  timestamp: string;
-  isMe: boolean;
-  isDelivered?: boolean;
-  isRead?: boolean;
-}
-
-interface Conversation {
-  id: string;
-  partnerId?: string;
-  name: string;
-  username: string;
-  avatar: string;
-  isOnline: boolean;
-  unreadCount: number;
-  lastMessage: string;
-  lastTime: string;
-}
-
-const AVAILABLE_CONTACTS_DIRECTORY = [
-  {
-    id: "conv-goyalshaliniuk",
-    name: "Shalini Goyal",
-    username: "goyalshaliniuk",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-    isOnline: true
-  },
-  {
-    id: "conv-dev_sound",
-    name: "Devansh Nambiar",
-    username: "dev_sound",
-    avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
-    isOnline: true
-  },
-  {
-    id: "conv-arjun_arch",
-    name: "Arjun Singhania",
-    username: "arjun_arch",
-    avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150",
-    isOnline: false
-  },
-  {
-    id: "conv-simrank",
-    name: "Simran Kulkarni",
-    username: "simrank",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-    isOnline: true
-  },
-  {
-    id: "conv-sumit",
-    name: "Sumit",
-    username: "sumit",
-    avatar: "https://ui-avatars.com/api/?name=Sumit&background=00f2fe&color=ffffff&bold=true",
-    isOnline: true
-  }
-];
-
-function MessagesContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const convIdParam = searchParams?.get("convId");
-
-  const { startCall } = useCall();
-
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConvId, setActiveConvId] = useState<string | null>(convIdParam || null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputText, setInputText] = useState("");
+export default function MessagesPage() {
+  const [conversations, setConversations] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
-  const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>();
+  const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
+  const router = useRouter();
 
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-
-  // Sync ConvId URL parameter
-  useEffect(() => {
-    if (convIdParam) {
-      setActiveConvId(convIdParam);
-    }
-  }, [convIdParam]);
-
-  // Fetch Conversations List
-  const fetchConversations = async () => {
-    try {
-      const res = await fetch("/api/messages/conversations");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.conversations && Array.isArray(data.conversations)) {
-          setConversations(data.conversations);
-          if (!activeConvId && data.conversations.length > 0 && !convIdParam) {
-            setActiveConvId(data.conversations[0].id);
-          }
-        }
-      }
-    } catch (e) {}
-  };
-
-  // Fetch Messages for Active Conversation
-  const fetchMessages = async (cId: string) => {
-    try {
-      const res = await fetch(`/api/messages?convId=${encodeURIComponent(cId)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.messages && Array.isArray(data.messages)) {
-          setMessages(data.messages);
-        }
-        setIsPartnerTyping(Boolean(data.isPartnerTyping));
-      }
-    } catch (e) {}
-  };
+  const { presenceMap, typingMap, registerMessageListener } = useSSEPresence(currentUserId);
 
   useEffect(() => {
+    fetch("/api/users/profile")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user) {
+          setCurrentUserId(data.user.id);
+        }
+      })
+      .catch(() => {});
+
     fetchConversations();
-    const interval = setInterval(fetchConversations, 3000);
-    return () => clearInterval(interval);
+    fetchSuggestions();
   }, []);
 
-  useEffect(() => {
-    if (activeConvId) {
-      fetchMessages(activeConvId);
-      const interval = setInterval(() => fetchMessages(activeConvId), 1200);
-      return () => clearInterval(interval);
-    }
-  }, [activeConvId]);
-
-  // Auto-scroll chat to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isPartnerTyping]);
-
-  const activeConv = conversations.find(c => c.id === activeConvId);
-
-  const handleSelectConv = (id: string) => {
-    setActiveConvId(id);
-    router.push(`/messages?convId=${encodeURIComponent(id)}`);
-  };
-
-  const handleSendMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if ((!inputText.trim() && !attachedImage) || !activeConvId) return;
-
-    const textToSend = inputText.trim();
-    const imageToSend = attachedImage;
-
-    setInputText("");
-    setAttachedImage(null);
-
-    // Optimistic Message Append
-    const tempMsg: ChatMessage = {
-      id: `temp_${Date.now()}`,
-      senderId: "me",
-      senderName: "You",
-      text: textToSend || (imageToSend ? "📷 Photo" : ""),
-      imageUrl: imageToSend || undefined,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      isMe: true,
-      isDelivered: true,
-      isRead: false
-    };
-
-    setMessages(prev => [...prev, tempMsg]);
-
+  const fetchConversations = async () => {
     try {
-      await fetch("/api/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          convId: activeConvId,
-          text: textToSend,
-          imageUrl: imageToSend
-        })
-      });
-      fetchMessages(activeConvId);
-      fetchConversations();
-    } catch (e) {}
+      setError(null);
+      const res = await fetch("/api/conversations");
+      if (res.ok) {
+        const data = await res.json();
+        setConversations(Array.isArray(data.conversations) ? data.conversations : []);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || "Failed to load conversations");
+      }
+    } catch (err) {
+      console.error("Fetch conversations error:", err);
+      setError("Network error while loading messages");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filteredConvs = conversations.filter(c => {
-    const nameStr = (c.name || c.username || "User").toLowerCase();
-    const usernameStr = (c.username || "").toLowerCase();
-    const query = (searchQuery || "").toLowerCase();
-    return nameStr.includes(query) || usernameStr.includes(query);
+  const fetchSuggestions = async () => {
+    try {
+      const res = await fetch("/api/users/search?q=");
+      if (res.ok) {
+        const data = await res.json();
+        setSuggestedUsers(data.users || []);
+      }
+    } catch (err) {
+      console.error("Fetch suggestions error:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!registerMessageListener) return;
+    const unbind = registerMessageListener(() => {
+      fetchConversations();
+    });
+    return unbind;
+  }, [registerMessageListener]);
+
+  const filteredConversations = (conversations || []).filter((c) => {
+    const name = c?.name || "";
+    return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
   return (
-    <AppLayout fullWidth>
-      <div className={styles.container}>
-        {/* Left Sidebar: Conversations List */}
-        <div className={`${styles.sidebar} ${activeConvId ? styles.sidebarHiddenMobile : ""}`}>
-          <div className={styles.sidebarHeader}>
-            <h2 style={{ fontSize: "1.4rem", fontWeight: 900, color: "#ffffff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-              <MessageCircle size={24} style={{ color: "#00f2fe" }} /> Messages
-            </h2>
-            <button 
-              onClick={() => setShowNewChatModal(true)}
-              className={styles.actionBtn}
-              title="Start New Chat"
-            >
-              <Plus size={20} />
-            </button>
+    <div className={styles.container}>
+      {/* LEFT COLUMN: Sidebar with List & Online Connections */}
+      <div className={styles.sidebar}>
+        {/* Header */}
+        <div className={styles.sidebarHeader}>
+          <div className={styles.titleGroup}>
+            <h1 className={styles.title}>
+              Messages
+              <Sparkles size={16} style={{ color: "#00f2fe" }} />
+            </h1>
+            <span className={styles.subtitle}>Real-time messaging & connections</span>
           </div>
 
-          <div className={styles.searchContainer}>
-            <div className={styles.searchInputWrapper}>
-              <Search size={18} style={{ color: "rgba(255,255,255,0.4)" }} />
-              <input
-                type="text"
-                placeholder="Search DMs & contacts..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ background: "none", border: "none", color: "#ffffff", outline: "none", width: "100%", fontSize: "0.9rem" }}
-              />
+          <button onClick={() => setIsModalOpen(true)} className={styles.newChatBtn}>
+            <Plus size={15} />
+            <span>New Chat</span>
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className={styles.searchContainer}>
+          <div className={styles.searchInputWrapper}>
+            <Search size={16} style={{ color: "#94a3b8" }} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search chats or friends..."
+              className={styles.searchInput}
+            />
+          </div>
+        </div>
+
+        {/* Online Friends Carousel */}
+        {suggestedUsers.length > 0 && (
+          <div className={styles.onlineSection}>
+            <span className={styles.sectionLabel}>Online Friends</span>
+            <div className={styles.onlineList}>
+              {suggestedUsers.slice(0, 10).map((u) => {
+                const isOnline = presenceMap[u.id]?.isOnline ?? true;
+                return (
+                  <div
+                    key={u.id}
+                    onClick={() => setIsModalOpen(true)}
+                    className={styles.onlineUserItem}
+                  >
+                    <div className={styles.onlineAvatarRing}>
+                      <img
+                        src={
+                          u.avatar ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                            u.name || "User"
+                          )}`
+                        }
+                        alt={u.name || "User"}
+                        className={styles.onlineAvatarImg}
+                        style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }}
+                      />
+                      {isOnline && <span className={styles.onlineGreenDot} />}
+                    </div>
+                    <span className={styles.onlineUserName}>
+                      {u.name?.split(" ")[0] || "User"}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
+        )}
 
-          <div className={styles.conversationsList}>
-            {filteredConvs.map(conv => {
-              const isActive = conv.id === activeConvId;
+        {/* Conversations List */}
+        <div className={styles.conversationsList}>
+          {loading && (
+            <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: "0.8rem" }}>
+              Loading messages...
+            </div>
+          )}
+
+          {!loading && error && (
+            <div style={{ padding: 20, textAlign: "center" }}>
+              <p style={{ color: "#f87171", fontSize: "0.8rem", marginBottom: 10 }}>{error}</p>
+              <button
+                onClick={fetchConversations}
+                style={{
+                  padding: "6px 14px",
+                  background: "rgba(255,255,255,0.1)",
+                  border: "none",
+                  color: "#fff",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontSize: "0.75rem",
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && filteredConversations.length === 0 && (
+            <div style={{ padding: "40px 20px", textAlign: "center" }}>
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 16,
+                  background: "rgba(0, 242, 254, 0.1)",
+                  color: "#00f2fe",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 12px auto",
+                }}
+              >
+                <MessageSquare size={24} />
+              </div>
+              <h4 style={{ color: "#f1f5f9", margin: "0 0 4px 0", fontSize: "0.9rem" }}>No conversations yet</h4>
+              <p style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: 16 }}>
+                Connect with friends and start chatting.
+              </p>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className={styles.newChatBtn}
+                style={{ margin: "0 auto" }}
+              >
+                Start First Chat
+              </button>
+            </div>
+          )}
+
+          {!loading &&
+            !error &&
+            filteredConversations.length > 0 &&
+            filteredConversations.map((conv) => {
+              const partnerId = conv?.partner?.id;
+              const isOnline = partnerId
+                ? presenceMap[partnerId]?.isOnline ?? conv?.partner?.isOnline
+                : false;
+              const isTyping = partnerId ? typingMap[partnerId] === conv.id : false;
+              const unread = conv.unreadCount || 0;
+
               return (
                 <div
                   key={conv.id}
-                  onClick={() => handleSelectConv(conv.id)}
-                  className={`${styles.conversationItem} ${isActive ? styles.conversationItemActive : ""}`}
+                  onClick={() => router.push(`/messages/${conv.id}`)}
+                  className={styles.conversationItem}
                 >
                   <div className={styles.avatarWrapper}>
                     <img
-                      src={conv.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(conv.name || conv.username || "User")}`}
-                      alt={conv.name || conv.username || "User"}
-                      style={{ width: "48px", height: "48px", borderRadius: "50%", objectFit: "cover" }}
+                      src={conv.avatar || "https://ui-avatars.com/api/?name=User"}
+                      alt={conv.name || "User"}
+                      className={styles.avatarImg}
+                      style={{ width: 46, height: 46, borderRadius: "50%", objectFit: "cover" }}
                     />
-                    {conv.isOnline && <div className={styles.onlineBadge} />}
+                    {isOnline && <span className={styles.onlineGreenDot} />}
                   </div>
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                      <span style={{ fontWeight: 800, color: "#ffffff", fontSize: "0.95rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {conv.name || conv.username || "User"}
-                      </span>
-                      <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>
-                        {conv.lastTime}
-                      </span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {conv.lastMessage || "No messages yet"}
-                      </span>
-                      {conv.unreadCount > 0 && (
-                        <span style={{ background: "#00f2fe", color: "#000000", fontWeight: 900, fontSize: "0.72rem", padding: "2px 8px", borderRadius: "9999px" }}>
-                          {conv.unreadCount}
+                  <div className={styles.convContent}>
+                    <div className={styles.convHeader}>
+                      <span className={styles.convName}>{conv.name || "User"}</span>
+                      {conv.updatedAt && (
+                        <span className={styles.convTime}>
+                          {new Date(conv.updatedAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </span>
                       )}
+                    </div>
+
+                    <div className={styles.convSub}>
+                      <span className={styles.convMessage}>
+                        {isTyping ? (
+                          <span style={{ color: "#00f2fe", fontWeight: 600 }}>typing...</span>
+                        ) : (
+                          conv.lastMessage?.content || "Click to start chatting"
+                        )}
+                      </span>
+                      {unread > 0 && <span className={styles.unreadBadge}>{unread}</span>}
                     </div>
                   </div>
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        {/* Right Area: Active Chat Window */}
-        <div className={`${styles.chatWindow} ${!activeConvId ? styles.chatHiddenMobile : ""}`}>
-          {activeConv ? (
-            <>
-              {/* Active Chat Top Header */}
-              <div className={styles.chatHeader}>
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <button 
-                    onClick={() => setActiveConvId(null)}
-                    className={styles.actionBtn}
-                    style={{ display: "flex" }}
-                  >
-                    <ArrowLeft size={20} />
-                  </button>
-                  <div className={styles.avatarWrapper}>
-                    <img
-                      src={activeConv.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeConv.name || activeConv.username || "User")}`}
-                      alt={activeConv.name || activeConv.username || "User"}
-                      style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }}
-                    />
-                    {activeConv.isOnline && <div className={styles.onlineBadge} />}
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: "1.1rem", fontWeight: 900, color: "#ffffff", margin: 0 }}>
-                      {activeConv.name || activeConv.username || "Friend"}
-                    </h3>
-                    <span style={{ fontSize: "0.78rem", color: activeConv.isOnline ? "#10b981" : "rgba(255,255,255,0.4)", fontWeight: 700 }}>
-                      {activeConv.isOnline ? "Online • Active Now" : `@${activeConv.username || "user"}`}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Instant Voice & Video Call Action Buttons */}
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <button
-                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.name, "voice", activeConv.name, activeConv.avatar)}
-                    className={styles.actionBtn}
-                    title="Start Voice Call"
-                    style={{ background: "rgba(0, 242, 254, 0.15)", border: "1px solid rgba(0, 242, 254, 0.3)", color: "#00f2fe" }}
-                  >
-                    <Phone size={20} />
-                  </button>
-                  <button
-                    onClick={() => startCall(activeConv.partnerId || activeConv.username || activeConv.name, "video", activeConv.name, activeConv.avatar)}
-                    className={styles.actionBtn}
-                    title="Start Video Call"
-                    style={{ background: "rgba(168, 85, 247, 0.15)", border: "1px solid rgba(168, 85, 247, 0.3)", color: "#a855f7" }}
-                  >
-                    <Video size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Chat Messages Scrolling Body */}
-              <div className={styles.messagesArea}>
-                {messages.map(msg => (
-                  <div key={msg.id} className={msg.isMe ? styles.sentMessage : styles.receivedMessage}>
-                    <div className={msg.isMe ? styles.sentBubble : styles.receivedBubble}>
-                      {msg.text}
-                      {msg.imageUrl && (
-                        <img 
-                          src={msg.imageUrl} 
-                          alt="Attached media" 
-                          style={{ width: "100%", maxWidth: "260px", borderRadius: "14px", marginTop: "8px", objectFit: "cover" }} 
-                        />
-                      )}
-                    </div>
-                    <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", marginTop: "4px", padding: "0 6px", fontWeight: 600 }}>
-                      {msg.timestamp}
-                    </span>
-                  </div>
-                ))}
-
-                {isPartnerTyping && (
-                  <div className={styles.receivedMessage}>
-                    <div className={styles.receivedBubble} style={{ display: "flex", alignItems: "center", gap: "6px", fontStyle: "italic" }}>
-                      <Sparkles size={16} className="animate-spin" style={{ color: "#00f2fe" }} />
-                      <span>Typing a message...</span>
-                    </div>
-                  </div>
-                )}
-
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Input Footer */}
-              <form onSubmit={handleSendMessage} className={styles.inputForm}>
-                <input
-                  type="text"
-                  placeholder={`Message ${activeConv.name || activeConv.username || "Friend"}...`}
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  className={styles.messageInput}
-                />
-                <button type="submit" className={styles.sendBtn} title="Send Message">
-                  <Send size={20} />
-                </button>
-              </form>
-            </>
-          ) : (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.4)", gap: "16px" }}>
-              <MessageCircle size={64} style={{ color: "rgba(0,242,254,0.3)" }} />
-              <h3 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#ffffff", margin: 0 }}>Select a Conversation</h3>
-              <p style={{ fontSize: "0.9rem", margin: 0 }}>Choose a friend from the left list to start messaging or HD calling!</p>
-            </div>
-          )}
         </div>
       </div>
-    </AppLayout>
-  );
-}
 
-export default function MessagesPage() {
-  return (
-    <Suspense fallback={<div style={{ padding: "40px", color: "white", textAlign: "center" }}>Loading DOST Messages...</div>}>
-      <MessagesContent />
-    </Suspense>
+      {/* RIGHT COLUMN: Desktop Hero Welcome Pane */}
+      <div className={styles.heroPane}>
+        <div className={styles.heroCard}>
+          <div className={styles.heroIconWrapper}>
+            <MessageSquare size={36} />
+          </div>
+
+          <h2 className={styles.heroTitle}>DOST Instant Messages</h2>
+          <p className={styles.heroText}>
+            Select a conversation on the left or tap below to start a new chat with your friends in real-time.
+          </p>
+
+          <button onClick={() => setIsModalOpen(true)} className={styles.heroStartBtn}>
+            Start New Conversation
+          </button>
+
+          <div className={styles.featuresGrid}>
+            <div className={styles.featureBox}>
+              <Zap size={18} style={{ color: "#00f2fe" }} />
+              <div>
+                <div className={styles.featureTitle}>Instant SSE</div>
+                <div className={styles.featureDesc}>Real-time delivery</div>
+              </div>
+            </div>
+
+            <div className={styles.featureBox}>
+              <Shield size={18} style={{ color: "#10b981" }} />
+              <div>
+                <div className={styles.featureTitle}>Read Receipts</div>
+                <div className={styles.featureDesc}>Live blue checkmarks</div>
+              </div>
+            </div>
+
+            <div className={styles.featureBox}>
+              <Phone size={18} style={{ color: "#3b82f6" }} />
+              <div>
+                <div className={styles.featureTitle}>Voice Calls</div>
+                <div className={styles.featureDesc}>HD WebRTC Audio</div>
+              </div>
+            </div>
+
+            <div className={styles.featureBox}>
+              <Video size={18} style={{ color: "#a855f7" }} />
+              <div>
+                <div className={styles.featureTitle}>Video Calls</div>
+                <div className={styles.featureDesc}>HD WebRTC Video</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* New Chat Modal */}
+      <NewChatModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    </div>
   );
 }

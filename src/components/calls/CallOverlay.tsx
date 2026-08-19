@@ -1,652 +1,106 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { 
-  Phone, PhoneOff, Mic, MicOff, Volume2, Video, VideoOff, 
-  Shield, PhoneCall, Headphones, Minimize2, Maximize2, RefreshCw, Zap
+import React, { useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useCall } from "@/context/CallContext";
+import {
+  Phone,
+  PhoneOff,
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  Minimize2,
+  Maximize2,
+  Volume2,
 } from "lucide-react";
-import { 
-  CallSessionData, startOutgoingRingbackSound, 
-  startIncomingCallerTuneSound, stopAllRingtones, getOrCreateAudioContext,
-  claimSystemAudioSession, releaseSystemAudioSession, playRemoteAudioStream
-} from "@/lib/callEngine";
 
-interface CallOverlayProps {
-  session: CallSessionData;
-  currentUserId: string;
-  onEndCall: () => void;
-  onAcceptCall: () => void;
-}
+export function CallOverlay() {
+  const {
+    callState,
+    callType,
+    partner,
+    localStream,
+    remoteStream,
+    callDuration,
+    isMuted,
+    isCameraOff,
+    isMinimized,
+    rtcService,
+    acceptCall,
+    rejectCall,
+    endCall,
+    toggleMute,
+    toggleCamera,
+    toggleMinimize,
+    forcePlayAudio,
+    reattachRemoteStream,
+    enableAllTracks,
+  } = useCall();
 
-export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }: CallOverlayProps) {
-  const normUid = (currentUserId || "").toLowerCase().replace("@", "").trim();
-  const normCallerId = (session.callerId || "").toLowerCase().replace("@", "").trim();
-  const normCallerName = (session.callerName || "").toLowerCase().replace("@", "").trim();
-  const normRecipId = (session.recipientId || "").toLowerCase().replace("@", "").trim();
-  const normRecipName = (session.recipientName || "").toLowerCase().replace("@", "").trim();
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
-  // Role resolution
-  const isExplicitRecipient = Boolean(normUid && (normUid === normRecipId || normUid === normRecipName));
-  const isExplicitCaller = Boolean(normUid && (normUid === normCallerId || normUid === normCallerName)) || (session.callerId === "me" || session.callerName === "me");
-  
-  // Is Caller default fallback
-  const isCaller = isExplicitCaller || !isExplicitRecipient;
-  const isRecipient = isExplicitRecipient || !isCaller;
+  const [audioMode, setAudioMode] = React.useState<"speaker" | "earpiece">("earpiece");
+  const [telemetry, setTelemetry] = React.useState<any>({});
 
-  const isRinging = session.status === "RINGING";
-  const isConnected = session.status === "CONNECTED";
-
-  const [callDuration, setCallDuration] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(session.callType === "video");
-  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
-  const [voiceVolume, setVoiceVolume] = useState<number>(0);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const [isMinimized, setIsMinimized] = useState<boolean>(false);
-  const [micStatusText, setMicStatusText] = useState<string>("Requesting Mic...");
-  const [signalingError, setSignalingError] = useState<string>("");
-
-  // Live Detailed Diagnostic State
-  const [diag, setDiag] = useState({
-    localTracks: "0 (requesting...)",
-    remoteTracks: "0 (waiting)",
-    audioEl: "none",
-    audioCtx: "none",
-    pcState: "NONE",
-    iceState: "NONE",
-    sigState: "NONE",
-    lastMsg: "Initializing media capture..."
-  });
-
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
-  const localMediaStreamRef = useRef<MediaStream | null>(null);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const processedIceCandidatesRef = useRef<Set<string>>(new Set());
-  const pendingIceCandidatesRef = useRef<any[]>([]);
-  const isMediaCapturedRef = useRef<boolean>(false);
-  const isOfferSentRef = useRef<boolean>(false);
-
-  // Clean Partner Name & Avatar Resolution
-  const rawOtherName = isCaller ? (session.recipientName || session.recipientId) : (session.callerName || session.callerId);
-  const otherPersonName = (rawOtherName && rawOtherName !== "me" && rawOtherName !== "User") ? rawOtherName : "Friend";
-  const rawOtherAvatar = isCaller ? session.recipientAvatar : session.callerAvatar;
-  const otherPersonAvatar = rawOtherAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(otherPersonName)}&background=00f2fe&color=ffffff`;
-
-  // Claim System Audio Session
+  // Attach local stream to video element
   useEffect(() => {
-    claimSystemAudioSession(otherPersonName, session.callType);
-    return () => {
-      releaseSystemAudioSession();
-    };
-  }, [otherPersonName, session.callType]);
-
-  // Audio Context Gesture Unlock Helper
-  const unlockAudioPipeline = async () => {
-    try {
-      const ctx = getOrCreateAudioContext();
-      if (ctx && ctx.state === "suspended") {
-        await ctx.resume();
-      }
-      if (remoteStream) {
-        playRemoteAudioStream(remoteStream, isSpeakerOn);
-      }
-    } catch (e) {}
-  };
-
-  // 1. BUTTON ACTION: FORCE PLAY REMOTE AUDIO & UNMUTE TRACKS
-  const handleForcePlayAudio = () => {
-    console.log("[FORCE PLAY AUDIO] Diagnostic Button Tapped!");
-    unlockAudioPipeline();
-
-    const pc = peerConnectionRef.current;
-    if (remoteStream) {
-      remoteStream.getAudioTracks().forEach(t => {
-        t.enabled = true;
-      });
-      playRemoteAudioStream(remoteStream, isSpeakerOn);
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
     }
+  }, [localStream]);
 
-    if (pc) {
-      pc.getReceivers().forEach(rcv => {
-        if (rcv.track && rcv.track.kind === "audio") {
-          rcv.track.enabled = true;
-          const s = new MediaStream([rcv.track]);
-          playRemoteAudioStream(s, isSpeakerOn);
-        }
-      });
-    }
-
-    const audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
-    if (audioEl) {
-      audioEl.muted = false;
-      audioEl.volume = isSpeakerOn ? 1.0 : 0.2;
-      audioEl.play().catch(() => {});
-    }
-  };
-
-  // 2. BUTTON ACTION: FORCE ENABLE ALL TRACKS AND RE-CAPTURE MIC IF MISSING
-  const handleForceEnableAllTracks = async () => {
-    console.log("[FORCE ENABLE ALL TRACKS] Diagnostic Button Tapped!");
-    unlockAudioPipeline();
-
-    // If local tracks are missing, re-trigger getUserMedia
-    if (!localMediaStreamRef.current || localMediaStreamRef.current.getAudioTracks().length === 0) {
-      console.log("[FORCE RE-CAPTURE MIC] Requesting microphone permission...");
-      try {
-        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-        localMediaStreamRef.current = s;
-        const pc = peerConnectionRef.current;
-        if (pc) {
-          s.getTracks().forEach(t => {
-            try { pc.addTrack(t, s); } catch (e) {}
-          });
-        }
-      } catch (e) {
-        console.error("Mic re-capture failed:", e);
-      }
-    }
-
-    if (localMediaStreamRef.current) {
-      localMediaStreamRef.current.getAudioTracks().forEach(t => {
-        t.enabled = true;
-      });
-    }
-
-    if (remoteStream) {
-      remoteStream.getAudioTracks().forEach(t => {
-        t.enabled = true;
-      });
-    }
-
-    const pc = peerConnectionRef.current;
-    if (pc) {
-      pc.getSenders().forEach(snd => {
-        if (snd.track && snd.track.kind === "audio") {
-          snd.track.enabled = true;
-        }
-      });
-      pc.getReceivers().forEach(rcv => {
-        if (rcv.track && rcv.track.kind === "audio") {
-          rcv.track.enabled = true;
-        }
-      });
-    }
-    setIsMuted(false);
-  };
-
-  // Real-time Live Diagnostic Telemetry Monitor (Updates every 300ms)
-  useEffect(() => {
-    const monitor = setInterval(() => {
-      const pc = peerConnectionRef.current;
-      const pcState = pc ? pc.connectionState : "NULL";
-      const iceState = pc ? pc.iceConnectionState : "NULL";
-      const sigState = pc ? pc.signalingState : "NULL";
-
-      // Local tracks info
-      let locInfo = "0 (requesting mic...)";
-      if (localMediaStreamRef.current) {
-        const trks = localMediaStreamRef.current.getAudioTracks();
-        if (trks.length > 0) {
-          locInfo = trks.map(t => `${t.kind}: en=${t.enabled}, mut=${t.muted}, state=${t.readyState}`).join(" | ");
-        }
-      }
-
-      // Remote tracks info
-      let remInfo = "0 (waiting)";
-      if (remoteStream) {
-        const trks = remoteStream.getAudioTracks();
-        if (trks.length > 0) {
-          remInfo = trks.map(t => `${t.kind}: en=${t.enabled}, mut=${t.muted}, state=${t.readyState}`).join(" | ");
-        }
-      } else if (pc) {
-        const receivers = pc.getReceivers().filter(r => r.track && r.track.kind === "audio");
-        if (receivers.length > 0) {
-          remInfo = receivers.map(r => `rcv: en=${r.track.enabled}, mut=${r.track.muted}, state=${r.track.readyState}`).join(" | ");
-        }
-      }
-
-      // Audio DOM Element info
-      const audioEl = document.getElementById("global_webrtc_remote_audio") as HTMLAudioElement | null;
-      let elInfo = "none";
-      if (audioEl) {
-        elInfo = `pause=${audioEl.paused}, vol=${audioEl.volume}, ready=${audioEl.readyState}, mut=${audioEl.muted}`;
-      }
-
-      // AudioContext info
-      const ctx = getOrCreateAudioContext();
-      let ctxInfo = "none";
-      if (ctx) {
-        ctxInfo = `state=${ctx.state}, rate=${ctx.sampleRate}`;
-      }
-
-      setDiag({
-        localTracks: locInfo,
-        remoteTracks: remInfo,
-        audioEl: elInfo,
-        audioCtx: ctxInfo,
-        pcState,
-        iceState,
-        sigState,
-        lastMsg: signalingError ? `Err: ${signalingError}` : (isConnected ? "Call Connected & Live" : micStatusText)
-      });
-    }, 300);
-
-    return () => clearInterval(monitor);
-  }, [remoteStream, isConnected, micStatusText, signalingError]);
-
-  // Bind Remote Stream to Audio Engines
+  // Attach remote stream to video & audio element
   useEffect(() => {
     if (remoteStream) {
-      remoteStream.getAudioTracks().forEach(t => t.enabled = true);
-      playRemoteAudioStream(remoteStream, isSpeakerOn);
-    }
-  }, [remoteStream, isSpeakerOn]);
-
-  // Ringtone Management
-  useEffect(() => {
-    if (isRinging) {
-      if (isCaller) startOutgoingRingbackSound();
-      else startIncomingCallerTuneSound();
-    } else {
-      stopAllRingtones();
-    }
-    return () => stopAllRingtones();
-  }, [isRinging, isCaller]);
-
-  // Helper to format ICE Candidate safely
-  const formatCandidate = (c: any): RTCIceCandidateInit | null => {
-    if (!c) return null;
-    let raw = c;
-    if (c.candidate && typeof c.candidate === "object") {
-      raw = c.candidate;
-    }
-    const candStr = typeof raw.candidate === "string" ? raw.candidate : (typeof raw === "string" ? raw : "");
-    if (!candStr) return null;
-
-    return {
-      candidate: candStr,
-      sdpMid: raw.sdpMid !== undefined && raw.sdpMid !== null ? String(raw.sdpMid) : "0",
-      sdpMLineIndex: raw.sdpMLineIndex !== undefined && raw.sdpMLineIndex !== null ? Number(raw.sdpMLineIndex) : 0,
-      usernameFragment: raw.usernameFragment
-    };
-  };
-
-  // Helper to add candidate safely (only after remote description is set)
-  const addCandidateSafely = async (cand: any) => {
-    const pc = peerConnectionRef.current;
-    if (!pc || (pc as any).signalingState === "closed") return;
-    
-    const formatted = formatCandidate(cand);
-    if (!formatted) return;
-
-    if (pc.remoteDescription && pc.remoteDescription.type) {
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(formatted));
-        console.log("[WebRTC] Added ICE Candidate successfully! ICE State:", pc.iceConnectionState);
-      } catch (e) {
-        console.warn("[WebRTC] ICE candidate add warning:", e);
-      }
-    } else {
-      pendingIceCandidatesRef.current.push(formatted);
-    }
-  };
-
-  const flushPendingIceCandidates = async () => {
-    const pc = peerConnectionRef.current;
-    if (!pc || !pc.remoteDescription || (pc as any).signalingState === "closed") return;
-    
-    console.log(`[WebRTC] Flushing ${pendingIceCandidatesRef.current.length} queued ICE candidates...`);
-    while (pendingIceCandidatesRef.current.length > 0) {
-      const cand = pendingIceCandidatesRef.current.shift();
-      if (cand) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(cand));
-          console.log("[WebRTC] Flushed candidate added successfully!");
-        } catch (e) {}
-      }
-    }
-  };
-
-  // INITIALIZE WEBRTC PEER CONNECTION (SINGLETON LIFECYCLE FOR COMPONENT LIFETIME)
-  useEffect(() => {
-    console.log("[CallOverlay] Mounting Singleton WebRTC PeerConnection...");
-
-    const configuration: RTCConfiguration = {
-      iceServers: [
-        { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302", "stun:stun3.l.google.com:19302", "stun:stun4.l.google.com:19302"] },
-        { urls: ["stun:stun.cloudflare.com:3478", "stun:global.stun.twilio.com:3478", "stun:stun.services.mozilla.com"] },
-        {
-          urls: [
-            "turn:openrelay.metered.ca:80",
-            "turn:openrelay.metered.ca:80?transport=udp",
-            "turn:openrelay.metered.ca:80?transport=tcp",
-            "turn:openrelay.metered.ca:443",
-            "turn:openrelay.metered.ca:443?transport=tcp",
-            "turns:openrelay.metered.ca:443?transport=tcp"
-          ],
-          username: "openrelayproject",
-          credential: "openrelayproject"
-        }
-      ],
-      iceCandidatePoolSize: 10,
-      bundlePolicy: "max-bundle",
-      rtcpMuxPolicy: "require"
-    };
-
-    const pc = new RTCPeerConnection(configuration);
-    peerConnectionRef.current = pc;
-
-    // Add audio transceiver explicitly to ensure a=sendrecv in SDP!
-    try {
-      pc.addTransceiver("audio", { direction: "sendrecv" });
-    } catch (e) {}
-
-    pc.onconnectionstatechange = () => {
-      console.log("[WebRTC State] pc.connectionState changed to:", pc.connectionState);
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log("[WebRTC State] pc.iceConnectionState changed to:", pc.iceConnectionState);
-    };
-
-    // Handle Remote Track Received via WebRTC (UNMUTE TRACK IMMEDIATELY!)
-    pc.ontrack = (event) => {
-      console.log("[CallOverlay] pc.ontrack event received! Track kind:", event.track.kind, "Streams count:", event.streams.length);
-      event.track.enabled = true;
-
-      event.track.onunmute = () => {
-        console.log("[CallOverlay] Remote track onunmute event fired!");
-        event.track.enabled = true;
-      };
-
-      const stream = event.streams[0] || new MediaStream([event.track]);
+      console.log("[CallOverlay] Attaching remoteStream tracks:", remoteStream.getTracks().map(t => `${t.kind}:${t.enabled}`));
       
-      setRemoteStream(stream);
-      playRemoteAudioStream(stream, isSpeakerOn);
+      // Ensure all remote audio tracks are explicitly enabled
+      remoteStream.getAudioTracks().forEach((track) => {
+        track.enabled = true;
+      });
 
-      if (event.track.kind === "video" && remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = stream;
-      }
-    };
-
-    // Send Local ICE Candidates with Clean JSON Serialization
-    pc.onicecandidate = (event) => {
-      if (event.candidate && (pc as any).signalingState !== "closed") {
-        const candJson = event.candidate.toJSON ? event.candidate.toJSON() : {
-          candidate: event.candidate.candidate,
-          sdpMid: event.candidate.sdpMid,
-          sdpMLineIndex: event.candidate.sdpMLineIndex
-        };
-        fetch("/api/calls/signal", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "ICE_CANDIDATE", candidate: candJson })
-        }).catch(() => {});
-      }
-    };
-
-    // UNMOUNT-ONLY CLEANUP (RUNS ONLY WHEN CALL IS COMPLETELY CLOSED/REMOVED!)
-    return () => {
-      console.log("[CallOverlay] Unmounting CallOverlay component: Closing Peer Connection permanently...");
-      stopAllRingtones();
-      if (localMediaStreamRef.current) {
-        localMediaStreamRef.current.getTracks().forEach(t => t.stop());
-      }
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = null;
-      }
       if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = null;
+        remoteVideoRef.current.srcObject = remoteStream;
       }
-      try { pc.close(); } catch (e) {}
-    };
-  }, []);
 
-  // MEDIA CAPTURE ENGINE (CAPTURES MICROPHONE AND ADDS TRACKS TO PC)
-  useEffect(() => {
-    const pc = peerConnectionRef.current;
-    if (!pc || (pc as any).signalingState === "closed") return;
-    if (isRecipient && isRinging) return;
-    if (isMediaCapturedRef.current) return;
-
-    console.log("[CallOverlay] Capturing Local Media Stream...");
-    setMicStatusText("Capturing Microphone...");
-
-    let animFrame: number;
-
-    async function captureMedia() {
-      const pc = peerConnectionRef.current;
-      if (!pc || (pc as any).signalingState === "closed") return;
-
-      try {
-        const constraints: MediaStreamConstraints = {
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 },
-          video: session.callType === "video" ? {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: facingMode
-          } : false
-        };
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(async (err) => {
-          console.warn("[CallOverlay] Fallback to basic audio getUserMedia due to:", err);
-          return await navigator.mediaDevices.getUserMedia({ audio: true });
-        });
-
-        if (!stream || (pc as any).signalingState === "closed") return;
-
-        isMediaCapturedRef.current = true;
-        setMicStatusText("Microphone Active!");
-        localMediaStreamRef.current = stream;
-
-        stream.getTracks().forEach(track => {
-          track.enabled = true;
-          if ((pc as any).signalingState !== "closed") {
-            try { 
-              pc.addTrack(track, stream); 
-              console.log("[CallOverlay] Added local track to PC:", track.kind);
-            } catch (e) {}
-          }
-        });
-
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-          localVideoRef.current.muted = true;
-        }
-
-        // Live Voice Visualizer Analyser
-        try {
-          const ctx = getOrCreateAudioContext();
-          if (ctx) {
-            if (ctx.state === "suspended") ctx.resume().catch(() => {});
-            const source = ctx.createMediaStreamSource(stream);
-            const analyser = ctx.createAnalyser();
-            analyser.fftSize = 64;
-            source.connect(analyser);
-
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            const updateVolume = () => {
-              analyser.getByteFrequencyData(dataArray);
-              let sum = 0;
-              for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-              setVoiceVolume(Math.min(100, Math.round((sum / dataArray.length / 128) * 100)));
-              animFrame = requestAnimationFrame(updateVolume);
-            };
-            updateVolume();
-          }
-        } catch (e) {}
-
-        // CALLER: Create SDP Offer immediately after adding local tracks
-        if (!isOfferSentRef.current && (pc as any).signalingState !== "closed") {
-          isOfferSentRef.current = true;
-          console.log("[CallOverlay] Creating SDP Offer after tracks attached...");
-          const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
-          await pc.setLocalDescription(offer);
-          await fetch("/api/calls/signal", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "SDP_OFFER", sdp: offer })
-          });
-          console.log("[CallOverlay] SDP Offer sent successfully!");
-        }
-      } catch (e) {
-        console.error("[CallOverlay] Media capture error:", e);
-        setMicStatusText(`Mic Error: ${(e as any)?.message || "Permission Denied"}`);
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remoteStream;
+        remoteAudioRef.current.volume = 1.0;
+        remoteAudioRef.current.muted = false;
+        remoteAudioRef.current
+          .play()
+          .then(() => console.log("[CallOverlay] Remote audio playing loud and clear!"))
+          .catch((e) => console.warn("[CallOverlay] Audio play warning:", e));
       }
     }
+  }, [remoteStream]);
 
-    captureMedia();
-  }, [isRecipient, isRinging, session.callType]);
-
-  // DIRECT POLLER: APPLIES SDP ANSWER FOR ANY PEER WITH LOCAL OFFER
+  // Live Telemetry Loop (Updates every 800ms)
   useEffect(() => {
-    const poller = setInterval(async () => {
-      const pc = peerConnectionRef.current;
-      if (!pc || pc.remoteDescription || (pc as any).signalingState === "closed") return;
+    if (callState === "IDLE") return;
 
-      try {
-        const res = await fetch("/api/calls/signal");
-        if (res.ok) {
-          const data = await res.json();
-          const sess = data.session;
-          if (sess && sess.sdpAnswer && !pc.remoteDescription && (pc as any).signalingState !== "closed") {
-            console.log("[CallOverlay Direct Poller] Applying sdpAnswer!");
-            try {
-              const answerObj = typeof sess.sdpAnswer === "string" ? { type: "answer", sdp: sess.sdpAnswer } : sess.sdpAnswer;
-              await pc.setRemoteDescription(new RTCSessionDescription(answerObj));
-              await flushPendingIceCandidates();
-              console.log("[CallOverlay Direct Poller] SUCCESS: PC Signaling State is now:", pc.signalingState);
-              setSignalingError("");
-            } catch (err: any) {
-              console.error("[CallOverlay Direct Poller] setRemoteDescription error:", err);
-              setSignalingError(err?.message || "SDP Answer Format Error");
-            }
-          }
-        }
-      } catch (e) {}
-    }, 200);
+    const interval = setInterval(() => {
+      const pc = rtcService?.getPeerConnection();
+      const localAudioTrack = localStream?.getAudioTracks()[0];
+      const remoteAudioTrack = remoteStream?.getAudioTracks()[0];
+      const audioEl = remoteAudioRef.current || (typeof window !== "undefined" ? (document.getElementById("remoteAudio") as HTMLAudioElement) : null);
 
-    return () => clearInterval(poller);
-  }, []);
+      setTelemetry({
+        pcConnectionState: pc?.connectionState || "none",
+        iceConnectionState: pc?.iceConnectionState || "none",
+        localTrack: localAudioTrack ? `enabled:${localAudioTrack.enabled}, muted:${localAudioTrack.muted}, state:${localAudioTrack.readyState}` : "none",
+        remoteTrack: remoteAudioTrack ? `enabled:${remoteAudioTrack.enabled}, muted:${remoteAudioTrack.muted}, state:${remoteAudioTrack.readyState}` : "none",
+        audioElement: audioEl ? `paused:${audioEl.paused}, vol:${audioEl.volume}, muted:${audioEl.muted}` : "none",
+      });
+    }, 800);
 
-  // DECOUPLED REACTIVE SIGNALING LISTENER (ROBUST OFFER / ANSWER / ICE PROCESSOR)
-  useEffect(() => {
-    const pc = peerConnectionRef.current;
-    if (!pc || (pc as any).signalingState === "closed") return;
+    return () => clearInterval(interval);
+  }, [callState, localStream, remoteStream, rtcService]);
 
-    async function handleSignaling() {
-      const pc = peerConnectionRef.current;
-      if (!pc || (pc as any).signalingState === "closed") return;
-
-      try {
-        // ANY PEER THAT DOES NOT HAVE LOCAL DESCRIPTION RECEIVES SDP OFFER -> CREATES ANSWER
-        if (session.sdpOffer && !pc.localDescription && !pc.remoteDescription && pc.signalingState !== "closed") {
-          console.log("[WebRTC Handshake] Processing sdpOffer! Setting Remote Description & Creating Answer...");
-          try {
-            const offerObj = typeof session.sdpOffer === "string" ? { type: "offer", sdp: session.sdpOffer } : session.sdpOffer;
-            await pc.setRemoteDescription(new RTCSessionDescription(offerObj));
-            await flushPendingIceCandidates();
-
-            if ((pc as any).signalingState !== "closed") {
-              const answer = await pc.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: session.callType === "video" });
-              if ((pc as any).signalingState !== "closed") {
-                await pc.setLocalDescription(answer);
-                await fetch("/api/calls/signal", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ action: "SDP_ANSWER", sdp: answer })
-                });
-                console.log("[WebRTC Handshake] Sent SDP Answer to server!");
-                setSignalingError("");
-              }
-            }
-          } catch (err: any) {
-            console.error("[WebRTC Handshake] setRemoteDescription offer error:", err);
-            setSignalingError(err?.message || "SDP Offer Format Error");
-          }
-        }
-
-        // ANY PEER THAT ALREADY HAS LOCAL OFFER RECEIVES SDP ANSWER -> TRANSITIONS TO STABLE
-        if (session.sdpAnswer && pc.localDescription && !pc.remoteDescription && pc.signalingState !== "closed") {
-          console.log("[WebRTC Handshake] Processing sdpAnswer! Setting Remote Description -> Transitioning to STABLE!");
-          try {
-            const answerObj = typeof session.sdpAnswer === "string" ? { type: "answer", sdp: session.sdpAnswer } : session.sdpAnswer;
-            await pc.setRemoteDescription(new RTCSessionDescription(answerObj));
-            await flushPendingIceCandidates();
-            console.log("[WebRTC Handshake] SUCCESS: PC Signaling State is now:", pc.signalingState);
-            setSignalingError("");
-          } catch (err: any) {
-            console.error("[WebRTC Handshake] setRemoteDescription answer error:", err);
-            setSignalingError(err?.message || "SDP Answer Format Error");
-          }
-        }
-
-        // CALLER ONLY ADDS RECIPIENT CANDIDATES; RECIPIENT ONLY ADDS CALLER CANDIDATES!
-        const amITheCaller = (pc?.localDescription?.type === "offer") || isCaller;
-        const targetCandidates = amITheCaller ? session.recipientCandidates : session.callerCandidates;
-
-        if (targetCandidates && targetCandidates.length > 0 && (pc as any).signalingState !== "closed") {
-          for (const cand of targetCandidates) {
-            const candStr = JSON.stringify(cand);
-            if (!processedIceCandidatesRef.current.has(candStr)) {
-              processedIceCandidatesRef.current.add(candStr);
-              await addCandidateSafely(cand);
-            }
-          }
-        }
-      } catch (e) {
-        console.error("[WebRTC Handshake] Error handling signaling:", e);
-      }
-    }
-
-    handleSignaling();
-  }, [session.sdpOffer, session.sdpAnswer, session.callerCandidates, session.recipientCandidates, session.status]);
-
-  // Call Duration Counter
-  useEffect(() => {
-    let timer: any;
-    if (isConnected) {
-      timer = setInterval(() => setCallDuration(prev => prev + 1), 1000);
-    } else {
-      setCallDuration(0);
-    }
-    return () => { if (timer) clearInterval(timer); };
-  }, [isConnected]);
-
-  // Toggle Mute
-  const handleToggleMute = () => {
-    unlockAudioPipeline();
-    if (localMediaStreamRef.current) {
-      localMediaStreamRef.current.getAudioTracks().forEach(t => t.enabled = isMuted);
-      setIsMuted(!isMuted);
-    }
-  };
-
-  // Toggle Video
-  const handleToggleVideo = () => {
-    unlockAudioPipeline();
-    if (localMediaStreamRef.current) {
-      localMediaStreamRef.current.getVideoTracks().forEach(t => t.enabled = !isVideoEnabled);
-      setIsVideoEnabled(!isVideoEnabled);
-    }
-  };
-
-  // Switch Front / Rear Camera
-  const handleFlipCamera = () => {
-    setFacingMode(prev => prev === "user" ? "environment" : "user");
-  };
-
-  // Toggle Speaker / Earpiece Target Output
-  const handleToggleSpeaker = () => {
-    unlockAudioPipeline();
-    const nextSpeaker = !isSpeakerOn;
-    setIsSpeakerOn(nextSpeaker);
-    if (remoteStream) {
-      playRemoteAudioStream(remoteStream, nextSpeaker);
-    }
-  };
+  if (callState === "IDLE") return null;
 
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -654,346 +108,525 @@ export function CallOverlay({ session, currentUserId, onEndCall, onAcceptCall }:
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Minimized Picture-in-Picture Floating Bar
-  if (isMinimized) {
+  // 1. MINIMIZED CALL FLOATING PILL
+  if (isMinimized && callState === "CONNECTED") {
     return (
-      <div 
+      <motion.div
+        key="call-overlay-minimized-view"
+        initial={{ opacity: 0, scale: 0.8, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
         style={{
-          position: "fixed", top: "16px", right: "16px", zIndex: 99999,
-          background: "rgba(10, 10, 12, 0.95)", border: "2px solid #00f2fe",
-          borderRadius: "9999px", padding: "8px 20px", display: "flex",
-          alignItems: "center", gap: "12px", boxShadow: "0 10px 30px rgba(0, 242, 254, 0.4)",
-          backdropFilter: "blur(16px)", cursor: "pointer", color: "white"
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "10px 16px",
+          backgroundColor: "#0d1017",
+          border: "1px solid rgba(0, 242, 254, 0.4)",
+          borderRadius: 9999,
+          boxShadow: "0 10px 30px rgba(0, 242, 254, 0.3)",
+          color: "#ffffff",
         }}
-        onClick={() => setIsMinimized(false)}
-        className="animate-pulse"
       >
-        <img
-          src={otherPersonAvatar}
-          alt={otherPersonName}
-          style={{ width: "32px", height: "32px", borderRadius: "50%", objectFit: "cover", border: "2px solid #00f2fe" }}
-        />
+        <div style={{ position: "relative", width: 36, height: 36 }}>
+          <img
+            src={partner?.avatar || "https://ui-avatars.com/api/?name=User"}
+            alt={partner?.name}
+            style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }}
+          />
+          <span
+            style={{
+              position: "absolute",
+              bottom: 0,
+              right: 0,
+              width: 10,
+              height: 10,
+              backgroundColor: "#10b981",
+              borderRadius: "50%",
+              border: "2px solid #0d1017",
+            }}
+          />
+        </div>
+
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#ffffff" }}>{otherPersonName}</span>
-          <span style={{ fontSize: "0.75rem", color: "#00f2fe", fontWeight: 700 }}>
-            {isConnected ? `Connected • ${formatTimer(callDuration)}` : "Calling..."}
+          <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#f8fafc" }}>
+            {partner?.name || "Call"}
+          </span>
+          <span style={{ fontSize: "0.72rem", color: "#00f2fe", fontWeight: 600 }}>
+            {formatTimer(callDuration)}
           </span>
         </div>
+
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsMinimized(false);
+          onClick={toggleMinimize}
+          style={{
+            background: "rgba(255, 255, 255, 0.1)",
+            border: "none",
+            color: "#ffffff",
+            padding: 8,
+            borderRadius: "50%",
+            cursor: "pointer",
+            display: "flex",
           }}
-          style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "white", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+          title="Maximize Call"
         >
           <Maximize2 size={16} />
         </button>
+
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onEndCall();
+          onClick={endCall}
+          style={{
+            background: "#f87171",
+            border: "none",
+            color: "#ffffff",
+            padding: 8,
+            borderRadius: "50%",
+            cursor: "pointer",
+            display: "flex",
           }}
-          style={{ background: "#ef4444", border: "none", color: "white", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+          title="End Call"
         >
           <PhoneOff size={16} />
         </button>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div 
-      onClick={unlockAudioPipeline}
-      style={{
-        position: "fixed", inset: 0, zIndex: 99999,
-        backgroundColor: "rgba(8, 8, 12, 0.96)",
-        backdropFilter: "blur(40px)",
-        display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: "space-between", padding: "24px 16px", overflowY: "auto"
-      }}
-      className="animate-fade-in"
-    >
-      {/* Background Artwork */}
-      <div 
+    <AnimatePresence>
+      <motion.div
+        key="call-overlay-active-root"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
         style={{
-          position: "absolute", inset: 0, backgroundImage: `url(${otherPersonAvatar})`,
-          backgroundSize: "cover", backgroundPosition: "center",
-          filter: "blur(80px) brightness(0.18)", opacity: 0.5, transform: "scale(1.1)", zIndex: 0
-        }} 
-      />
-
-      {/* Top Bar Header */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", zIndex: 2, width: "100%", maxWidth: "460px", position: "relative" }}>
-        {isConnected && (
-          <button
-            onClick={() => setIsMinimized(true)}
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 99999,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "space-between",
+          backgroundColor: "#05070a",
+          padding: "40px 24px",
+          boxSizing: "border-box",
+          overflow: "hidden",
+        }}
+      >
+        {/* Remote Video Container (When Video Call Connected) */}
+        {callType === "VIDEO" && callState === "CONNECTED" && (
+          <div
             style={{
-              position: "absolute", right: 0, top: 0,
-              background: "rgba(255, 255, 255, 0.15)", border: "1px solid rgba(255, 255, 255, 0.25)",
-              color: "white", borderRadius: "50%", width: "38px", height: "38px",
-              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-              backdropFilter: "blur(12px)"
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 1,
+              backgroundColor: "#000000",
             }}
-            title="Minimize Call to Floating Pill"
           >
-            <Minimize2 size={18} />
-          </button>
-        )}
-
-        <div style={{
-          display: "flex", alignItems: "center", gap: "6px",
-          background: "rgba(255, 255, 255, 0.12)", padding: "4px 14px",
-          borderRadius: "9999px", color: "white", fontSize: "0.8rem", fontWeight: 800,
-          border: "1px solid rgba(255, 255, 255, 0.2)", backdropFilter: "blur(12px)"
-        }}>
-          <Shield size={14} style={{ color: "#10b981" }} /> End-to-End Encrypted HD {session.callType === "voice" ? "Voice" : "Video"} Call
-        </div>
-
-        <h2 style={{ fontSize: "1.8rem", fontWeight: 900, color: "#ffffff", margin: "6px 0 2px 0", textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
-          {otherPersonName}
-        </h2>
-        
-        <span style={{ 
-          fontSize: "0.95rem", 
-          color: isConnected ? "#10b981" : "#00f2fe", 
-          fontWeight: 800, display: "flex", alignItems: "center", gap: "6px" 
-        }}>
-          {isRinging ? (
-            <>
-              <PhoneCall size={16} className="animate-pulse" /> {isCaller ? `Calling ${otherPersonName}...` : `Incoming Call from ${otherPersonName}...`}
-            </>
-          ) : (
-            `Connected • ${formatTimer(callDuration)}`
-          )}
-        </span>
-
-        {/* 🚨 AGGRESSIVE MANDATORY REAL-TIME DEBUG PANEL 🚨 */}
-        <div style={{
-          width: "100%", background: "rgba(239, 68, 68, 0.18)",
-          border: "2px solid #ef4444", borderRadius: "16px",
-          padding: "10px 14px", marginTop: "8px", backdropFilter: "blur(16px)",
-          boxShadow: "0 0 20px rgba(239, 68, 68, 0.4)", textAlign: "left"
-        }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-            <span style={{ color: "#ef4444", fontWeight: 900, fontSize: "0.75rem", letterSpacing: "0.5px" }}>
-              🔴 LIVE AGGRESSIVE WEBRTC AUDIO TELEMETRY
-            </span>
-            <span style={{ color: "#00f2fe", fontSize: "0.7rem", fontWeight: 700 }}>
-              {diag.lastMsg}
-            </span>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", fontSize: "0.7rem", fontFamily: "monospace", color: "#ffffff" }}>
-            <div><span style={{ color: "#00f2fe" }}>PC Conn:</span> {diag.pcState}</div>
-            <div><span style={{ color: "#00f2fe" }}>ICE State:</span> {diag.iceState}</div>
-            <div><span style={{ color: "#00f2fe" }}>Signaling:</span> {diag.sigState}</div>
-            <div><span style={{ color: "#00f2fe" }}>AudioCtx:</span> {diag.audioCtx}</div>
-            <div style={{ gridColumn: "span 2" }}><span style={{ color: "#10b981" }}>Local Audio:</span> {diag.localTracks}</div>
-            <div style={{ gridColumn: "span 2" }}><span style={{ color: "#f59e0b" }}>Remote Audio:</span> {diag.remoteTracks}</div>
-            <div style={{ gridColumn: "span 2" }}><span style={{ color: "#ec4899" }}>Audio Element:</span> {diag.audioEl}</div>
-          </div>
-
-          {/* TWO MANDATORY BIG FORCE BUTTONS */}
-          <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-            <button
-              onClick={handleForcePlayAudio}
-              style={{
-                flex: 1, background: "linear-gradient(135deg, #ef4444, #dc2626)",
-                color: "white", fontWeight: 900, fontSize: "0.7rem",
-                padding: "8px 10px", borderRadius: "10px", border: "none",
-                cursor: "pointer", boxShadow: "0 4px 12px rgba(239, 68, 68, 0.4)",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: "4px"
-              }}
-            >
-              <Volume2 size={14} /> 🔊 FORCE PLAY REMOTE AUDIO
-            </button>
-            <button
-              onClick={handleForceEnableAllTracks}
-              style={{
-                flex: 1, background: "linear-gradient(135deg, #3b82f6, #2563eb)",
-                color: "white", fontWeight: 900, fontSize: "0.7rem",
-                padding: "8px 10px", borderRadius: "10px", border: "none",
-                cursor: "pointer", boxShadow: "0 4px 12px rgba(59, 130, 246, 0.4)",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: "4px"
-              }}
-            >
-              <Zap size={14} /> ⚡ FORCE ENABLE ALL TRACKS / RE-CAPTURE MIC
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Avatar / Video Canvas Display */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", position: "relative", width: "100%", maxHeight: "380px", flex: 1, zIndex: 2, margin: "12px 0" }}>
-        {session.callType === "voice" ? (
-          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{
-              position: "absolute", width: `${150 + voiceVolume * 1.2}px`, height: `${150 + voiceVolume * 1.2}px`,
-              borderRadius: "50%", border: "3px solid rgba(0, 242, 254, 0.7)", boxShadow: "0 0 30px rgba(0, 242, 254, 0.4)",
-              transition: "all 0.08s ease-out", opacity: isMuted ? 0.2 : 0.8
-            }} />
-            <img
-              src={otherPersonAvatar}
-              alt={otherPersonName}
-              style={{
-                width: "130px", height: "130px", borderRadius: "50%", objectFit: "cover",
-                border: "4px solid #00f2fe", boxShadow: "0 0 40px rgba(0, 242, 254, 0.5)", zIndex: 2
-              }}
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
-          </div>
-        ) : (
-          <div style={{
-            width: "100%", maxWidth: "640px", height: "100%", minHeight: "280px",
-            borderRadius: "24px", overflow: "hidden", background: "#111111", position: "relative",
-            border: "1px solid rgba(255, 255, 255, 0.2)", boxShadow: "0 20px 50px rgba(0,0,0,0.6)"
-          }}>
-            <video ref={remoteVideoRef} autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            <div style={{
-              position: "absolute", bottom: "16px", right: "16px", width: "100px", height: "140px",
-              borderRadius: "16px", background: "#000", border: "2px solid rgba(255, 255, 255, 0.4)", overflow: "hidden"
-            }}>
-              <video ref={localVideoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", transform: facingMode === "user" ? "scaleX(-1)" : "none" }} />
+
+            {/* Local Video Float (Picture in Picture) */}
+            <div
+              style={{
+                position: "absolute",
+                top: 24,
+                right: 24,
+                width: 140,
+                height: 200,
+                borderRadius: 18,
+                overflow: "hidden",
+                border: "2px solid rgba(255, 255, 255, 0.2)",
+                boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
+                backgroundColor: "#000000",
+                zIndex: 10,
+              }}
+            >
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
             </div>
           </div>
         )}
-      </div>
 
-      {/* Bottom Control Bar with ALL 6 FEATURES VISIBLE & FUNCTIONAL */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: "14px",
-        background: "rgba(255, 255, 255, 0.14)", padding: "12px 20px",
-        borderRadius: "9999px", border: "1px solid rgba(255, 255, 255, 0.25)",
-        backdropFilter: "blur(24px)", boxShadow: "0 10px 40px rgba(0,0,0,0.5)", zIndex: 2
-      }}>
-        {/* Recipient Ringing Controls (MANUAL TAP TO ACCEPT REQUIRED) */}
-        {isRecipient && isRinging ? (
-          <>
-            <button
-              onClick={() => {
-                unlockAudioPipeline();
-                onAcceptCall();
-              }}
-              style={{
-                width: "64px", height: "64px", borderRadius: "50%",
-                background: "#10b981", border: "none", color: "white",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", boxShadow: "0 0 35px rgba(16, 185, 129, 0.8)"
-              }}
-              className="hover:scale-110 active:scale-95 transition-all animate-bounce"
-              title="Accept Call"
-            >
-              <Phone size={28} />
-            </button>
-            <button
-              onClick={onEndCall}
-              style={{
-                width: "64px", height: "64px", borderRadius: "50%",
-                background: "#ef4444", border: "none", color: "white",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", boxShadow: "0 0 35px rgba(239, 68, 68, 0.8)"
-              }}
-              className="hover:scale-110 active:scale-95 transition-all"
-              title="Decline Call"
-            >
-              <PhoneOff size={28} />
-            </button>
-          </>
-        ) : (
-          <>
-            {/* 1. Mute Mic */}
-            <button
-              onClick={handleToggleMute}
-              style={{
-                width: "44px", height: "44px", borderRadius: "50%",
-                background: isMuted ? "#ef4444" : "rgba(255, 255, 255, 0.2)",
-                border: "none", color: "white", display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", transition: "all 0.2s ease"
-              }}
-              className="hover:scale-105 active:scale-95"
-              title={isMuted ? "Unmute Mic" : "Mute Mic"}
-            >
-              {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
-            </button>
+        {/* Ambient Glowing Background Circles */}
+        <div
+          style={{
+            position: "absolute",
+            top: "20%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 400,
+            height: 400,
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(0, 242, 254, 0.15) 0%, transparent 70%)",
+            pointerEvents: "none",
+            zIndex: 2,
+          }}
+        />
 
-            {/* 2. Loudspeaker / Earpiece Toggle Button */}
-            <button
-              onClick={handleToggleSpeaker}
-              style={{
-                width: "44px", height: "44px", borderRadius: "50%",
-                background: isSpeakerOn ? "rgba(0, 242, 254, 0.3)" : "rgba(255, 255, 255, 0.2)",
-                border: "none", color: isSpeakerOn ? "#00f2fe" : "white",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", transition: "all 0.2s ease"
-              }}
-              className="hover:scale-105 active:scale-95"
-              title={isSpeakerOn ? "Loudspeaker Mode (Main Speaker)" : "Earpiece Mode (Top Receiver)"}
-            >
-              {isSpeakerOn ? <Volume2 size={18} /> : <Headphones size={18} />}
-            </button>
+        {/* TOP CALL HEADER */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 10,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span
+            style={{
+              fontSize: "0.78rem",
+              fontWeight: 700,
+              color: "#00f2fe",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              padding: "4px 14px",
+              backgroundColor: "rgba(0, 242, 254, 0.1)",
+              borderRadius: 9999,
+              border: "1px solid rgba(0, 242, 254, 0.2)",
+            }}
+          >
+            {callType === "VIDEO" ? "HD Video Call" : "Voice Call"}
+          </span>
 
-            {/* 3. Video Toggle */}
-            <button
-              onClick={handleToggleVideo}
-              style={{
-                width: "44px", height: "44px", borderRadius: "50%",
-                background: isVideoEnabled ? "rgba(168, 85, 247, 0.3)" : "rgba(255, 255, 255, 0.2)",
-                border: "none", color: isVideoEnabled ? "#a855f7" : "white",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", transition: "all 0.2s ease"
-              }}
-              className="hover:scale-105 active:scale-95"
-              title={isVideoEnabled ? "Turn Video Off" : "Turn Video On"}
-            >
-              {isVideoEnabled ? <Video size={18} /> : <VideoOff size={18} />}
-            </button>
+          <h2 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#ffffff", margin: "6px 0 0 0" }}>
+            {partner?.name || "DOST Friend"}
+          </h2>
 
-            {/* 4. Flip Camera Button (Front / Rear) */}
-            <button
-              onClick={handleFlipCamera}
-              style={{
-                width: "44px", height: "44px", borderRadius: "50%",
-                background: "rgba(255, 255, 255, 0.2)", border: "none", color: "white",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", transition: "all 0.2s ease"
-              }}
-              className="hover:scale-105 active:scale-95"
-              title="Flip Camera (Front / Back)"
-            >
-              <RefreshCw size={18} />
-            </button>
+          <span style={{ fontSize: "0.88rem", color: "#94a3b8", fontWeight: 500 }}>
+            {callState === "OUTGOING" && "Ringing..."}
+            {callState === "INCOMING" && "Incoming Call..."}
+            {callState === "CONNECTED" && formatTimer(callDuration)}
+            {callState === "ENDED" && "Call Ended"}
+          </span>
+        </div>
 
-            {/* 5. Minimize to Floating Pill Button */}
-            <button
-              onClick={() => setIsMinimized(true)}
+        {/* CENTER AVATAR DISPLAY (FOR VOICE CALL OR OUTGOING/INCOMING) */}
+        {(callType === "VOICE" || callState !== "CONNECTED") && (
+          <div
+            style={{
+              position: "relative",
+              zIndex: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "auto 0",
+            }}
+          >
+            {/* Pulsing Ring for Ringing/Incoming */}
+            <motion.div
+              animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0.2, 0.6] }}
+              transition={{ repeat: Infinity, duration: 2 }}
               style={{
-                width: "44px", height: "44px", borderRadius: "50%",
-                background: "rgba(255, 255, 255, 0.2)", border: "none", color: "white",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", transition: "all 0.2s ease"
+                position: "absolute",
+                width: 190,
+                height: 190,
+                borderRadius: "50%",
+                border: "2px solid #00f2fe",
               }}
-              className="hover:scale-105 active:scale-95"
-              title="Minimize to Floating Pill"
-            >
-              <Minimize2 size={18} />
-            </button>
+            />
 
-            {/* 6. End Call Button */}
-            <button
-              onClick={onEndCall}
+            <img
+              src={partner?.avatar || "https://ui-avatars.com/api/?name=User"}
+              alt={partner?.name}
               style={{
-                width: "48px", height: "48px", borderRadius: "50%",
-                background: "#ef4444", border: "none", color: "white",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", boxShadow: "0 0 25px rgba(239, 68, 68, 0.7)"
+                width: 140,
+                height: 140,
+                borderRadius: "50%",
+                objectFit: "cover",
+                border: "4px solid rgba(0, 242, 254, 0.5)",
+                boxShadow: "0 0 40px rgba(0, 242, 254, 0.4)",
               }}
-              className="hover:scale-110 active:scale-95 transition-all"
-              title="End Call"
-            >
-              <PhoneOff size={22} />
-            </button>
-          </>
+            />
+          </div>
         )}
-      </div>
-    </div>
+
+        {/* BOTTOM CONTROL BAR */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 20,
+            padding: "16px 28px",
+            backgroundColor: "rgba(16, 18, 24, 0.85)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            borderRadius: 9999,
+            boxShadow: "0 20px 50px rgba(0, 0, 0, 0.6)",
+          }}
+        >
+          {/* INCOMING CALL CONTROLS: ACCEPT & REJECT */}
+          {callState === "INCOMING" && (
+            <>
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => {
+                  if (remoteAudioRef.current) {
+                    remoteAudioRef.current.play().catch(() => {});
+                  }
+                  acceptCall();
+                }}
+                style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: "50%",
+                  backgroundColor: "#10b981",
+                  border: "none",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  boxShadow: "0 0 30px rgba(16, 185, 129, 0.6)",
+                }}
+              >
+                <Phone size={26} />
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={rejectCall}
+                style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: "50%",
+                  backgroundColor: "#ef4444",
+                  border: "none",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  boxShadow: "0 0 30px rgba(239, 68, 68, 0.6)",
+                }}
+              >
+                <PhoneOff size={26} />
+              </motion.button>
+            </>
+          )}
+
+          {/* CONNECTED / OUTGOING CALL CONTROLS */}
+          {callState !== "INCOMING" && (
+            <>
+              {/* Mute Mic */}
+              <button
+                onClick={toggleMute}
+                style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: "50%",
+                  backgroundColor: isMuted ? "#ef4444" : "rgba(255, 255, 255, 0.1)",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+                title={isMuted ? "Unmute" : "Mute"}
+              >
+                {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+              </button>
+
+              {/* Earpiece / Speaker Output Toggle */}
+              <button
+                onClick={async () => {
+                  const newMode = await rtcService.setAudioOutputDevice(audioMode);
+                  setAudioMode(newMode);
+                }}
+                style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: "50%",
+                  backgroundColor: audioMode === "speaker" ? "rgba(0, 242, 254, 0.35)" : "rgba(255, 255, 255, 0.1)",
+                  border: audioMode === "speaker" ? "1px solid #00f2fe" : "1px solid rgba(255, 255, 255, 0.15)",
+                  color: audioMode === "speaker" ? "#00f2fe" : "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+                title={audioMode === "speaker" ? "Switch to Earpiece" : "Switch to Loudspeaker"}
+              >
+                <Volume2 size={20} />
+              </button>
+
+              {/* Toggle Camera (If Video Call) */}
+              {callType === "VIDEO" && (
+                <button
+                  onClick={toggleCamera}
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: "50%",
+                    backgroundColor: isCameraOff ? "#ef4444" : "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    color: "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                  }}
+                  title={isCameraOff ? "Turn Camera On" : "Turn Camera Off"}
+                >
+                  {isCameraOff ? <VideoOff size={20} /> : <Video size={20} />}
+                </button>
+              )}
+
+              {/* Minimize Call */}
+              {callState === "CONNECTED" && (
+                <button
+                  onClick={toggleMinimize}
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: "50%",
+                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    color: "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                  }}
+                  title="Minimize"
+                >
+                  <Minimize2 size={20} />
+                </button>
+              )}
+
+              {/* End Call */}
+              <motion.button
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={endCall}
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: "50%",
+                  backgroundColor: "#ef4444",
+                  border: "none",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  boxShadow: "0 0 25px rgba(239, 68, 68, 0.5)",
+                }}
+                title="End Call"
+              >
+                <PhoneOff size={24} />
+              </motion.button>
+            </>
+          )}
+        </div>
+
+        {/* LIVE AUDIO TELEMETRY & DEBUG ACTION BUTTONS */}
+        {callState === "CONNECTED" && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: "10px 14px",
+              backgroundColor: "rgba(0, 0, 0, 0.65)",
+              border: "1px solid rgba(0, 242, 254, 0.25)",
+              borderRadius: "14px",
+              fontSize: "0.72rem",
+              color: "#94a3b8",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              width: "100%",
+              boxSizing: "border-box",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", color: "#00f2fe", fontWeight: 700 }}>
+              <span>PC: {telemetry.pcConnectionState}</span>
+              <span>ICE: {telemetry.iceConnectionState}</span>
+            </div>
+
+            <div style={{ fontSize: "0.68rem", display: "flex", flexDirection: "column", gap: 2 }}>
+              <span>Local Track: {telemetry.localTrack}</span>
+              <span>Remote Track: {telemetry.remoteTrack}</span>
+              <span>Audio Element: {telemetry.audioElement}</span>
+            </div>
+
+            <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap", justifyContent: "center" }}>
+              <button
+                onClick={forcePlayAudio}
+                style={{
+                  padding: "4px 8px",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  backgroundColor: "rgba(0, 242, 254, 0.15)",
+                  border: "1px solid rgba(0, 242, 254, 0.4)",
+                  color: "#00f2fe",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                }}
+              >
+                Force Play Audio
+              </button>
+              <button
+                onClick={reattachRemoteStream}
+                style={{
+                  padding: "4px 8px",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  color: "#ffffff",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                }}
+              >
+                Re-attach Stream
+              </button>
+              <button
+                onClick={enableAllTracks}
+                style={{
+                  padding: "4px 8px",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  backgroundColor: "rgba(16, 185, 129, 0.2)",
+                  border: "1px solid rgba(16, 185, 129, 0.4)",
+                  color: "#10b981",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                }}
+              >
+                Enable All Tracks
+              </button>
+            </div>
+          </div>
+        )}
+      </motion.div>
+
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: "none" }} />
+    </AnimatePresence>
   );
 }
