@@ -69,6 +69,21 @@ export async function POST(request: NextRequest) {
             endedAt: new Date(),
           },
         }).catch(() => {});
+
+        // Inject Call Log Message in Chat Thread
+        const existingSession = await prisma.callSession.findUnique({ where: { id: callId } });
+        if (existingSession?.conversationId) {
+          const durStr = durationSeconds > 0 ? `${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s` : "0s";
+          const callText = `📞 ${callType === "VIDEO" ? "Video" : "Voice"} call ended (${durStr})`;
+          await prisma.message.create({
+            data: {
+              conversationId: existingSession.conversationId,
+              senderId: userPayload.userId,
+              content: callText,
+              type: "SYSTEM",
+            },
+          }).catch(() => {});
+        }
       } else if (signalType === "call_reject") {
         await prisma.callSession.update({
           where: { id: callId },
@@ -77,6 +92,18 @@ export async function POST(request: NextRequest) {
             endedAt: new Date(),
           },
         }).catch(() => {});
+
+        const existingSession = await prisma.callSession.findUnique({ where: { id: callId } });
+        if (existingSession?.conversationId) {
+          await prisma.message.create({
+            data: {
+              conversationId: existingSession.conversationId,
+              senderId: userPayload.userId,
+              content: `📵 Call declined`,
+              type: "SYSTEM",
+            },
+          }).catch(() => {});
+        }
       } else if (signalType === "call_busy") {
         await prisma.callSession.update({
           where: { id: callId },
@@ -85,6 +112,18 @@ export async function POST(request: NextRequest) {
             endedAt: new Date(),
           },
         }).catch(() => {});
+
+        const existingSession = await prisma.callSession.findUnique({ where: { id: callId } });
+        if (existingSession?.conversationId) {
+          await prisma.message.create({
+            data: {
+              conversationId: existingSession.conversationId,
+              senderId: userPayload.userId,
+              content: `⚠️ Missed ${callType === "VIDEO" ? "video" : "voice"} call`,
+              type: "SYSTEM",
+            },
+          }).catch(() => {});
+        }
       }
     }
 
