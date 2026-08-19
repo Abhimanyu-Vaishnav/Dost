@@ -319,7 +319,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   // 4. EITHER: End Call
   const endCall = async () => {
     if (partner) {
-      await sendSignal("call_end", partner.id, callType, activeCallIdRef.current!);
+      await sendSignal("call_end", partner.id, callType, activeCallIdRef.current!, { duration: callDuration });
     }
     handleCleanupAndReset();
   };

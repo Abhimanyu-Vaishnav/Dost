@@ -41,7 +41,8 @@ model User {
   conversationParticipants ConversationParticipant[]
   messages               Message[]
   messageStatuses        MessageStatus[]
-  initiatedCalls         CallSession[]
+  callerCalls   CallSession[] @relation("CallSessionCaller")
+  receiverCalls CallSession[] @relation("CallSessionReceiver")
   presence               UserPresence?
   stories                Story[]
   
@@ -416,18 +417,21 @@ model Hashtag {
 
 model CallSession {
   id             String     @id @default(cuid())
-  conversationId String
+  conversationId String?
   callerId       String
+  receiverId     String
   type           CallType   @default(AUDIO)
   status         CallStatus @default(RINGING)
+  duration       Int        @default(0) // Duration in seconds
   sdp            String?    // Signalling data JSON string
   candidates     String?    // ICE candidates JSON string
   startedAt      DateTime?
   endedAt        DateTime?
   createdAt      DateTime   @default(now())
 
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  caller         User         @relation(fields: [callerId], references: [id], onDelete: Cascade)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  caller         User          @relation("CallSessionCaller", fields: [callerId], references: [id], onDelete: Cascade)
+  receiver       User          @relation("CallSessionReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
 }
 
 enum CallType {

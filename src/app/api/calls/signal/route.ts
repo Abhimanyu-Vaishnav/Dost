@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { presenceManager } from "@/lib/presence/presence-manager";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing targetUserId or signalType" }, { status: 400 });
     }
 
+    // Forward signaling payload via SSE
     presenceManager.sendToUser(targetUserId, {
       type: "call_signal",
       payload: {
@@ -31,6 +33,60 @@ export async function POST(request: NextRequest) {
         caller,
       },
     });
+
+    // Database CallSession Logging
+    if (callId) {
+      if (signalType === "call_offer") {
+        await prisma.callSession.upsert({
+          where: { id: callId },
+          create: {
+            id: callId,
+            callerId: userPayload.userId,
+            receiverId: targetUserId,
+            type: callType === "VIDEO" ? "VIDEO" : "AUDIO",
+            status: "RINGING",
+            startedAt: new Date(),
+          },
+          update: {
+            status: "RINGING",
+          },
+        }).catch(() => {});
+      } else if (signalType === "call_answer") {
+        await prisma.callSession.update({
+          where: { id: callId },
+          data: {
+            status: "CONNECTED",
+            startedAt: new Date(),
+          },
+        }).catch(() => {});
+      } else if (signalType === "call_end") {
+        const durationSeconds = body.duration || 0;
+        await prisma.callSession.update({
+          where: { id: callId },
+          data: {
+            status: "ENDED",
+            duration: durationSeconds,
+            endedAt: new Date(),
+          },
+        }).catch(() => {});
+      } else if (signalType === "call_reject") {
+        await prisma.callSession.update({
+          where: { id: callId },
+          data: {
+            status: "DECLINED",
+            endedAt: new Date(),
+          },
+        }).catch(() => {});
+      } else if (signalType === "call_busy") {
+        await prisma.callSession.update({
+          where: { id: callId },
+          data: {
+            status: "MISSED",
+            endedAt: new Date(),
+          },
+        }).catch(() => {});
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

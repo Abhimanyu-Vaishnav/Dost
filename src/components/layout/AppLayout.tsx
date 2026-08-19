@@ -179,6 +179,8 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
         return <CheckCircle2 size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
       case "analytics":
         return <BarChart3 size={size} strokeWidth={isActive ? 3 : 2} />;
+      case "calls":
+        return <Phone size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
       case "profile":
         return <User size={size} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 2.5 : 2} />;
       default:
@@ -191,6 +193,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
     { href: "/feed", label: "Home", id: "home" },
     { href: "/search", label: "Explore", id: "explore" },
     { href: "/shorts", label: "Shorts", id: "shorts" },
+    { href: "/calls", label: "Calls", id: "calls" },
     { href: "/communities", label: "Communities", id: "communities" },
     { href: "/notifications", label: "Notifications", id: "notifications" },
     { href: "/messages", label: "Messages", id: "messages" },
@@ -567,11 +570,12 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
       {/* MOBILE BOTTOM NAVIGATION BAR (Instagram / YouTube Style) */}
       <nav className={styles.mobileBottomBar}>
         {[
-          { href: "/feed", label: "Home", icon: <Home size={22} />, id: "home" },
-          { href: "/search", label: "Explore", icon: <Search size={22} />, id: "explore" },
-          { href: "/shorts", label: "Shorts", icon: <Video size={22} />, id: "shorts" },
-          { href: "/notifications", label: "Alerts", icon: <Bell size={22} />, id: "notifications" },
-          { href: "/messages", label: "Messages", icon: <Mail size={22} />, id: "messages" },
+          { href: "/feed", label: "Home", icon: <Home size={20} />, id: "home" },
+          { href: "/search", label: "Explore", icon: <Search size={20} />, id: "explore" },
+          { href: "/shorts", label: "Shorts", icon: <Video size={20} />, id: "shorts" },
+          { href: "/calls", label: "Calls", icon: <Phone size={20} />, id: "calls" },
+          { href: "/notifications", label: "Alerts", icon: <Bell size={20} />, id: "notifications" },
+          { href: "/messages", label: "Messages", icon: <Mail size={20} />, id: "messages" },
         ].map((tab) => {
           const active = isItemActive(tab.href);
           return (
