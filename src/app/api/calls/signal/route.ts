@@ -36,13 +36,16 @@ export async function POST(request: NextRequest) {
 
     // Database CallSession Logging
     if (callId) {
+      const senderIdStr = String(userPayload.userId);
+      const targetUserIdStr = String(targetUserId);
+
       if (signalType === "call_offer") {
         await prisma.callSession.upsert({
           where: { id: callId },
           create: {
             id: callId,
-            callerId: userPayload.userId,
-            receiverId: targetUserId,
+            callerId: senderIdStr,
+            receiverId: targetUserIdStr,
             type: callType === "VIDEO" ? "VIDEO" : "AUDIO",
             status: "RINGING",
             startedAt: new Date(),
