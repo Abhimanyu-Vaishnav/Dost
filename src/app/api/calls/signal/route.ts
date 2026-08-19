@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
           await prisma.message.create({
             data: {
               conversationId: existingSession.conversationId,
-              senderId: userPayload.userId,
+              senderId: senderIdStr,
               content: callText,
               type: "SYSTEM",
             },
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
           await prisma.message.create({
             data: {
               conversationId: existingSession.conversationId,
-              senderId: userPayload.userId,
+              senderId: senderIdStr,
               content: `📵 Call declined`,
               type: "SYSTEM",
             },
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
           await prisma.message.create({
             data: {
               conversationId: existingSession.conversationId,
-              senderId: userPayload.userId,
+              senderId: senderIdStr,
               content: `⚠️ Missed ${callType === "VIDEO" ? "video" : "voice"} call`,
               type: "SYSTEM",
             },
