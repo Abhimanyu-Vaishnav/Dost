@@ -58,8 +58,8 @@ export async function POST(request: NextRequest) {
     // 3. GENERATE HASHTAGS
     if (action === "hashtags") {
       const text = content || prompt || "";
-      const words = text.replace(/[^a-zA-Z0-9\s]/g, "").split(/\s+/).filter(w => w.length > 3);
-      const uniqueTags = Array.from(new Set(words.slice(0, 5))).map(w => `#${w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()}`);
+      const words: string[] = text.replace(/[^a-zA-Z0-9\s]/g, "").split(/\s+/).filter((w: string) => w.length > 3);
+      const uniqueTags: string[] = (Array.from(new Set(words.slice(0, 5))) as string[]).map((w: string) => `#${w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()}`);
       
       if (uniqueTags.length === 0) {
         uniqueTags.push("#DOST", "#Trending", "#Viral", "#Explore", "#Today");

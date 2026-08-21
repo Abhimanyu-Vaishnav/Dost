@@ -81,7 +81,7 @@ export function ChatGameCard({
       }}
     >
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyBetween: "space-between", width: "100%" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div
             style={{

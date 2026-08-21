@@ -515,6 +515,7 @@ export default function ChatRoomPage({ params }: { params: Promise<{ id: string 
           <ChatGameCard
             player1Name="You"
             player2Name={conversation?.partner?.name || "Friend"}
+            isMyTurn={true}
           />
         )}
 

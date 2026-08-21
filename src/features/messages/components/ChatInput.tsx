@@ -42,6 +42,8 @@ export function ChatInput({
   editingMessage,
   onCancelEdit,
   onSaveEdit,
+  onLaunchGame,
+  onOpenAi,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [showAttachments, setShowAttachments] = useState(false);
