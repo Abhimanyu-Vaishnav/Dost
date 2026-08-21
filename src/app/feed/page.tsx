@@ -47,7 +47,7 @@ export default async function FeedPage(props: { searchParams: Promise<{ tab?: st
     select: { name: true, avatar: true }
   });
 
-  // Filter logic
+  // Filter logic for topic tabs
   let where: any = {
     hiddenBy: { none: { userId: user.userId as string } },
     author: {
@@ -63,6 +63,25 @@ export default async function FeedPage(props: { searchParams: Promise<{ tab?: st
     });
     const followingIds = following.map((f) => f.followingId);
     where = { ...where, authorId: { in: followingIds } };
+  } else if (activeTab === "ai") {
+    where.OR = [
+      { content: { contains: "AI", mode: "insensitive" } },
+      { content: { contains: "tech", mode: "insensitive" } },
+      { content: { contains: "code", mode: "insensitive" } },
+      { content: { contains: "model", mode: "insensitive" } },
+      { content: { contains: "prompt", mode: "insensitive" } },
+      { content: { contains: "gpt", mode: "insensitive" } },
+      { content: { contains: "#ai", mode: "insensitive" } },
+    ];
+  } else if (activeTab === "science" || activeTab === "explore") {
+    where.OR = [
+      { content: { contains: "explore", mode: "insensitive" } },
+      { content: { contains: "science", mode: "insensitive" } },
+      { content: { contains: "innovation", mode: "insensitive" } },
+      { content: { contains: "future", mode: "insensitive" } },
+      { content: { contains: "space", mode: "insensitive" } },
+      { content: { contains: "research", mode: "insensitive" } },
+    ];
   }
 
   const posts = await (prisma.post as any).findMany({

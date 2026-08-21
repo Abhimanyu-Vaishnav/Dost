@@ -54,6 +54,25 @@ export async function GET(request: NextRequest) {
       });
       const followingIds = following.map((f) => f.followingId);
       where.authorId = { in: followingIds };
+    } else if (tab === "ai") {
+      where.OR = [
+        { content: { contains: "AI", mode: "insensitive" } },
+        { content: { contains: "tech", mode: "insensitive" } },
+        { content: { contains: "code", mode: "insensitive" } },
+        { content: { contains: "model", mode: "insensitive" } },
+        { content: { contains: "prompt", mode: "insensitive" } },
+        { content: { contains: "gpt", mode: "insensitive" } },
+        { content: { contains: "#ai", mode: "insensitive" } },
+      ];
+    } else if (tab === "science" || tab === "explore") {
+      where.OR = [
+        { content: { contains: "explore", mode: "insensitive" } },
+        { content: { contains: "science", mode: "insensitive" } },
+        { content: { contains: "innovation", mode: "insensitive" } },
+        { content: { contains: "future", mode: "insensitive" } },
+        { content: { contains: "space", mode: "insensitive" } },
+        { content: { contains: "research", mode: "insensitive" } },
+      ];
     }
 
     if (since) {
