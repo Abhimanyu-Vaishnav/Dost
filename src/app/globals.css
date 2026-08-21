@@ -341,24 +341,25 @@ button:active, a:active {
 
 .responsive-msg-toast {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
-  top: auto;
-  left: auto;
-  transform: none;
-  z-index: 9999;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999999;
+  width: 360px;
+  max-width: calc(100vw - 32px);
 }
 
-@media (max-width: 639px) {
+@media (max-width: 900px) {
   .responsive-msg-toast {
     position: fixed;
-    top: 16px;
+    top: 14px;
     left: 50%;
     transform: translateX(-50%);
     bottom: auto;
     right: auto;
-    width: calc(100vw - 32px);
-    max-width: 400px;
+    width: calc(100vw - 24px);
+    max-width: 420px;
+    z-index: 999999;
   }
 }
 

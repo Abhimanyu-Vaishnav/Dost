@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useCall } from "@/context/CallContext";
 import {
   Check,
   CheckCheck,
@@ -13,6 +14,12 @@ import {
   Pause,
   Download,
   FileText,
+  Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
+  PhoneMissed,
+  Video,
+  Disc,
 } from "lucide-react";
 
 export interface MessageBubbleProps {
@@ -43,6 +50,7 @@ export function MessageBubble({
   id,
   senderId,
   senderName,
+  senderAvatar,
   content,
   type = "TEXT",
   mediaUrl,
@@ -57,6 +65,7 @@ export function MessageBubble({
   onEdit,
   onDelete,
 }: MessageBubbleProps) {
+  const { startCall } = useCall();
   const [showMenu, setShowMenu] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null);
@@ -118,22 +127,89 @@ export function MessageBubble({
     );
   };
 
-  if (type === "SYSTEM") {
+  // Check if content is a Call History item
+  const isCallEvent = type === "SYSTEM" && (
+    content?.includes("call") ||
+    content?.includes("📞") ||
+    content?.includes("📹") ||
+    content?.includes("📵") ||
+    content?.includes("⚠️")
+  );
+
+  if (isCallEvent || type === "SYSTEM") {
+    const isVideoCall = content?.toLowerCase().includes("video");
+    const isMissed = content?.toLowerCase().includes("missed") || content?.toLowerCase().includes("declined");
+
     return (
-      <div style={{ display: "flex", justifyContent: "center", margin: "8px 0" }}>
-        <span
+      <div style={{ display: "flex", justifyContent: "center", margin: "10px 0" }}>
+        <div
           style={{
-            padding: "4px 12px",
-            backgroundColor: "rgba(255, 255, 255, 0.06)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-            borderRadius: "9999px",
-            fontSize: "0.72rem",
-            color: "#94a3b8",
-            fontWeight: 500,
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "8px 16px",
+            backgroundColor: "rgba(13, 16, 23, 0.8)",
+            border: isMissed ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(0, 242, 254, 0.25)",
+            borderRadius: "16px",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+            maxWidth: "360px",
           }}
         >
-          {content}
-        </span>
+          <div
+            style={{
+              width: "32px",
+              height: "32px",
+              borderRadius: "50%",
+              backgroundColor: isMissed ? "rgba(239, 68, 68, 0.15)" : "rgba(0, 242, 254, 0.15)",
+              color: isMissed ? "#ef4444" : "#00f2fe",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {isMissed ? (
+              <PhoneMissed size={16} />
+            ) : isVideoCall ? (
+              <Video size={16} />
+            ) : (
+              <Phone size={16} />
+            )}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1 }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#ffffff" }}>
+              {content}
+            </span>
+            <span style={{ fontSize: "0.68rem", color: "#94a3b8" }}>
+              {formattedTime}
+            </span>
+          </div>
+
+          {senderId && senderId !== "SYSTEM" && (
+            <button
+              onClick={() =>
+                startCall(
+                  { id: senderId, name: senderName || "Friend", avatar: senderAvatar || "" },
+                  isVideoCall ? "VIDEO" : "VOICE"
+                )
+              }
+              style={{
+                padding: "5px 10px",
+                borderRadius: "99px",
+                backgroundColor: "rgba(0, 242, 254, 0.15)",
+                border: "1px solid rgba(0, 242, 254, 0.35)",
+                color: "#00f2fe",
+                fontSize: "0.72rem",
+                fontWeight: 800,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Call Back
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -219,14 +295,25 @@ export function MessageBubble({
             </div>
           ) : null}
 
-          {/* Audio Attachment */}
+          {/* Audio / Voice Recording Attachment */}
           {type === "AUDIO" && mediaUrl ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "6px", minWidth: "180px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "8px 12px",
+                backgroundColor: isMe ? "rgba(0, 0, 0, 0.12)" : "rgba(0, 242, 254, 0.08)",
+                borderRadius: "12px",
+                minWidth: "220px",
+                border: isMe ? "none" : "1px solid rgba(0, 242, 254, 0.2)",
+              }}
+            >
               <button
                 onClick={toggleAudio}
                 style={{
-                  width: "36px",
-                  height: "36px",
+                  width: "38px",
+                  height: "38px",
                   borderRadius: "50%",
                   backgroundColor: "#00f2fe",
                   border: "none",
@@ -235,11 +322,20 @@ export function MessageBubble({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  boxShadow: "0 2px 8px rgba(0, 242, 254, 0.4)",
+                  flexShrink: 0,
                 }}
               >
-                {isPlayingAudio ? <Pause size={16} /> : <Play size={16} />}
+                {isPlayingAudio ? <Pause size={18} /> : <Play size={18} />}
               </button>
-              <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>Voice Note</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" }}>
+                <span style={{ fontSize: "0.82rem", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                  <Disc size={14} color="#00f2fe" /> Call Recording
+                </span>
+                <span style={{ fontSize: "0.7rem", opacity: 0.8 }}>
+                  {fileName || "Voice call audio recording"}
+                </span>
+              </div>
             </div>
           ) : null}
 
@@ -276,7 +372,7 @@ export function MessageBubble({
           ) : null}
 
           {/* Text Content */}
-          {content ? (
+          {content && type !== "AUDIO" ? (
             <p style={{ margin: 0, fontSize: "0.9rem", lineHeight: 1.45, whiteSpace: "pre-wrap" }}>
               {content}
             </p>

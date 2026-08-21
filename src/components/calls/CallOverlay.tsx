@@ -13,6 +13,8 @@ import {
   Minimize2,
   Maximize2,
   Volume2,
+  Disc,
+  StopCircle,
 } from "lucide-react";
 
 export function CallOverlay() {
@@ -26,6 +28,8 @@ export function CallOverlay() {
     isMuted,
     isCameraOff,
     isMinimized,
+    isRecording,
+    recordingDuration,
     rtcService,
     acceptCall,
     rejectCall,
@@ -33,6 +37,8 @@ export function CallOverlay() {
     toggleMute,
     toggleCamera,
     toggleMinimize,
+    startRecording,
+    stopRecording,
     forcePlayAudio,
     reattachRemoteStream,
     enableAllTracks,
@@ -42,7 +48,7 @@ export function CallOverlay() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
-  const [audioMode, setAudioMode] = React.useState<"speaker" | "earpiece">("earpiece");
+  const [audioMode, setAudioMode] = React.useState<"speaker" | "earpiece">("speaker");
   const [telemetry, setTelemetry] = React.useState<any>({});
 
   // Attach local stream to video element
@@ -57,7 +63,6 @@ export function CallOverlay() {
     if (remoteStream) {
       console.log("[CallOverlay] Attaching remoteStream tracks:", remoteStream.getTracks().map(t => `${t.kind}:${t.enabled}`));
       
-      // Ensure all remote audio tracks are explicitly enabled
       remoteStream.getAudioTracks().forEach((track) => {
         track.enabled = true;
       });
@@ -91,9 +96,9 @@ export function CallOverlay() {
       setTelemetry({
         pcConnectionState: pc?.connectionState || "none",
         iceConnectionState: pc?.iceConnectionState || "none",
-        localTrack: localAudioTrack ? `enabled:${localAudioTrack.enabled}, muted:${localAudioTrack.muted}, state:${localAudioTrack.readyState}` : "none",
-        remoteTrack: remoteAudioTrack ? `enabled:${remoteAudioTrack.enabled}, muted:${remoteAudioTrack.muted}, state:${remoteAudioTrack.readyState}` : "none",
-        audioElement: audioEl ? `paused:${audioEl.paused}, vol:${audioEl.volume}, muted:${audioEl.muted}` : "none",
+        localTrack: localAudioTrack ? `enabled:${localAudioTrack.enabled}, state:${localAudioTrack.readyState}` : "none",
+        remoteTrack: remoteAudioTrack ? `enabled:${remoteAudioTrack.enabled}, state:${remoteAudioTrack.readyState}` : "none",
+        audioElement: audioEl ? `paused:${audioEl.paused}, vol:${audioEl.volume}` : "none",
       });
     }, 800);
 
@@ -144,7 +149,7 @@ export function CallOverlay() {
               right: 0,
               width: 10,
               height: 10,
-              backgroundColor: "#10b981",
+              backgroundColor: isRecording ? "#ef4444" : "#10b981",
               borderRadius: "50%",
               border: "2px solid #0d1017",
             }}
@@ -155,9 +160,16 @@ export function CallOverlay() {
           <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#f8fafc" }}>
             {partner?.name || "Call"}
           </span>
-          <span style={{ fontSize: "0.72rem", color: "#00f2fe", fontWeight: 600 }}>
-            {formatTimer(callDuration)}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: "0.72rem", color: "#00f2fe", fontWeight: 600 }}>
+              {formatTimer(callDuration)}
+            </span>
+            {isRecording && (
+              <span style={{ fontSize: "0.68rem", color: "#ef4444", fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
+                🔴 REC {formatTimer(recordingDuration)}
+              </span>
+            )}
+          </div>
         </div>
 
         <button
@@ -214,7 +226,7 @@ export function CallOverlay() {
           alignItems: "center",
           justifyContent: "space-between",
           backgroundColor: "#05070a",
-          padding: "40px 24px",
+          padding: "36px 20px 28px",
           boxSizing: "border-box",
           overflow: "hidden",
         }}
@@ -244,13 +256,13 @@ export function CallOverlay() {
               style={{
                 position: "absolute",
                 top: 24,
-                right: 24,
-                width: 140,
-                height: 200,
-                borderRadius: 18,
+                right: 20,
+                width: 130,
+                height: 180,
+                borderRadius: 16,
                 overflow: "hidden",
-                border: "2px solid rgba(255, 255, 255, 0.2)",
-                boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
+                border: "2px solid rgba(0, 242, 254, 0.4)",
+                boxShadow: "0 10px 30px rgba(0, 0, 0, 0.6)",
                 backgroundColor: "#000000",
                 zIndex: 10,
               }}
@@ -273,10 +285,10 @@ export function CallOverlay() {
             top: "20%",
             left: "50%",
             transform: "translateX(-50%)",
-            width: 400,
-            height: 400,
+            width: 380,
+            height: 380,
             borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(0, 242, 254, 0.15) 0%, transparent 70%)",
+            background: "radial-gradient(circle, rgba(0, 242, 254, 0.14) 0%, transparent 70%)",
             pointerEvents: "none",
             zIndex: 2,
           }}
@@ -293,29 +305,53 @@ export function CallOverlay() {
             gap: 6,
           }}
         >
-          <span
-            style={{
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              color: "#00f2fe",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              padding: "4px 14px",
-              backgroundColor: "rgba(0, 242, 254, 0.1)",
-              borderRadius: 9999,
-              border: "1px solid rgba(0, 242, 254, 0.2)",
-            }}
-          >
-            {callType === "VIDEO" ? "HD Video Call" : "Voice Call"}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                fontSize: "0.76rem",
+                fontWeight: 800,
+                color: "#00f2fe",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                padding: "4px 14px",
+                backgroundColor: "rgba(0, 242, 254, 0.1)",
+                borderRadius: 9999,
+                border: "1px solid rgba(0, 242, 254, 0.25)",
+              }}
+            >
+              {callType === "VIDEO" ? "HD Video Call" : "Voice Call"}
+            </span>
 
-          <h2 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#ffffff", margin: "6px 0 0 0" }}>
+            {/* LIVE RECORDING BADGE */}
+            {isRecording && (
+              <motion.span
+                animate={{ opacity: [1, 0.5, 1] }}
+                transition={{ repeat: Infinity, duration: 1.5 }}
+                style={{
+                  fontSize: "0.76rem",
+                  fontWeight: 800,
+                  color: "#ffffff",
+                  padding: "4px 12px",
+                  backgroundColor: "#ef4444",
+                  borderRadius: 9999,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  boxShadow: "0 0 14px rgba(239, 68, 68, 0.5)",
+                }}
+              >
+                🔴 REC {formatTimer(recordingDuration)}
+              </motion.span>
+            )}
+          </div>
+
+          <h2 style={{ fontSize: "1.55rem", fontWeight: 800, color: "#ffffff", margin: "4px 0 0 0" }}>
             {partner?.name || "DOST Friend"}
           </h2>
 
-          <span style={{ fontSize: "0.88rem", color: "#94a3b8", fontWeight: 500 }}>
-            {callState === "OUTGOING" && "Ringing..."}
-            {callState === "INCOMING" && "Incoming Call..."}
+          <span style={{ fontSize: "0.85rem", color: "#94a3b8", fontWeight: 500 }}>
+            {callState === "OUTGOING" && "🔔 Ringing..."}
+            {callState === "INCOMING" && "📞 Incoming Call..."}
             {callState === "CONNECTED" && formatTimer(callDuration)}
             {callState === "ENDED" && "Call Ended"}
           </span>
@@ -339,8 +375,8 @@ export function CallOverlay() {
               transition={{ repeat: Infinity, duration: 2 }}
               style={{
                 position: "absolute",
-                width: 190,
-                height: 190,
+                width: 180,
+                height: 180,
                 borderRadius: "50%",
                 border: "2px solid #00f2fe",
               }}
@@ -350,8 +386,8 @@ export function CallOverlay() {
               src={partner?.avatar || "https://ui-avatars.com/api/?name=User"}
               alt={partner?.name}
               style={{
-                width: 140,
-                height: 140,
+                width: 130,
+                height: 130,
                 borderRadius: "50%",
                 objectFit: "cover",
                 border: "4px solid rgba(0, 242, 254, 0.5)",
@@ -368,14 +404,17 @@ export function CallOverlay() {
             zIndex: 10,
             display: "flex",
             alignItems: "center",
-            gap: 20,
-            padding: "16px 28px",
-            backgroundColor: "rgba(16, 18, 24, 0.85)",
+            gap: 14,
+            padding: "14px 22px",
+            backgroundColor: "rgba(16, 18, 24, 0.88)",
             backdropFilter: "blur(24px)",
             WebkitBackdropFilter: "blur(24px)",
             border: "1px solid rgba(255, 255, 255, 0.12)",
             borderRadius: 9999,
             boxShadow: "0 20px 50px rgba(0, 0, 0, 0.6)",
+            maxWidth: "100%",
+            flexWrap: "wrap",
+            justifyContent: "center",
           }}
         >
           {/* INCOMING CALL CONTROLS: ACCEPT & REJECT */}
@@ -391,8 +430,8 @@ export function CallOverlay() {
                   acceptCall();
                 }}
                 style={{
-                  width: 60,
-                  height: 60,
+                  width: 58,
+                  height: 58,
                   borderRadius: "50%",
                   backgroundColor: "#10b981",
                   border: "none",
@@ -403,8 +442,9 @@ export function CallOverlay() {
                   cursor: "pointer",
                   boxShadow: "0 0 30px rgba(16, 185, 129, 0.6)",
                 }}
+                title="Accept Call"
               >
-                <Phone size={26} />
+                <Phone size={24} />
               </motion.button>
 
               <motion.button
@@ -412,8 +452,8 @@ export function CallOverlay() {
                 whileTap={{ scale: 0.9 }}
                 onClick={rejectCall}
                 style={{
-                  width: 60,
-                  height: 60,
+                  width: 58,
+                  height: 58,
                   borderRadius: "50%",
                   backgroundColor: "#ef4444",
                   border: "none",
@@ -424,8 +464,9 @@ export function CallOverlay() {
                   cursor: "pointer",
                   boxShadow: "0 0 30px rgba(239, 68, 68, 0.6)",
                 }}
+                title="Decline Call"
               >
-                <PhoneOff size={26} />
+                <PhoneOff size={24} />
               </motion.button>
             </>
           )}
@@ -437,8 +478,8 @@ export function CallOverlay() {
               <button
                 onClick={toggleMute}
                 style={{
-                  width: 50,
-                  height: 50,
+                  width: 48,
+                  height: 48,
                   borderRadius: "50%",
                   backgroundColor: isMuted ? "#ef4444" : "rgba(255, 255, 255, 0.1)",
                   border: "1px solid rgba(255, 255, 255, 0.15)",
@@ -453,6 +494,35 @@ export function CallOverlay() {
                 {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
               </button>
 
+              {/* Record Call Button (Voice & Video) */}
+              {callState === "CONNECTED" && (
+                <button
+                  onClick={() => {
+                    if (isRecording) {
+                      stopRecording();
+                    } else {
+                      startRecording();
+                    }
+                  }}
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: "50%",
+                    backgroundColor: isRecording ? "#ef4444" : "rgba(239, 68, 68, 0.15)",
+                    border: isRecording ? "2px solid #ef4444" : "1px solid rgba(239, 68, 68, 0.4)",
+                    color: isRecording ? "#ffffff" : "#f87171",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    boxShadow: isRecording ? "0 0 20px rgba(239, 68, 68, 0.6)" : "none",
+                  }}
+                  title={isRecording ? "Stop Recording" : "Record Call"}
+                >
+                  {isRecording ? <StopCircle size={20} /> : <Disc size={20} />}
+                </button>
+              )}
+
               {/* Earpiece / Speaker Output Toggle */}
               <button
                 onClick={async () => {
@@ -460,8 +530,8 @@ export function CallOverlay() {
                   setAudioMode(newMode);
                 }}
                 style={{
-                  width: 50,
-                  height: 50,
+                  width: 48,
+                  height: 48,
                   borderRadius: "50%",
                   backgroundColor: audioMode === "speaker" ? "rgba(0, 242, 254, 0.35)" : "rgba(255, 255, 255, 0.1)",
                   border: audioMode === "speaker" ? "1px solid #00f2fe" : "1px solid rgba(255, 255, 255, 0.15)",
@@ -481,8 +551,8 @@ export function CallOverlay() {
                 <button
                   onClick={toggleCamera}
                   style={{
-                    width: 50,
-                    height: 50,
+                    width: 48,
+                    height: 48,
                     borderRadius: "50%",
                     backgroundColor: isCameraOff ? "#ef4444" : "rgba(255, 255, 255, 0.1)",
                     border: "1px solid rgba(255, 255, 255, 0.15)",
@@ -503,8 +573,8 @@ export function CallOverlay() {
                 <button
                   onClick={toggleMinimize}
                   style={{
-                    width: 50,
-                    height: 50,
+                    width: 48,
+                    height: 48,
                     borderRadius: "50%",
                     backgroundColor: "rgba(255, 255, 255, 0.1)",
                     border: "1px solid rgba(255, 255, 255, 0.15)",
@@ -526,8 +596,8 @@ export function CallOverlay() {
                 whileTap={{ scale: 0.92 }}
                 onClick={endCall}
                 style={{
-                  width: 56,
-                  height: 56,
+                  width: 52,
+                  height: 52,
                   borderRadius: "50%",
                   backgroundColor: "#ef4444",
                   border: "none",
@@ -540,7 +610,7 @@ export function CallOverlay() {
                 }}
                 title="End Call"
               >
-                <PhoneOff size={24} />
+                <PhoneOff size={22} />
               </motion.button>
             </>
           )}
@@ -550,17 +620,18 @@ export function CallOverlay() {
         {callState === "CONNECTED" && (
           <div
             style={{
-              marginTop: 16,
-              padding: "10px 14px",
+              marginTop: 12,
+              padding: "8px 12px",
               backgroundColor: "rgba(0, 0, 0, 0.65)",
               border: "1px solid rgba(0, 242, 254, 0.25)",
-              borderRadius: "14px",
-              fontSize: "0.72rem",
+              borderRadius: "12px",
+              fontSize: "0.7rem",
               color: "#94a3b8",
               display: "flex",
               flexDirection: "column",
-              gap: 8,
+              gap: 6,
               width: "100%",
+              maxWidth: 400,
               boxSizing: "border-box",
             }}
           >
@@ -569,13 +640,7 @@ export function CallOverlay() {
               <span>ICE: {telemetry.iceConnectionState}</span>
             </div>
 
-            <div style={{ fontSize: "0.68rem", display: "flex", flexDirection: "column", gap: 2 }}>
-              <span>Local Track: {telemetry.localTrack}</span>
-              <span>Remote Track: {telemetry.remoteTrack}</span>
-              <span>Audio Element: {telemetry.audioElement}</span>
-            </div>
-
-            <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap", justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap", justifyContent: "center" }}>
               <button
                 onClick={forcePlayAudio}
                 style={{
@@ -605,21 +670,6 @@ export function CallOverlay() {
                 }}
               >
                 Re-attach Stream
-              </button>
-              <button
-                onClick={enableAllTracks}
-                style={{
-                  padding: "4px 8px",
-                  fontSize: "0.68rem",
-                  fontWeight: 700,
-                  backgroundColor: "rgba(16, 185, 129, 0.2)",
-                  border: "1px solid rgba(16, 185, 129, 0.4)",
-                  color: "#10b981",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                }}
-              >
-                Enable All Tracks
               </button>
             </div>
           </div>

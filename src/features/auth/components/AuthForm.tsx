@@ -17,6 +17,21 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/users/profile");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user?.id) {
+            router.replace("/feed");
+          }
+        }
+      } catch (e) {}
+    }
+    checkAuth();
+  }, [router]);
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!email || !password) {

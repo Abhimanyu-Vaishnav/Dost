@@ -19,13 +19,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing targetUserId or signalType" }, { status: 400 });
     }
 
+    const senderIdStr = String(userPayload.userId);
+
+    // Resolve real target user DB ID (whether passed as user ID or username)
+    let targetDbUser = await prisma.user.findUnique({ where: { id: String(targetUserId) } });
+    if (!targetDbUser) {
+      targetDbUser = await prisma.user.findFirst({
+        where: { username: String(targetUserId) },
+      });
+    }
+    const realReceiverId = targetDbUser ? targetDbUser.id : String(targetUserId);
+
     // Forward signaling payload via SSE
-    presenceManager.sendToUser(targetUserId, {
+    presenceManager.sendToUser(realReceiverId, {
       type: "call_signal",
       payload: {
         signalType, // "call_offer" | "call_answer" | "ice_candidate" | "call_end" | "call_reject" | "call_busy"
-        senderId: userPayload.userId,
-        targetUserId,
+        senderId: senderIdStr,
+        targetUserId: realReceiverId,
         callType: callType || "VOICE",
         callId,
         sdp,
@@ -34,99 +45,153 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Database CallSession Logging
+    // Database CallSession & Chat Log Integration
     if (callId) {
-      const senderIdStr = String(userPayload.userId);
-      const targetUserIdStr = String(targetUserId);
+      // Find or create conversation for this pair
+      let conversation = await prisma.conversation.findFirst({
+        where: {
+          isGroup: false,
+          AND: [
+            { participants: { some: { userId: senderIdStr } } },
+            { participants: { some: { userId: realReceiverId } } },
+          ],
+        },
+      });
+
+      if (!conversation) {
+        conversation = await prisma.conversation.create({
+          data: {
+            isGroup: false,
+            participants: {
+              create: [
+                { userId: senderIdStr },
+                { userId: realReceiverId },
+              ],
+            },
+          },
+        });
+      }
+
+      const conversationId = conversation.id;
 
       if (signalType === "call_offer") {
         await prisma.callSession.upsert({
           where: { id: callId },
           create: {
             id: callId,
+            conversationId,
             callerId: senderIdStr,
-            receiverId: targetUserIdStr,
+            receiverId: realReceiverId,
             type: callType === "VIDEO" ? "VIDEO" : "AUDIO",
             status: "RINGING",
             startedAt: new Date(),
           },
           update: {
+            conversationId,
             status: "RINGING",
           },
-        }).catch(() => {});
+        }).catch((err) => console.error("CallSession upsert offer error:", err));
       } else if (signalType === "call_answer") {
-        await prisma.callSession.update({
+        await prisma.callSession.upsert({
           where: { id: callId },
-          data: {
+          create: {
+            id: callId,
+            conversationId,
+            callerId: senderIdStr,
+            receiverId: realReceiverId,
+            type: callType === "VIDEO" ? "VIDEO" : "AUDIO",
             status: "CONNECTED",
             startedAt: new Date(),
           },
-        }).catch(() => {});
+          update: {
+            status: "CONNECTED",
+            startedAt: new Date(),
+          },
+        }).catch((err) => console.error("CallSession update answer error:", err));
       } else if (signalType === "call_end") {
         const durationSeconds = body.duration || 0;
-        await prisma.callSession.update({
+        await prisma.callSession.upsert({
           where: { id: callId },
-          data: {
+          create: {
+            id: callId,
+            conversationId,
+            callerId: senderIdStr,
+            receiverId: realReceiverId,
+            type: callType === "VIDEO" ? "VIDEO" : "AUDIO",
             status: "ENDED",
             duration: durationSeconds,
             endedAt: new Date(),
           },
-        }).catch(() => {});
+          update: {
+            status: "ENDED",
+            duration: durationSeconds,
+            endedAt: new Date(),
+          },
+        }).catch((err) => console.error("CallSession update end error:", err));
 
-        // Inject Call Log Message in Chat Thread
-        const existingSession = await prisma.callSession.findUnique({ where: { id: callId } });
-        if (existingSession?.conversationId) {
-          const durStr = durationSeconds > 0 ? `${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s` : "0s";
-          const callText = `📞 ${callType === "VIDEO" ? "Video" : "Voice"} call ended (${durStr})`;
-          await prisma.message.create({
-            data: {
-              conversationId: existingSession.conversationId,
-              senderId: senderIdStr,
-              content: callText,
-              type: "SYSTEM",
-            },
-          }).catch(() => {});
-        }
-      } else if (signalType === "call_reject") {
-        await prisma.callSession.update({
-          where: { id: callId },
+        // Inject Call Log System Message in Chat Thread
+        const durStr = durationSeconds > 0 ? `${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s` : "0s";
+        const callText = `📞 ${callType === "VIDEO" ? "Video" : "Voice"} call ended (${durStr})`;
+        await prisma.message.create({
           data: {
+            conversationId,
+            senderId: senderIdStr,
+            content: callText,
+            type: "SYSTEM",
+          },
+        }).catch(() => {});
+      } else if (signalType === "call_reject") {
+        await prisma.callSession.upsert({
+          where: { id: callId },
+          create: {
+            id: callId,
+            conversationId,
+            callerId: senderIdStr,
+            receiverId: realReceiverId,
+            type: callType === "VIDEO" ? "VIDEO" : "AUDIO",
             status: "DECLINED",
             endedAt: new Date(),
           },
-        }).catch(() => {});
+          update: {
+            status: "DECLINED",
+            endedAt: new Date(),
+          },
+        }).catch((err) => console.error("CallSession update reject error:", err));
 
-        const existingSession = await prisma.callSession.findUnique({ where: { id: callId } });
-        if (existingSession?.conversationId) {
-          await prisma.message.create({
-            data: {
-              conversationId: existingSession.conversationId,
-              senderId: senderIdStr,
-              content: `📵 Call declined`,
-              type: "SYSTEM",
-            },
-          }).catch(() => {});
-        }
-      } else if (signalType === "call_busy") {
-        await prisma.callSession.update({
-          where: { id: callId },
+        await prisma.message.create({
           data: {
+            conversationId,
+            senderId: senderIdStr,
+            content: `📵 Call declined`,
+            type: "SYSTEM",
+          },
+        }).catch(() => {});
+      } else if (signalType === "call_busy") {
+        await prisma.callSession.upsert({
+          where: { id: callId },
+          create: {
+            id: callId,
+            conversationId,
+            callerId: senderIdStr,
+            receiverId: realReceiverId,
+            type: callType === "VIDEO" ? "VIDEO" : "AUDIO",
             status: "MISSED",
             endedAt: new Date(),
           },
-        }).catch(() => {});
+          update: {
+            status: "MISSED",
+            endedAt: new Date(),
+          },
+        }).catch((err) => console.error("CallSession update busy error:", err));
 
-        const existingSession = await prisma.callSession.findUnique({ where: { id: callId } });
-        if (existingSession?.conversationId) {
-          await prisma.message.create({
-            data: {
-              conversationId: existingSession.conversationId,
-              senderId: senderIdStr,
-              content: `⚠️ Missed ${callType === "VIDEO" ? "video" : "voice"} call`,
-              type: "SYSTEM",
-            },
-          }).catch(() => {});
-        }
+        await prisma.message.create({
+          data: {
+            conversationId,
+            senderId: senderIdStr,
+            content: `⚠️ Missed ${callType === "VIDEO" ? "video" : "voice"} call`,
+            type: "SYSTEM",
+          },
+        }).catch(() => {});
       }
     }
 

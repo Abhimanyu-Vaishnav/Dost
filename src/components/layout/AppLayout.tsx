@@ -665,6 +665,7 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
       )}
 
       {/* Floating Toast Notification for messages */}
+      {/* Floating Toast Notification for messages */}
       {activeToast && (
         <div 
           onClick={() => {
@@ -673,21 +674,28 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
           }}
           className="glass animate-slide-up responsive-msg-toast"
           style={{
-            background: "var(--color-bg-surface)",
-            border: "1px solid var(--color-primary)",
+            position: "fixed",
+            top: "14px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(12, 16, 24, 0.95)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid #00f2fe",
             borderRadius: "20px",
             padding: "14px 18px",
             display: "flex",
             flexDirection: "column",
             gap: "6px",
-            boxShadow: "0 14px 40px rgba(0, 0, 0, 0.4)",
+            boxShadow: "0 14px 40px rgba(0, 242, 254, 0.3)",
             cursor: "pointer",
-            width: "320px",
-            maxWidth: "calc(100vw - 32px)"
+            width: "360px",
+            maxWidth: "calc(100vw - 24px)",
+            zIndex: 999999,
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontWeight: 800, color: "var(--color-primary)", fontSize: "0.85rem", letterSpacing: "0.5px" }}>NEW MESSAGE</span>
+            <span style={{ fontWeight: 800, color: "#00f2fe", fontSize: "0.85rem", letterSpacing: "0.5px" }}>NEW MESSAGE</span>
             <button 
               onClick={(e) => {
                 e.stopPropagation();
@@ -719,26 +727,30 @@ export function AppLayout({ children, rightSidebar, fullWidth = false }: { child
       {/* Floating Toast Notification for Login Security Alert */}
       {securityToast && (
         <div 
-          className="glass animate-slide-up"
+          className="glass animate-slide-up responsive-msg-toast"
           style={{
             position: "fixed",
-            bottom: activeToast ? "100px" : "24px",
-            right: "24px",
-            background: "var(--color-bg-surface)",
-            border: "1px solid var(--color-primary)",
+            top: activeToast ? "100px" : "14px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(12, 16, 24, 0.95)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid #00f2fe",
             borderRadius: "20px",
             padding: "16px 20px",
             display: "flex",
             alignItems: "center",
             gap: "12px",
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.2)",
-            zIndex: 9999,
-            maxWidth: "calc(100vw - 48px)"
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
+            zIndex: 999999,
+            width: "360px",
+            maxWidth: "calc(100vw - 24px)",
           }}
         >
-          <ShieldAlert size={24} color="var(--color-primary)" />
+          <ShieldAlert size={24} color="#00f2fe" />
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "2px" }}>
-            <span style={{ fontWeight: 800, color: "var(--color-primary)", fontSize: "0.85rem", letterSpacing: "0.5px" }}>SECURITY ALERT</span>
+            <span style={{ fontWeight: 800, color: "#00f2fe", fontSize: "0.85rem", letterSpacing: "0.5px" }}>SECURITY ALERT</span>
             <span style={{ fontWeight: 600, color: "var(--color-text-main)", fontSize: "0.95rem" }}>{securityToast}</span>
           </div>
           <button 

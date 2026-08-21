@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { WebRTCService } from "@/lib/webrtc/webrtc-service";
 import { useSSEPresence } from "@/hooks/useSSEPresence";
+import { ringtonePlayer } from "@/lib/audio/ringtone-player";
 
 export type CallState = "IDLE" | "OUTGOING" | "INCOMING" | "CONNECTED" | "ENDED";
 export type CallType = "VOICE" | "VIDEO";
@@ -11,6 +12,7 @@ export interface CallPartner {
   id: string;
   name: string;
   avatar: string;
+  conversationId?: string;
 }
 
 export interface CallContextType {
@@ -23,6 +25,9 @@ export interface CallContextType {
   isMuted: boolean;
   isCameraOff: boolean;
   isMinimized: boolean;
+  isRecording: boolean;
+  recordingDuration: number;
+  lastRecordedAudioUrl: string | null;
   rtcService: WebRTCService;
   startCall: (targetUser: CallPartner, type: CallType) => Promise<void>;
   acceptCall: () => Promise<void>;
@@ -31,6 +36,8 @@ export interface CallContextType {
   toggleMute: () => void;
   toggleCamera: () => void;
   toggleMinimize: () => void;
+  startRecording: () => void;
+  stopRecording: () => void;
   forcePlayAudio: () => void;
   reattachRemoteStream: () => void;
   enableAllTracks: () => void;
@@ -50,6 +57,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+
+  // Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [lastRecordedAudioUrl, setLastRecordedAudioUrl] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [pendingOffer, setPendingOffer] = useState<any | null>(null);
@@ -75,6 +90,20 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       Notification.requestPermission().catch(() => {});
     }
   }, []);
+
+  // Control Ringtone Sound (Plays on Ringing OUTGOING or INCOMING, Stops when Connected or Ended)
+  useEffect(() => {
+    if (callState === "INCOMING") {
+      ringtonePlayer.startIncomingRingtone();
+    } else if (callState === "OUTGOING") {
+      ringtonePlayer.startOutgoingRingtone();
+    } else {
+      ringtonePlayer.stopRingtone();
+    }
+    return () => {
+      ringtonePlayer.stopRingtone();
+    };
+  }, [callState]);
 
   // Handle Tab Unload / Page Refresh Edge Case
   useEffect(() => {
@@ -116,7 +145,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const callStateRef = useRef<CallState>("IDLE");
   callStateRef.current = callState;
 
-  // Listen for WebRTC SSE Signals
   useEffect(() => {
     if (!registerCallSignalListener) return;
 
@@ -167,6 +195,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         if (sdp) {
           rtcServiceRef.current.handleAnswer(sdp).then(() => {
             setCallState("CONNECTED");
+            ringtonePlayer.stopRingtone();
             console.log("[CallContext] Call CONNECTED successfully on caller side!");
           }).catch(err => {
             console.error("[CallContext] handleAnswer error:", err);
@@ -270,6 +299,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
     try {
       console.log("[CallContext] Accepting incoming call from:", partner.name);
+      ringtonePlayer.stopRingtone();
       setCallState("CONNECTED");
 
       // 1. Initialize callee peer connection FIRST
@@ -310,6 +340,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   // 3. CALLEE: Reject Call
   const rejectCall = async () => {
+    ringtonePlayer.stopRingtone();
     if (partner) {
       await sendSignal("call_reject", partner.id, callType, activeCallIdRef.current!);
     }
@@ -318,14 +349,113 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   // 4. EITHER: End Call
   const endCall = async () => {
+    ringtonePlayer.stopRingtone();
+    if (isRecording) {
+      stopRecording();
+    }
     if (partner) {
       await sendSignal("call_end", partner.id, callType, activeCallIdRef.current!, { duration: callDuration });
     }
     handleCleanupAndReset();
   };
 
+  // Call Recording Logic using Web MediaRecorder & Web Audio API Mixer
+  const startRecording = () => {
+    if (isRecording) return;
+
+    try {
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioCtxClass();
+      const destination = audioCtx.createMediaStreamDestination();
+
+      if (localStream && localStream.getAudioTracks().length > 0) {
+        const localSource = audioCtx.createMediaStreamSource(localStream);
+        localSource.connect(destination);
+      }
+
+      if (remoteStream && remoteStream.getAudioTracks().length > 0) {
+        const remoteSource = audioCtx.createMediaStreamSource(remoteStream);
+        remoteSource.connect(destination);
+      }
+
+      const tracksToRecord = [...destination.stream.getAudioTracks()];
+      if (callType === "VIDEO" && remoteStream && remoteStream.getVideoTracks().length > 0) {
+        tracksToRecord.push(...remoteStream.getVideoTracks());
+      }
+
+      const combinedStream = new MediaStream(tracksToRecord);
+      const mimeType = callType === "VIDEO" ? "video/webm" : "audio/webm";
+
+      const recorder = new MediaRecorder(combinedStream, {
+        mimeType: MediaRecorder.isTypeSupported(mimeType) ? mimeType : undefined,
+      });
+
+      recordedChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        setLastRecordedAudioUrl(url);
+
+        // Upload recorded blob to server / attach to chat if conversationId available
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = async () => {
+          const base64data = reader.result;
+          if (partner?.id) {
+            await fetch("/api/calls/record", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                targetUserId: partner.id,
+                audioData: base64data,
+                callType,
+                callId: activeCallIdRef.current,
+              }),
+            }).catch(() => {});
+          }
+        };
+      };
+
+      recorder.start(1000);
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("[CallContext] startRecording error:", err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (!isRecording) return;
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {}
+    }
+  };
+
   const handleCleanupAndReset = () => {
     console.log("[CallContext] Cleaning up call session...");
+    ringtonePlayer.stopRingtone();
+    if (isRecording) {
+      stopRecording();
+    }
     setCallState("ENDED");
     rtcServiceRef.current.closeConnection();
     setLocalStream(null);
@@ -400,6 +530,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         isMuted,
         isCameraOff,
         isMinimized,
+        isRecording,
+        recordingDuration,
+        lastRecordedAudioUrl,
         rtcService: rtcServiceRef.current,
         startCall,
         acceptCall,
@@ -408,6 +541,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         toggleMute,
         toggleCamera,
         toggleMinimize,
+        startRecording,
+        stopRecording,
         forcePlayAudio,
         reattachRemoteStream,
         enableAllTracks,

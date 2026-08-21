@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const currentUserId = userPayload.userId;
+    const currentUserId = userPayload.userId as string;
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get("filter") || "ALL"; // ALL, MISSED, INCOMING, OUTGOING
     const query = (searchParams.get("q") || "").toLowerCase().trim();
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: 100,
     });
 
     const formattedCalls = calls
@@ -47,6 +47,13 @@ export async function GET(request: NextRequest) {
           direction = "MISSED";
         }
 
+        const safePeer = peer || {
+          id: isCaller ? call.receiverId : call.callerId,
+          name: "DOST User",
+          username: "user",
+          avatar: "https://ui-avatars.com/api/?name=User",
+        };
+
         return {
           id: call.id,
           callId: call.id,
@@ -55,7 +62,7 @@ export async function GET(request: NextRequest) {
           direction,
           duration: call.duration || 0,
           createdAt: call.createdAt,
-          partner: peer,
+          partner: safePeer,
         };
       })
       .filter((call) => {
@@ -66,8 +73,8 @@ export async function GET(request: NextRequest) {
 
         // Filter by search query
         if (query) {
-          const peerName = (call.partner.name || "").toLowerCase();
-          const peerUsername = (call.partner.username || "").toLowerCase();
+          const peerName = (call.partner?.name || "").toLowerCase();
+          const peerUsername = (call.partner?.username || "").toLowerCase();
           return peerName.includes(query) || peerUsername.includes(query);
         }
 
