@@ -10,6 +10,8 @@ import {
   ImageIcon,
   FileText,
   Check,
+  Gamepad2,
+  Sparkles,
 } from "lucide-react";
 
 export interface ChatInputProps {
@@ -27,6 +29,8 @@ export interface ChatInputProps {
   editingMessage?: { id: string; content?: string | null } | null;
   onCancelEdit?: () => void;
   onSaveEdit?: (messageId: string, newContent: string) => void;
+  onLaunchGame?: () => void;
+  onOpenAi?: () => void;
 }
 
 export function ChatInput({
@@ -285,6 +289,48 @@ export function ChatInput({
                   }}
                 >
                   <FileText size={15} style={{ color: "#00f2fe" }} /> Document
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAttachments(false);
+                    onLaunchGame?.();
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 12px",
+                    fontSize: "0.78rem",
+                    color: "#f1f5f9",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    borderRadius: "10px",
+                    textAlign: "left",
+                  }}
+                >
+                  <Gamepad2 size={15} style={{ color: "#8b5cf6" }} /> Play 1v1 Game
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAttachments(false);
+                    onOpenAi?.();
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 12px",
+                    fontSize: "0.78rem",
+                    color: "#f1f5f9",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    borderRadius: "10px",
+                    textAlign: "left",
+                  }}
+                >
+                  <Sparkles size={15} style={{ color: "#00f2fe" }} /> DOST AI Assistant
                 </button>
               </motion.div>
             ) : null}

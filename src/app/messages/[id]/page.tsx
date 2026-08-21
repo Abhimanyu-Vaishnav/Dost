@@ -5,6 +5,8 @@ import { ChatHeader } from "@/features/messages/components/ChatHeader";
 import { MessageBubble } from "@/features/messages/components/MessageBubble";
 import { ChatInput } from "@/features/messages/components/ChatInput";
 import { NewChatModal } from "@/features/messages/components/NewChatModal";
+import { AIChatModal } from "@/features/ai/components/AIChatModal";
+import { ChatGameCard } from "@/features/messages/components/ChatGameCard";
 import { useSSEPresence } from "@/hooks/useSSEPresence";
 import { useCall } from "@/context/CallContext";
 import { Search, Plus, MessageSquare, X, Trash2 } from "lucide-react";
@@ -27,6 +29,8 @@ export default function ChatRoomPage({ params }: { params: Promise<{ id: string 
   const [editingMessage, setEditingMessage] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [showGameCard, setShowGameCard] = useState(false);
 
   // In-chat message search filter
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -507,6 +511,13 @@ export default function ChatRoomPage({ params }: { params: Promise<{ id: string 
           <div ref={messagesEndRef} />
         </div>
 
+        {showGameCard && (
+          <ChatGameCard
+            player1Name="You"
+            player2Name={conversation?.partner?.name || "Friend"}
+          />
+        )}
+
         <ChatInput
           onSendMessage={handleSendMessage}
           onTypingStart={() => sendTyping(conversationId, true)}
@@ -516,10 +527,17 @@ export default function ChatRoomPage({ params }: { params: Promise<{ id: string 
           editingMessage={editingMessage}
           onCancelEdit={() => setEditingMessage(null)}
           onSaveEdit={handleSaveEdit}
+          onLaunchGame={() => setShowGameCard(!showGameCard)}
+          onOpenAi={() => setShowAiModal(true)}
         />
       </div>
 
       <NewChatModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <AIChatModal
+        isOpen={showAiModal}
+        onClose={() => setShowAiModal(false)}
+        onInsertToPost={(text) => handleSendMessage({ content: text })}
+      />
     </div>
   );
 }

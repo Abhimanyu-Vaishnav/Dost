@@ -12,6 +12,7 @@ import {
 import { uploadMediaFile } from "@/lib/upload";
 import { CreatePostModal } from "./CreatePostModal";
 import { GifPickerModal } from "@/components/common/GifPickerModal";
+import { AIChatModal } from "@/features/ai/components/AIChatModal";
 
 interface CreatePostProps {
   userName: string;
@@ -74,6 +75,7 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [voiceRecordTime, setVoiceRecordTime] = useState(0);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const [showAiModal, setShowAiModal] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<any>(null);
@@ -520,8 +522,30 @@ export function CreatePost({ userName, userAvatar, initialDraft, onPostSuccess, 
           {isRecordingVoice ? <Square size={17} className="animate-pulse" /> : <Mic size={19} />}
         </button>
 
-
+        <button
+          type="button"
+          onClick={() => setShowAiModal(true)}
+          className="hover-bg-circle"
+          style={{ width: "36px", height: "36px", color: "#00f2fe" }}
+          title="DOST AI Magic Assistant"
+        >
+          <Sparkles size={19} />
+        </button>
       </div>
+
+      <AIChatModal
+        isOpen={showAiModal}
+        onClose={() => setShowAiModal(false)}
+        onInsertToPost={(text) => {
+          setThreadItems((prev) => {
+            const updated = [...prev];
+            if (updated[activeItemIndex]) {
+              updated[activeItemIndex].content = (updated[activeItemIndex].content + "\n" + text).trim();
+            }
+            return updated;
+          });
+        }}
+      />
 
       {/* Action Buttons Right */}
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
