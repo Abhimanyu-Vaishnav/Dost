@@ -25,18 +25,20 @@ export function FeedTabs() {
     <div
       style={{
         display: "flex",
+        alignItems: "center",
         width: "100%",
-        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-        background: "rgba(10, 12, 16, 0.88)",
+        height: "56px",
+        minHeight: "56px",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+        backgroundColor: "rgba(10, 12, 16, 0.95)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         position: "sticky",
         top: 0,
-        zIndex: 20,
+        zIndex: 30,
         overflowX: "auto",
         scrollbarWidth: "none",
-        padding: "6px 12px",
-        gap: 6,
+        padding: "0 8px",
         boxSizing: "border-box",
       }}
     >
@@ -48,43 +50,48 @@ export function FeedTabs() {
             onClick={() => handleTabChange(tab.id)}
             style={{
               flex: "1 0 auto",
-              padding: "10px 18px",
-              background: "none",
-              border: "none",
+              height: "40px",
+              padding: "0 18px",
+              background: isActive ? "rgba(29, 155, 240, 0.15)" : "transparent",
+              border: isActive ? "1px solid rgba(29, 155, 240, 0.4)" : "1px solid transparent",
+              borderRadius: "9999px",
               cursor: "pointer",
               fontWeight: isActive ? 800 : 600,
-              fontSize: "0.88rem",
-              color: isActive ? "#00f2fe" : "#94a3b8",
+              fontSize: "0.92rem",
+              color: isActive ? "#1d9bf0" : "#94a3b8",
               position: "relative",
               whiteSpace: "nowrap",
-              display: "flex",
+              display: "inline-flex",
               alignItems: "center",
+              justifyContent: "center",
               gap: 8,
-              borderRadius: 9999,
-              transition: "color 0.15s ease",
+              transition: "all 0.2s ease",
+              boxShadow: isActive ? "0 0 16px rgba(29, 155, 240, 0.2)" : "none",
+              margin: "0 3px",
             }}
           >
-            {/* Sliding Glowing Pill Indicator */}
-            {isActive && (
-              <motion.div
-                layoutId="activeFeedTabPill"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  backgroundColor: "rgba(0, 242, 254, 0.14)",
-                  border: "1px solid rgba(0, 242, 254, 0.35)",
-                  borderRadius: 9999,
-                  boxShadow: "0 0 20px rgba(0, 242, 254, 0.2)",
-                  zIndex: 0,
-                }}
-                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              />
-            )}
-
-            <span style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, lineHeight: 1 }}>
               {tab.icon}
               {tab.label}
             </span>
+
+            {/* Bottom Glow Line Indicator */}
+            {isActive && (
+              <motion.div
+                layoutId="activeTabUnderline"
+                style={{
+                  position: "absolute",
+                  bottom: "-8px",
+                  left: "20%",
+                  right: "20%",
+                  height: "3px",
+                  backgroundColor: "#1d9bf0",
+                  borderRadius: "9999px",
+                  boxShadow: "0 0 10px #1d9bf0",
+                }}
+                transition={{ type: "spring", stiffness: 500, damping: 35 }}
+              />
+            )}
           </button>
         );
       })}
