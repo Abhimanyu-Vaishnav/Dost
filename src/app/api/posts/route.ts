@@ -224,7 +224,15 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ posts: formattedPosts }, { status: 200 });
+    return NextResponse.json(
+      { posts: formattedPosts },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "private, max-age=2, stale-while-revalidate=10",
+        },
+      }
+    );
   } catch (error) {
     console.error("Fetch posts error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

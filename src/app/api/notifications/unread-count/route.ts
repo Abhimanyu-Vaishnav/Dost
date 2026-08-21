@@ -14,7 +14,9 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    return NextResponse.json({ count });
+    return NextResponse.json({ count }, {
+      headers: { "Cache-Control": "private, max-age=1, stale-while-revalidate=5" }
+    });
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
